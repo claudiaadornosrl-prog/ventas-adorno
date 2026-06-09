@@ -165,7 +165,8 @@ td input { width: 100%; padding: 4px; border: 1px solid var(--primary); border-r
     <select id="sel-mes" onchange="cargar()"></select>
     <select id="sel-local" onchange="cargar()" style="display:none;"></select>
     <div class="spacer"></div>
-    <button id="btn-dragonfish" onclick="abrirCargaDragonfish()" title="Sincronizar el mes seleccionado desde Dragonfish (todos los días, captura correcciones retroactivas)">🐉 Cargar mes desde Dragonfish</button>
+    <button id="btn-dragonfish" onclick="abrirCargaDragonfish('3d')" title="Trae desde Dragonfish los últimos 3 días (hoy, ayer y antesdeayer) — rápido, ideal para uso diario">🐉 Actualizar (últimos 3 días)</button>
+    <button id="btn-dragonfish-mes" onclick="abrirCargaDragonfish('mes')" style="display:none;" title="Re-sincroniza TODO el mes seleccionado desde Dragonfish (admin) — más lento, ideal antes de cerrar o ante una corrección retroactiva">🐉 Resincronizar mes</button>
     <button class="primary" id="btn-cargar-dia" onclick="abrirCarga()">+ Cargar venta del día</button>
     <button id="btn-cerrar-mes" onclick="cerrarMesActual()" style="display:none;background:#fef3c7;color:#92400e;border-color:#fcd34d;">🔒 Cerrar mes</button>
     <button id="btn-reabrir-mes" onclick="reabrirMesActual()" style="display:none;background:#fee2e2;color:#991b1b;border-color:#fca5a5;">🔓 Reabrir mes</button>
@@ -638,8 +639,10 @@ async function guardarVenta(fecha, localId, vId) {
   }
 }
 
-// ─── Cargar desde Dragonfish: inserta job tipo 'mes' + polling ───────
-async function abrirCargaDragonfish() {
+// ─── Cargar desde Dragonfish: inserta job + polling ──────────────────
+// modo: '3d' (últimos 3 días, rápido) o 'mes' (mes completo, admin)
+async function abrirCargaDragonfish(modo) {
+  modo = modo || '3d';
   const localId = session.isAdmin ? document.getElementById('sel-local').value : session.local_id;
   if (session.isAdmin && (!localId || localId === 'todos')) {
     toast('Elegí un local específico antes', true);
@@ -647,21 +650,38 @@ async function abrirCargaDragonfish() {
   }
   const año = parseInt(document.getElementById('sel-año').value);
   const mes = parseInt(document.getElementById('sel-mes').value);
-  // Verificar si el mes está cerrado
+
+  // Calcular rango según modo
+  let desde, hasta, label;
+  const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  if (modo === 'mes') {
+    desde = `${año}-${String(mes).padStart(2,'0')}-01`;
+    const ultDia = new Date(año, mes, 0).getDate();
+    hasta = `${año}-${String(mes).padStart(2,'0')}-${String(ultDia).padStart(2,'0')}`;
+    label = `${meses[mes-1]} ${año}`;
+    if (!confirm(`Resincronizar TODO ${label} de ${LOCALES[localId].nombre} desde Dragonfish.\n\nVa a sobreescribir cualquier dato manual del mes con los valores actuales del Dragonfish.\n\n¿Confirmás?`)) return;
+  } else {
+    // '3d' = últimos 3 días (hoy, ayer, antesdeayer)
+    const hoy = new Date();
+    const ant = new Date(hoy); ant.setDate(hoy.getDate() - 2);
+    const toISO = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    desde = toISO(ant);
+    hasta = toISO(hoy);
+    label = 'últimos 3 días';
+  }
+
+  // Verificar si el mes del rango está cerrado
+  const fechaCheck = new Date(desde + 'T12:00:00');
   const { data: cerrado } = await sb.from('meses_cerrados_ventas')
-    .select('id, cerrado_por, cerrado_at')
-    .eq('local', localId).eq('año', año).eq('mes', mes).maybeSingle();
+    .select('id').eq('local', localId)
+    .eq('año', fechaCheck.getFullYear()).eq('mes', fechaCheck.getMonth()+1)
+    .maybeSingle();
   if (cerrado) {
-    toast(`🔒 El mes ${año}-${String(mes).padStart(2,'0')} está cerrado. Reabrir primero para sincronizar.`, true);
+    toast(`🔒 El mes ${desde.slice(0,7)} está cerrado. Reabrir primero para sincronizar.`, true);
     return;
   }
-  const desde = `${año}-${String(mes).padStart(2,'0')}-01`;
-  const ultDia = new Date(año, mes, 0).getDate();
-  const hasta = `${año}-${String(mes).padStart(2,'0')}-${String(ultDia).padStart(2,'0')}`;
-  const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  if (!confirm(`Sincronizar TODO ${meses[mes-1]} ${año} de ${LOCALES[localId].nombre} desde Dragonfish.\n\nVa a procesar día por día (${ultDia} días). Puede tomar 1-2 minutos.\n\n¿Confirmás?`)) return;
 
-  toast('🐉 Pidiendo al servicio local…');
+  toast(`🐉 Pidiendo al servicio local (${label})…`);
   try {
     const { data: job, error } = await sb.from('dragonfish_jobs').insert({
       local: localId, fecha: desde,
@@ -670,7 +690,7 @@ async function abrirCargaDragonfish() {
       solicitado_por: session.email,
     }).select().single();
     if (error) throw error;
-    pollJob(job.id, localId, `${meses[mes-1]} ${año}`);
+    pollJob(job.id, localId, label);
   } catch (e) {
     toast('Error: ' + e.message, true);
   }
@@ -714,11 +734,13 @@ function _actualizarBotonesCierre(cerradoRow, localUnico) {
   const btnCerrar = document.getElementById('btn-cerrar-mes');
   const btnReabrir = document.getElementById('btn-reabrir-mes');
   const btnDF = document.getElementById('btn-dragonfish');
+  const btnDFmes = document.getElementById('btn-dragonfish-mes');
   const btnDia = document.getElementById('btn-cargar-dia');
 
   // Reset
   btnCerrar.style.display = 'none';
   btnReabrir.style.display = 'none';
+  if (btnDFmes) btnDFmes.style.display = 'none';
   statusEl.style.display = 'none';
   if (btnDF) btnDF.disabled = false;
   if (btnDia) btnDia.disabled = false;
@@ -735,10 +757,13 @@ function _actualizarBotonesCierre(cerradoRow, localUnico) {
     if (btnDF) btnDF.disabled = true;
     if (btnDia) btnDia.disabled = true;
   } else {
-    // Mes abierto: mostrar botón Cerrar (solo admin)
+    // Mes abierto: mostrar botón Cerrar (solo admin) + botón Resincronizar mes (admin)
     statusEl.style.display = '';
     statusEl.innerHTML = `<span style="background:#fef3c7;color:#92400e;padding:3px 9px;border-radius:10px;font-weight:600;">🔓 Mes abierto</span> · podés editar y sincronizar`;
-    if (session.isAdmin) btnCerrar.style.display = '';
+    if (session.isAdmin) {
+      btnCerrar.style.display = '';
+      if (btnDFmes) btnDFmes.style.display = '';
+    }
   }
 }
 
@@ -749,13 +774,51 @@ async function cerrarMesActual() {
   const localId = session.isAdmin ? document.getElementById('sel-local').value : session.local_id;
   if (!localId || localId === 'todos') { toast('Elegí un local específico', true); return; }
   const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  if (!confirm(`¿Cerrar ${meses[mes-1]} ${año} de ${LOCALES[localId].nombre}?\n\nDespués nadie va a poder modificar las ventas de ese mes (ni sincronizar Dragonfish) hasta que lo reabras.`)) return;
+  const label = `${meses[mes-1]} ${año}`;
+  if (!confirm(`¿Cerrar ${label} de ${LOCALES[localId].nombre}?\n\nAntes de cerrar, voy a hacer una sincronización completa desde Dragonfish para asegurar que todos los días del mes están al día.\n\nDespués del cierre, nadie podrá modificar las ventas ni resincronizar hasta reabrir.\n\n¿Confirmás?`)) return;
+
+  // 1) Sync completo del mes antes de cerrar (garantiza datos finales correctos)
+  try {
+    const desde = `${año}-${String(mes).padStart(2,'0')}-01`;
+    const ultDia = new Date(año, mes, 0).getDate();
+    const hasta = `${año}-${String(mes).padStart(2,'0')}-${String(ultDia).padStart(2,'0')}`;
+    toast(`🐉 Sincronización previa al cierre…`);
+    const { data: job, error: errJob } = await sb.from('dragonfish_jobs').insert({
+      local: localId, fecha: desde,
+      tipo: 'mes', fecha_desde: desde, fecha_hasta: hasta,
+      estado: 'pendiente',
+      solicitado_por: session.email,
+    }).select().single();
+    if (errJob) throw errJob;
+    // Esperar a que termine antes de cerrar
+    const ok = await esperarJob(job.id, 180);  // hasta 3 minutos
+    if (!ok) {
+      toast(`⚠ Sync no completó. Cerrá el mes manualmente si querés.`, true);
+      return;
+    }
+  } catch (e) {
+    if (!confirm(`No se pudo sincronizar Dragonfish: ${e.message}\n\n¿Cerrar el mes igualmente?`)) return;
+  }
+
+  // 2) Cerrar el mes
   try {
     const { error } = await sb.rpc('ventas_cerrar_mes', { p_local: localId, p_año: año, p_mes: mes });
     if (error) throw error;
-    toast(`🔒 ${meses[mes-1]} ${año} cerrado`);
+    toast(`🔒 ${label} cerrado`);
     cargar();
   } catch (e) { toast('Error: ' + e.message, true); }
+}
+
+// Espera hasta que el job termine. Devuelve true si completó OK, false si falló o timeout.
+async function esperarJob(jobId, timeoutSec) {
+  const t0 = Date.now();
+  while ((Date.now() - t0) < timeoutSec * 1000) {
+    const { data: j } = await sb.from('dragonfish_jobs').select('estado, error_msg').eq('id', jobId).single();
+    if (j?.estado === 'completado') return true;
+    if (j?.estado === 'error') { toast(`✗ Sync error: ${j.error_msg||'desconocido'}`, true); return false; }
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  return false;
 }
 
 async function reabrirMesActual() {

@@ -26,7 +26,7 @@ import json
 import logging
 import socket
 import traceback
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 import pyodbc
 import requests
@@ -51,7 +51,7 @@ LOCAL          = os.environ.get('VENTAS_LOCAL', '').strip().lower()
 SQL_SERVER     = os.environ.get('VENTAS_SQL_SERVER', '').strip() or r'localhost\ZOOLOGIC2026'
 SUPABASE_URL   = os.environ.get('SUPABASE_URL', 'https://kwwiykssrpabncpqtmwi.supabase.co').rstrip('/')
 SUPABASE_KEY   = os.environ.get('SUPABASE_SERVICE_KEY', '').strip()
-POLL_SECONDS   = int(os.environ.get('POLL_SECONDS', '60'))
+POLL_SECONDS   = int(os.environ.get('POLL_SECONDS', '10'))
 LOG_FILE       = os.environ.get('LOG_FILE', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sync.log'))
 
 # Mapeo local → bases Dragonfish
@@ -135,6 +135,98 @@ def get_conn():
         f"TrustServerCertificate=yes;",   # ODBC 18 lo necesita para conexiones sin cert SSL
         timeout=15
     )
+
+def consultar_dragonfish_rango(desde, hasta):
+    """
+    Consulta TODO un rango de fechas en 3 queries (en lugar de N por día).
+    Devuelve dict {'YYYY-MM-DD': {efectivo, tarjeta, qr, vales, online, fc_oficina, cant_transacciones}}.
+
+    Diseño: 1 query a VAL con BETWEEN+GROUP BY, 1 query a COMPROBANTEV física,
+    1 query a COMPROBANTEV online. Mucho más rápido que iterar 30 días sueltos.
+    """
+    desde_str = desde.strftime('%Y-%m-%d') if isinstance(desde, (datetime, date)) else str(desde)[:10]
+    hasta_str = hasta.strftime('%Y-%m-%d') if isinstance(hasta, (datetime, date)) else str(hasta)[:10]
+
+    # Inicializar diccionario con todas las fechas del rango en 0
+    out = {}
+    d_ini = datetime.strptime(desde_str, '%Y-%m-%d').date()
+    d_fin = datetime.strptime(hasta_str, '%Y-%m-%d').date()
+    d = d_ini
+    while d <= d_fin:
+        f = d.strftime('%Y-%m-%d')
+        out[f] = dict(
+            local=LOCAL, fecha=f,
+            efectivo=0, tarjeta=0, qr=0, vales=0,
+            cant_transacciones=0,
+            online=0, fc_oficina=0,
+        )
+        d += timedelta(days=1)
+
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+
+        # ── VAL: desglose por medio de pago, agrupado por fecha ──────
+        cur.execute(f"""
+            SELECT CONVERT(varchar(10), JJFECHA, 23) AS f,
+              SUM(CASE WHEN JJCO LIKE '0%'  THEN MONTOSISTE ELSE 0 END) AS efectivo,
+              SUM(CASE WHEN JJCO LIKE 'TJ%' THEN MONTOSISTE ELSE 0 END) AS tarjeta,
+              SUM(CASE WHEN JJCO LIKE 'QR%' THEN MONTOSISTE ELSE 0 END) AS qr,
+              SUM(CASE WHEN JJCO LIKE 'VC%' THEN MONTOSISTE ELSE 0 END) AS vales
+            FROM [{DB_FISICA}].ZooLogic.VAL
+            WHERE JJFECHA BETWEEN ? AND ? AND (ESVUELTO = 0 OR ESVUELTO IS NULL)
+            GROUP BY JJFECHA
+        """, desde_str, hasta_str)
+        for row in cur.fetchall():
+            f = str(row[0])[:10]
+            if f in out:
+                out[f]['efectivo'] = float(row[1] or 0)
+                out[f]['tarjeta']  = float(row[2] or 0)
+                out[f]['qr']       = float(row[3] or 0)
+                out[f]['vales']    = float(row[4] or 0)
+
+        # ── COMPROBANTEV física: cantidad de transacciones por fecha ─
+        cur.execute(f"""
+            SELECT CONVERT(varchar(10), FFCH, 23) AS f, COUNT(*)
+            FROM [{DB_FISICA}].ZooLogic.COMPROBANTEV
+            WHERE FFCH BETWEEN ? AND ? AND ANULADO = 0
+            GROUP BY FFCH
+        """, desde_str, hasta_str)
+        for row in cur.fetchall():
+            f = str(row[0])[:10]
+            if f in out:
+                out[f]['cant_transacciones'] = int(row[1] or 0)
+
+        # ── COMPROBANTEV online (si existe): total online por fecha ──
+        if DB_ONLINE:
+            cur.execute(f"""
+                SELECT CONVERT(varchar(10), FFCH, 23) AS f, COALESCE(SUM(FTOTAL), 0)
+                FROM [{DB_ONLINE}].ZooLogic.COMPROBANTEV
+                WHERE FFCH BETWEEN ? AND ? AND ANULADO = 0
+                GROUP BY FFCH
+            """, desde_str, hasta_str)
+            for row in cur.fetchall():
+                f = str(row[0])[:10]
+                if f in out:
+                    out[f]['online'] = float(row[1] or 0)
+
+        # ── Oficina: todo va a 'online' (no desglosamos por medio de pago) ──
+        if LOCAL == 'oficina':
+            cur.execute(f"""
+                SELECT CONVERT(varchar(10), FFCH, 23) AS f, COALESCE(SUM(FTOTAL), 0)
+                FROM [{DB_FISICA}].ZooLogic.COMPROBANTEV
+                WHERE FFCH BETWEEN ? AND ? AND ANULADO = 0
+                GROUP BY FFCH
+            """, desde_str, hasta_str)
+            for row in cur.fetchall():
+                f = str(row[0])[:10]
+                if f in out:
+                    out[f]['online'] = float(row[1] or 0)
+                    out[f]['efectivo'] = out[f]['tarjeta'] = out[f]['qr'] = out[f]['vales'] = 0
+    finally:
+        conn.close()
+    return out
+
 
 def consultar_dragonfish(fecha):
     """
@@ -253,6 +345,20 @@ def supa_upsert_venta_diaria(data):
                       json=body, timeout=15)
     r.raise_for_status()
 
+def supa_bulk_upsert_ventas(rows):
+    """Inserta/actualiza N filas en ventas_diarias con un solo POST."""
+    if not rows:
+        return
+    meta = {'origen': 'dragonfish_auto',
+            'cargado_por': f'sync_local@{socket.gethostname()}',
+            'cargado_at': datetime.utcnow().isoformat() + 'Z'}
+    body = [{**r, **meta} for r in rows]
+    url = f"{SUPABASE_URL}/rest/v1/ventas_diarias?on_conflict=local,fecha"
+    r = requests.post(url, headers={**HDRS,
+                                     'Prefer': 'resolution=merge-duplicates,return=minimal'},
+                      json=body, timeout=30)
+    r.raise_for_status()
+
 # ══════════════════════════════════════════════════════════════════
 #  Loop principal
 # ══════════════════════════════════════════════════════════════════
@@ -267,51 +373,50 @@ def procesar_job(job):
     log.info(f"[job#{job_id}] tipo={tipo}")
     try:
         supa_marcar_job(job_id, 'en_proceso')
-        from datetime import datetime as _dt, timedelta as _td
 
-        # Armar lista de fechas a procesar
-        fechas = []
+        # Determinar rango de fechas a procesar
         if tipo == 'mes':
-            d_ini = _dt.strptime(job['fecha_desde'][:10], '%Y-%m-%d').date()
-            d_fin = _dt.strptime(job['fecha_hasta'][:10], '%Y-%m-%d').date()
-            d = d_ini
-            while d <= d_fin:
-                fechas.append(d.strftime('%Y-%m-%d'))
-                d += _td(days=1)
+            d_ini_str = job['fecha_desde'][:10]
+            d_fin_str = job['fecha_hasta'][:10]
         else:
-            fechas.append(job['fecha'])
-        log.info(f"[job#{job_id}] {len(fechas)} día(s) a procesar")
+            d_ini_str = d_fin_str = job['fecha'][:10] if job.get('fecha') else None
+        if not d_ini_str:
+            raise RuntimeError("Job sin fecha")
 
-        ok = 0
-        errores = []
-        for f in fechas:
-            try:
-                data = consultar_dragonfish(f)
-                # Saltear días sin datos — no pisar lo que ya esté cargado manual
-                if data['cant_transacciones'] == 0 and not any([
-                    data['efectivo'], data['tarjeta'], data['qr'],
-                    data['vales'], data['online'], data['fc_oficina']
-                ]):
-                    log.info(f"[job#{job_id}] {f}: sin datos, saltando")
-                    continue
-                supa_upsert_venta_diaria(data)
-                ok += 1
-                log.info(f"[job#{job_id}] {f}: ef={data['efectivo']} tj={data['tarjeta']} "
-                         f"qr={data['qr']} on={data['online']} cant={data['cant_transacciones']}")
-            except Exception as e:
-                errores.append(f"{f}: {e}")
-                log.error(f"[job#{job_id}] {f}: ERROR {e}")
+        d_ini = datetime.strptime(d_ini_str, '%Y-%m-%d').date()
+        d_fin = datetime.strptime(d_fin_str, '%Y-%m-%d').date()
+        ndias = (d_fin - d_ini).days + 1
+        log.info(f"[job#{job_id}] rango {d_ini_str} → {d_fin_str} ({ndias} día(s))")
+
+        # 1) Consultar TODO el rango con 1 sola query (BETWEEN + GROUP BY)
+        t0 = time.time()
+        rango = consultar_dragonfish_rango(d_ini, d_fin)
+        log.info(f"[job#{job_id}] Dragonfish OK en {time.time()-t0:.2f}s — {len(rango)} fechas")
+
+        # 2) Filtrar las que tienen al menos un dato (saltear días vacíos)
+        rows = []
+        for f, data in sorted(rango.items()):
+            if data['cant_transacciones'] == 0 and not any([
+                data['efectivo'], data['tarjeta'], data['qr'],
+                data['vales'], data['online'], data['fc_oficina']
+            ]):
+                continue
+            rows.append(data)
+
+        # 3) Bulk upsert a Supabase (1 sola request en lugar de N)
+        if rows:
+            t0 = time.time()
+            supa_bulk_upsert_ventas(rows)
+            log.info(f"[job#{job_id}] Supabase OK en {time.time()-t0:.2f}s — {len(rows)} fechas upserteadas")
+        else:
+            log.info(f"[job#{job_id}] sin datos en el rango, nada para upsertear")
 
         payload = {
-            'dias_procesados': ok,
-            'rango': f"{fechas[0]} a {fechas[-1]}" if fechas else None,
-            'errores': errores[:10] if errores else None,
+            'dias_procesados': len(rows),
+            'rango': f"{d_ini_str} a {d_fin_str}",
         }
-        if errores and ok == 0:
-            supa_marcar_job(job_id, 'error', error='; '.join(errores[:3]), payload=payload)
-        else:
-            supa_marcar_job(job_id, 'completado', payload=payload)
-        log.info(f"[job#{job_id}] ✓ {ok} días procesados, {len(errores)} errores")
+        supa_marcar_job(job_id, 'completado', payload=payload)
+        log.info(f"[job#{job_id}] ✓ {len(rows)} días procesados")
     except Exception as e:
         err = traceback.format_exc()
         log.error(f"[job#{job_id}] ✗ ERROR: {err}")
