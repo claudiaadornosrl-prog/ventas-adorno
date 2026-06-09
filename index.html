@@ -592,6 +592,52 @@ function abrirEditar(fecha, localId, v) {
 
 function cerrarModal() { document.getElementById('modal')?.remove(); }
 
+// ─── Guardar venta diaria (insert o update) ──────────────────────────
+async function guardarVenta(fecha, localId, vId) {
+  const btn = document.getElementById('btn-guardar');
+  const errEl = document.getElementById('form-error');
+  const num = id => {
+    const v = document.getElementById(id).value;
+    return v === '' ? 0 : parseFloat(v);
+  };
+  const intNum = id => {
+    const v = document.getElementById(id).value;
+    return v === '' ? 0 : parseInt(v);
+  };
+  const data = {
+    local: localId,
+    fecha: fecha,
+    efectivo: num('f-efectivo'),
+    tarjeta: num('f-tarjeta'),
+    qr: num('f-qr'),
+    vales: num('f-vales'),
+    online: num('f-online'),
+    fc_oficina: num('f-fc-of'),
+    cant_transacciones: intNum('f-cant'),
+    controlado: document.getElementById('f-controlado').checked,
+    cargado_por: session.email,
+    origen: 'manual',
+  };
+  if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    let res;
+    if (vId) {
+      res = await sb.from('ventas_diarias').update(data).eq('id', vId);
+    } else {
+      // Upsert por (local, fecha) para no romper si ya existe
+      res = await sb.from('ventas_diarias').upsert(data, { onConflict: 'local,fecha' });
+    }
+    if (res.error) throw res.error;
+    cerrarModal();
+    toast('✓ Guardado');
+    cargar();
+  } catch (e) {
+    if (errEl) { errEl.textContent = e.message || 'Error al guardar'; errEl.style.display = 'block'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
+  }
+}
+
 // ─── Cargar desde Dragonfish: inserta job tipo 'mes' + polling ───────
 async function abrirCargaDragonfish() {
   const localId = session.isAdmin ? document.getElementById('sel-local').value : session.local_id;
