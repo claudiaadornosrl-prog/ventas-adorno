@@ -161,6 +161,12 @@ td input { width: 100%; padding: 4px; border: 1px solid var(--primary); border-r
     </div>
   </div>
 
+  <div id="alerta-sync-finmes" style="display:none;background:linear-gradient(90deg,#fed7aa,#fdba74);border-bottom:1px solid #ea580c;padding:10px 16px;align-items:center;gap:10px;flex-wrap:wrap;">
+    <span style="font-size:18px;">📅</span>
+    <span id="alerta-sync-finmes-text" style="flex:1;font-size:14px;color:#7c2d12;font-weight:600;"></span>
+    <button id="alerta-sync-finmes-btn" onclick="hacerSyncFinDeMes()" style="padding:6px 14px;background:#c2410c;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">🐉 Sincronizar ahora</button>
+  </div>
+
   <div id="alerta-cerrar-mes" style="display:none;background:linear-gradient(90deg,#fef3c7,#fde68a);border-bottom:1px solid #f59e0b;padding:10px 16px;display:none;align-items:center;gap:10px;flex-wrap:wrap;">
     <span style="font-size:18px;">🎉</span>
     <span id="alerta-cerrar-mes-text" style="flex:1;font-size:14px;color:#78350f;font-weight:600;"></span>
@@ -454,6 +460,8 @@ function enterApp() {
   cargar();
   // Chequear si hay meses listos para cerrar (en background, no bloquea)
   chequearMesesListosParaCerrar();
+  // Chequear si hay sync de fin de mes pendiente
+  chequearSyncFinDeMes();
   // Actualizar estado del botón de notificaciones
   actualizarBtnNotifs();
 }
@@ -517,6 +525,115 @@ async function chequearMesesListosParaCerrar() {
   } catch (e) {
     console.warn('chequearMesesListosParaCerrar:', e);
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Sync de fin de mes — banner obligatorio para vendedoras
+// Aparece los primeros 7 días del mes siguiente si el mes anterior NO tiene
+// el último día calendario cargado, y todavía no fue cerrado.
+// ═══════════════════════════════════════════════════════════════════════
+let _syncFinMesPendiente = null;  // { localId, año, mes, fechaUlt }
+
+async function chequearSyncFinDeMes() {
+  try {
+    const hoy = new Date();
+    const dia = hoy.getDate();
+    const mesActualLastDay = new Date(hoy.getFullYear(), hoy.getMonth()+1, 0).getDate();
+
+    // Determinar qué mes necesita el sync:
+    //  - Si hoy es el ÚLTIMO día del mes actual → ese mes es el objetivo
+    //  - Si estamos del 1 al 7 del mes siguiente → el mes anterior es el objetivo
+    //  - Sino → no mostrar nada
+    let añoAnt, mesAnt;
+    if (dia === mesActualLastDay) {
+      añoAnt = hoy.getFullYear();
+      mesAnt = hoy.getMonth() + 1;
+    } else if (dia <= 7) {
+      const ant = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+      añoAnt = ant.getFullYear();
+      mesAnt = ant.getMonth() + 1;
+    } else {
+      document.getElementById('alerta-sync-finmes').style.display = 'none';
+      _syncFinMesPendiente = null;
+      return;
+    }
+    const ultDia = new Date(añoAnt, mesAnt, 0).getDate();
+    const fechaUlt = `${añoAnt}-${String(mesAnt).padStart(2,'0')}-${String(ultDia).padStart(2,'0')}`;
+
+    const localesACheckear = session.isAdmin
+      ? Object.keys(LOCALES)
+      : [session.local_id];
+
+    for (const localId of localesACheckear) {
+      // ¿Cerrado?
+      const { data: cerr } = await sb.from('meses_cerrados_ventas')
+        .select('id').eq('local', localId).eq('año', añoAnt).eq('mes', mesAnt).maybeSingle();
+      if (cerr) continue;
+      // ¿Tiene el último día?
+      const { data: vd } = await sb.from('ventas_diarias')
+        .select('id').eq('local', localId).eq('fecha', fechaUlt).maybeSingle();
+      if (vd) continue;  // ya está, no hay que sincronizar
+      // Falta sync de fin de mes
+      _syncFinMesPendiente = { localId, año: añoAnt, mes: mesAnt, fechaUlt };
+      const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+      const txt = session.isAdmin
+        ? `📅 Falta el sync de fin de mes para ${meses[mesAnt-1]} ${añoAnt} de ${LOCALES[localId].nombre}`
+        : `📅 Tenés que hacer el sync de fin de mes de ${meses[mesAnt-1]} ${añoAnt} antes de que JP cierre el mes`;
+      document.getElementById('alerta-sync-finmes-text').textContent = txt;
+      document.getElementById('alerta-sync-finmes').style.display = 'flex';
+      return;
+    }
+    // Si llegamos acá, ningún local lo necesita
+    document.getElementById('alerta-sync-finmes').style.display = 'none';
+    _syncFinMesPendiente = null;
+  } catch (e) { console.warn('chequearSyncFinDeMes:', e); }
+}
+
+async function hacerSyncFinDeMes() {
+  if (!_syncFinMesPendiente) return;
+  const { localId, año, mes } = _syncFinMesPendiente;
+  const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const label = `${meses[mes-1]} ${año}`;
+  const desde = `${año}-${String(mes).padStart(2,'0')}-01`;
+  const ultDia = new Date(año, mes, 0).getDate();
+  const hasta = `${año}-${String(mes).padStart(2,'0')}-${String(ultDia).padStart(2,'0')}`;
+  try {
+    toast(`🐉 Pidiendo sync de fin de mes (${label})…`);
+    const { data: job, error } = await sb.from('dragonfish_jobs').insert({
+      local: localId, fecha: desde,
+      tipo: 'mes', fecha_desde: desde, fecha_hasta: hasta,
+      estado: 'pendiente',
+      solicitado_por: session.email,
+    }).select().single();
+    if (error) throw error;
+    // Polling hasta que termine (con timeout)
+    const ok = await esperarJob(job.id, 240);  // hasta 4 minutos
+    if (ok) {
+      toast(`✓ ${label} sincronizado completo`);
+      // Avisar al admin con push (fire and forget) si la vendedora completó el sync
+      if (!session.isAdmin) {
+        notificarAdminCierreListo(localId, año, mes);
+      }
+      cargar();
+      chequearSyncFinDeMes();
+      chequearMesesListosParaCerrar();
+    }
+  } catch (e) { toast('Error: ' + e.message, true); }
+}
+
+async function notificarAdminCierreListo(localId, año, mes) {
+  const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  try {
+    await sb.functions.invoke('ventas-enviar-push', {
+      body: {
+        para_admins: true,
+        title: '✅ Sync de fin de mes completo',
+        body: `${meses[mes-1]} ${año} de ${LOCALES[localId]?.nombre} está sincronizado. Listo para cerrar.`,
+        url: location.origin + location.pathname,
+        tag: 'ventas-finmes-listo',
+      }
+    });
+  } catch (e) { console.warn('push fin de mes:', e); }
 }
 
 function cerrarMesDesdeAlerta() {
@@ -1206,32 +1323,8 @@ async function cerrarMesActual() {
   if (!localId || localId === 'todos') { toast('Elegí un local específico', true); return; }
   const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const label = `${meses[mes-1]} ${año}`;
-  if (!confirm(`¿Cerrar ${label} de ${LOCALES[localId].nombre}?\n\nAntes de cerrar, voy a hacer una sincronización completa desde Dragonfish para asegurar que todos los días del mes están al día.\n\nDespués del cierre, nadie podrá modificar las ventas ni resincronizar hasta reabrir.\n\n¿Confirmás?`)) return;
+  if (!confirm(`¿Cerrar ${label} de ${LOCALES[localId].nombre}?\n\nDespués del cierre, nadie podrá modificar las ventas ni resincronizar hasta reabrir.\n\nAsegurate de que las vendedoras hayan hecho el sync de fin de mes antes.\n\n¿Confirmás?`)) return;
 
-  // 1) Sync completo del mes antes de cerrar (garantiza datos finales correctos)
-  try {
-    const desde = `${año}-${String(mes).padStart(2,'0')}-01`;
-    const ultDia = new Date(año, mes, 0).getDate();
-    const hasta = `${año}-${String(mes).padStart(2,'0')}-${String(ultDia).padStart(2,'0')}`;
-    toast(`🐉 Sincronización previa al cierre…`);
-    const { data: job, error: errJob } = await sb.from('dragonfish_jobs').insert({
-      local: localId, fecha: desde,
-      tipo: 'mes', fecha_desde: desde, fecha_hasta: hasta,
-      estado: 'pendiente',
-      solicitado_por: session.email,
-    }).select().single();
-    if (errJob) throw errJob;
-    // Esperar a que termine antes de cerrar
-    const ok = await esperarJob(job.id, 180);  // hasta 3 minutos
-    if (!ok) {
-      toast(`⚠ Sync no completó. Cerrá el mes manualmente si querés.`, true);
-      return;
-    }
-  } catch (e) {
-    if (!confirm(`No se pudo sincronizar Dragonfish: ${e.message}\n\n¿Cerrar el mes igualmente?`)) return;
-  }
-
-  // 2) Cerrar el mes
   try {
     const { error } = await sb.rpc('ventas_cerrar_mes', { p_local: localId, p_año: año, p_mes: mes });
     if (error) throw error;
