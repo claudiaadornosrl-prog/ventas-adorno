@@ -143,4 +143,43 @@ ORDER BY local, fecha, campo, resuelto_at DESC;
 GRANT SELECT ON ventas_correcciones_aplicadas TO authenticated;
 
 -- ═══════════════════════════════════════════════════════════════════════
+-- Tabla de suscripciones push del módulo Ventas
+-- (similar a rrhh_push_subscriptions, pero atada al service worker de Ventas)
+-- ═══════════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS ventas_push_subscriptions (
+    id              bigserial PRIMARY KEY,
+    user_email      text NOT NULL,
+    endpoint        text UNIQUE NOT NULL,
+    p256dh          text NOT NULL,
+    auth            text NOT NULL,
+    user_agent      text,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    last_used_at    timestamptz
+);
+CREATE INDEX IF NOT EXISTS idx_vps_email ON ventas_push_subscriptions(user_email);
+
+ALTER TABLE ventas_push_subscriptions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS vps_select_propio ON ventas_push_subscriptions;
+DROP POLICY IF EXISTS vps_modify_propio ON ventas_push_subscriptions;
+
+CREATE POLICY vps_select_propio ON ventas_push_subscriptions FOR SELECT
+    USING (
+        ventas_is_admin()
+        OR user_email = (SELECT email FROM auth.users WHERE id = auth.uid())
+    );
+CREATE POLICY vps_modify_propio ON ventas_push_subscriptions FOR ALL
+    USING (
+        ventas_is_admin()
+        OR user_email = (SELECT email FROM auth.users WHERE id = auth.uid())
+    )
+    WITH CHECK (
+        ventas_is_admin()
+        OR user_email = (SELECT email FROM auth.users WHERE id = auth.uid())
+    );
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON ventas_push_subscriptions TO authenticated;
+GRANT USAGE, SELECT ON SEQUENCE ventas_push_subscriptions_id_seq TO authenticated;
+
+-- ═══════════════════════════════════════════════════════════════════════
 SELECT '✅ 03_correcciones.sql aplicado' AS status;
