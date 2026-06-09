@@ -200,6 +200,18 @@ const LOCALES = {
 };
 
 let session = null;  // { email, local_id|null, isAdmin }
+
+// ═══════════════════════════════════════════════════════════════════════
+// URL FILTER — cada local tiene su shortcut: ?local=alcorta|unicenter|oficina
+// Si está presente, la PWA se "ata" a ese local: oculta los demás botones,
+// no permite entrar como admin, y si la sesión persistida corresponde a otro
+// local, se cierra sesión automáticamente.
+// ═══════════════════════════════════════════════════════════════════════
+const URL_LOCAL = (() => {
+  const p = new URLSearchParams(location.search).get('local');
+  return p && LOCALES[p] ? p : null;
+})();
+
 const fmt$ = n => (n || 0).toLocaleString('es-AR', { maximumFractionDigits: 0 });
 const fmtFecha = d => new Date(d + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
 const hoyISO = () => new Date().toISOString().split('T')[0];
@@ -226,11 +238,37 @@ function checkLoginReady() {
 }
 document.getElementById('login-pass').addEventListener('input', checkLoginReady);
 
+// Si la URL trae ?local=, pre-fijar ese local y ocultar los demás + el link admin
+(function aplicarURLLocal(){
+  if (!URL_LOCAL) return;
+  document.querySelectorAll('.local-opt').forEach(el => {
+    if (el.dataset.local === URL_LOCAL) {
+      el.classList.add('selected');
+      el.style.cursor = 'default';
+      el.onclick = null;
+    } else {
+      el.style.display = 'none';
+    }
+  });
+  // Esconder link "entrar como admin" — esta URL es para vendedoras del local
+  const adminLink = document.querySelector('.admin-link');
+  if (adminLink) adminLink.style.display = 'none';
+  // Mostrar nombre del local en el título
+  const subEl = document.querySelector('.login-card .sub');
+  if (subEl) subEl.textContent = LOCALES[URL_LOCAL].icon + ' ' + LOCALES[URL_LOCAL].nombre + ' · ingresá la contraseña';
+  checkLoginReady();
+})();
+
 async function doLogin() {
   const localEl = document.querySelector('.local-opt.selected');
   const pass = document.getElementById('login-pass').value.trim();
   if (!localEl || !pass) return;
   const local = localEl.dataset.local;
+  // Si la URL fija un local, no permitir loguearse a otro (defensa extra)
+  if (URL_LOCAL && local !== URL_LOCAL) {
+    document.getElementById('login-error').textContent = 'Esta URL es exclusiva de ' + LOCALES[URL_LOCAL].nombre;
+    return;
+  }
   const email = LOCAL_EMAILS[local];
   const errEl = document.getElementById('login-error');
   errEl.textContent = '';
@@ -247,6 +285,7 @@ async function doLogin() {
 }
 
 async function loginAdmin() {
+  if (URL_LOCAL) { alert('Esta URL es del local ' + LOCALES[URL_LOCAL].nombre + '. Para entrar como admin, abrí la URL sin parámetro.'); return; }
   const pass = prompt('Contraseña de administrador:');
   if (!pass) return;
   try {
@@ -701,6 +740,12 @@ async function reabrirMesActual() {
       for (const [id, em] of Object.entries(LOCAL_EMAILS)) {
         if (em === email) { local_id = id; break; }
       }
+    }
+    // Si la URL fija un local y la sesión persistida es de otro (o de admin),
+    // cerrar sesión y forzar login del local correcto.
+    if (URL_LOCAL && (isAdmin || local_id !== URL_LOCAL)) {
+      await sb.auth.signOut();
+      return;
     }
     session = { email, local_id, isAdmin };
     enterApp();
