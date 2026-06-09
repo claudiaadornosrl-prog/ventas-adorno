@@ -131,7 +131,8 @@ def get_conn():
     return pyodbc.connect(
         f"DRIVER={{{_DRIVER}}};"
         f"SERVER={SQL_SERVER};"
-        f"Trusted_Connection=yes;",
+        f"Trusted_Connection=yes;"
+        f"TrustServerCertificate=yes;",   # ODBC 18 lo necesita para conexiones sin cert SSL
         timeout=15
     )
 
