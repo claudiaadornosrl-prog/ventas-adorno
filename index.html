@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Ventas · Claudia Adorno</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#dc2626">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --primary: #dc2626;     /* Rojo Ventas */
+  --primary-dark: #991b1b;
+  --bg: #f9fafb;
+  --card: #ffffff;
+  --border: #e5e7eb;
+  --text: #111827;
+  --muted: #6b7280;
+  --green: #16a34a;
+  --green-bg: #dcfce7;
+  --orange: #f59e0b;
+  --orange-bg: #fef3c7;
+  --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+
+.screen { display: none; }
+.screen.active { display: block; }
+
+/* ═══ LOGIN ═══ */
+#login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); }
+.login-card { background: white; border-radius: 16px; padding: 30px 24px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 380px; width: 100%; }
+.login-card h1 { text-align: center; font-size: 26px; margin: 0 0 4px; color: var(--primary); }
+.login-card .sub { text-align: center; font-size: 13px; color: var(--muted); margin-bottom: 22px; }
+.login-card label { font-size: 12px; font-weight: 600; color: var(--muted); display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+.login-card input { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 15px; margin-bottom: 14px; }
+.login-card input:focus { outline: none; border-color: var(--primary); }
+.local-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+.local-opt { border: 2px solid var(--border); border-radius: 10px; padding: 12px 8px; text-align: center; cursor: pointer; transition: all 0.15s; background: white; }
+.local-opt:hover { border-color: #aaa; }
+.local-opt.selected { border-color: var(--primary); background: var(--primary); color: white; }
+.local-opt .icon { font-size: 22px; margin-bottom: 4px; }
+.local-opt .name { font-size: 12px; font-weight: 700; }
+.btn-primary { background: var(--primary); color: white; border: none; padding: 12px; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; width: 100%; }
+.btn-primary:hover { background: var(--primary-dark); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.login-error { color: var(--primary); font-size: 12px; margin-bottom: 8px; min-height: 16px; }
+.admin-link { text-align: center; margin-top: 14px; font-size: 12px; }
+.admin-link a { color: var(--muted); text-decoration: underline; cursor: pointer; }
+
+/* ═══ APP ═══ */
+.header { background: var(--card); border-bottom: 1px solid var(--border); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; }
+.header-left { display: flex; align-items: center; gap: 12px; }
+.header-title { font-size: 17px; font-weight: 700; color: var(--primary); }
+.header-local { font-size: 12px; color: var(--muted); }
+.header-right { display: flex; gap: 8px; align-items: center; }
+.btn-secondary { background: white; color: var(--text); border: 1px solid var(--border); padding: 8px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+.btn-secondary:hover { background: #f3f4f6; }
+.btn-icon { background: white; border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+
+.toolbar { background: white; border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.toolbar select { padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: white; cursor: pointer; }
+.toolbar button { padding: 7px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; cursor: pointer; background: white; }
+.toolbar button.primary { background: var(--primary); color: white; border-color: var(--primary); }
+.toolbar button.primary:hover { background: var(--primary-dark); }
+.toolbar .spacer { flex: 1; }
+
+/* KPIs */
+.kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; padding: 16px; }
+.kpi { background: white; border-radius: 10px; padding: 14px; box-shadow: var(--shadow); }
+.kpi-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.kpi-value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+.kpi-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+/* Tabla */
+.table-wrap { background: white; margin: 0 16px 16px; border-radius: 10px; box-shadow: var(--shadow); overflow: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 800px; }
+th { background: #f9fafb; padding: 10px 8px; text-align: right; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--border); position: sticky; top: 0; }
+th:first-child { text-align: left; }
+td { padding: 8px; border-bottom: 1px solid #f3f4f6; text-align: right; font-variant-numeric: tabular-nums; }
+td:first-child { text-align: left; font-weight: 600; }
+tr:hover { background: #fafbfc; }
+td.editable { cursor: pointer; }
+td.editable:hover { background: #fef3c7; }
+td input { width: 100%; padding: 4px; border: 1px solid var(--primary); border-radius: 4px; text-align: right; font: inherit; font-variant-numeric: tabular-nums; }
+.row-total { background: #fef3c7; font-weight: 700; }
+.row-empty td { color: #cbd5e1; }
+.row-today { background: #ecfeff; }
+.row-controlado { background: #f0fdf4; }
+.row-controlado td:first-child::before { content: '✓ '; color: var(--green); }
+.cell-derived { background: #f9fafb; color: var(--muted); }
+.cell-derived.big { background: #eef2ff; color: #4338ca; font-weight: 700; }
+
+/* Vista admin */
+.admin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; }
+@media (max-width: 800px) {
+  .admin-grid { grid-template-columns: 1fr; }
+  .kpi-row { grid-template-columns: 1fr 1fr; }
+}
+
+.empty { padding: 60px 20px; text-align: center; color: var(--muted); }
+.empty .icon { font-size: 42px; margin-bottom: 10px; }
+
+#toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #111827; color: white; padding: 10px 18px; border-radius: 6px; font-size: 13px; opacity: 0; transition: opacity 0.2s; z-index: 999; pointer-events: none; }
+#toast.show { opacity: 1; }
+#toast.err { background: var(--primary); }
+
+.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #e5e7eb; border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.chip-controlado { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+.chip-controlado.si { background: var(--green-bg); color: #065f46; }
+.chip-controlado.no { background: var(--orange-bg); color: #92400e; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen" class="screen active">
+  <div class="login-card">
+    <h1>📊 Ventas</h1>
+    <p class="sub">Claudia Adorno · Carga de ventas diarias</p>
+    <label>Local</label>
+    <div class="local-grid">
+      <div class="local-opt" data-local="alcorta" onclick="selectLocal(this)">
+        <div class="icon">🛍️</div><div class="name">Alcorta</div>
+      </div>
+      <div class="local-opt" data-local="unicenter" onclick="selectLocal(this)">
+        <div class="icon">🏬</div><div class="name">Unicenter</div>
+      </div>
+      <div class="local-opt" data-local="oficina" onclick="selectLocal(this)">
+        <div class="icon">💻</div><div class="name">Oficina</div>
+      </div>
+    </div>
+    <label>Contraseña</label>
+    <input type="password" id="login-pass" placeholder="Contraseña del local" onkeydown="if(event.key==='Enter')doLogin()">
+    <div class="login-error" id="login-error"></div>
+    <button class="btn-primary" id="login-btn" disabled onclick="doLogin()">Entrar →</button>
+    <div class="admin-link"><a onclick="loginAdmin()">Entrar como administrador (JP)</a></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app-screen" class="screen">
+  <div class="header">
+    <div class="header-left">
+      <span class="header-title">📊 Ventas</span>
+      <span class="header-local" id="hdr-local"></span>
+    </div>
+    <div class="header-right">
+      <button class="btn-icon" id="refresh-btn" onclick="cargar()" title="Actualizar">↻</button>
+      <button class="btn-secondary" onclick="logout()">Salir</button>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <select id="sel-año" onchange="cargar()"></select>
+    <select id="sel-mes" onchange="cargar()"></select>
+    <select id="sel-local" onchange="cargar()" style="display:none;"></select>
+    <div class="spacer"></div>
+    <button class="primary" onclick="abrirCarga()">+ Cargar venta del día</button>
+  </div>
+
+  <div id="contenido"><div class="empty"><div class="spinner"></div></div></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════════════════════
+const SUPA_URL = 'https://kwwiykssrpabncpqtmwi.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt3d2l5a3NzcnBhYm5jcHF0bXdpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg5MDUwNzcsImV4cCI6MjA2NDQ4MTA3N30.6sZjMTNeFKgcVgGRRKn7H7r-w8jrqo5jh-S6lpY4LV4';
+const sb = window.supabase.createClient(SUPA_URL, SUPA_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, storageKey: 'ventas-adorno-auth' }
+});
+
+const LOCAL_EMAILS = {
+  alcorta:   'alcorta@adorno.com.ar',
+  unicenter: 'unicenter@adorno.com.ar',
+  oficina:   'oficina@adorno.com.ar',
+};
+const ADMIN_EMAIL = 'juanpsimonelli@gmail.com';
+const LOCALES = {
+  alcorta:   { nombre: 'Alcorta',   icon: '🛍️' },
+  unicenter: { nombre: 'Unicenter', icon: '🏬' },
+  oficina:   { nombre: 'Oficina',   icon: '💻' },
+};
+
+let session = null;  // { email, local_id|null, isAdmin }
+const fmt$ = n => (n || 0).toLocaleString('es-AR', { maximumFractionDigits: 0 });
+const fmtFecha = d => new Date(d + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
+const hoyISO = () => new Date().toISOString().split('T')[0];
+const escHtml = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function toast(msg, err) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'show' + (err ? ' err' : '');
+  setTimeout(() => { t.className = ''; }, 2800);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// LOGIN
+// ═══════════════════════════════════════════════════════════════════════
+function selectLocal(el) {
+  document.querySelectorAll('.local-opt').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+  checkLoginReady();
+}
+function checkLoginReady() {
+  const sel = document.querySelector('.local-opt.selected');
+  const pass = document.getElementById('login-pass').value.trim();
+  document.getElementById('login-btn').disabled = !(sel && pass);
+}
+document.getElementById('login-pass').addEventListener('input', checkLoginReady);
+
+async function doLogin() {
+  const localEl = document.querySelector('.local-opt.selected');
+  const pass = document.getElementById('login-pass').value.trim();
+  if (!localEl || !pass) return;
+  const local = localEl.dataset.local;
+  const email = LOCAL_EMAILS[local];
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = '';
+  document.getElementById('login-btn').disabled = true;
+  try {
+    const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+    if (error) throw error;
+    session = { email, local_id: local, isAdmin: false };
+    enterApp();
+  } catch (e) {
+    errEl.textContent = e.message || 'No se pudo entrar';
+    document.getElementById('login-btn').disabled = false;
+  }
+}
+
+async function loginAdmin() {
+  const pass = prompt('Contraseña de administrador:');
+  if (!pass) return;
+  try {
+    const { error } = await sb.auth.signInWithPassword({ email: ADMIN_EMAIL, password: pass.trim() });
+    if (error) throw error;
+    session = { email: ADMIN_EMAIL, local_id: null, isAdmin: true };
+    enterApp();
+  } catch (e) {
+    alert('No se pudo entrar como admin: ' + (e.message || 'error'));
+  }
+}
+
+async function logout() {
+  await sb.auth.signOut();
+  session = null;
+  document.getElementById('app-screen').classList.remove('active');
+  document.getElementById('login-screen').classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// APP
+// ═══════════════════════════════════════════════════════════════════════
+function enterApp() {
+  document.getElementById('login-screen').classList.remove('active');
+  document.getElementById('app-screen').classList.add('active');
+
+  // Header
+  if (session.isAdmin) {
+    document.getElementById('hdr-local').textContent = '· Admin (JP)';
+  } else {
+    document.getElementById('hdr-local').textContent = '· ' + (LOCALES[session.local_id]?.nombre || session.local_id);
+  }
+
+  // Selectores
+  const selAño = document.getElementById('sel-año');
+  const selMes = document.getElementById('sel-mes');
+  const selLocal = document.getElementById('sel-local');
+  const añoActual = new Date().getFullYear();
+  selAño.innerHTML = [añoActual-1, añoActual, añoActual+1].map(a => `<option value="${a}"${a===añoActual?' selected':''}>${a}</option>`).join('');
+  const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  selMes.innerHTML = meses.map((m, i) => `<option value="${i+1}"${(i+1)===(new Date().getMonth()+1)?' selected':''}>${m}</option>`).join('');
+  // Selector de local solo para admin
+  if (session.isAdmin) {
+    selLocal.style.display = '';
+    selLocal.innerHTML = '<option value="todos">Todos (consolidado)</option>' +
+      Object.entries(LOCALES).map(([id, l]) => `<option value="${id}">${l.icon} ${l.nombre}</option>`).join('');
+  }
+
+  cargar();
+}
+
+async function cargar() {
+  const año = parseInt(document.getElementById('sel-año').value);
+  const mes = parseInt(document.getElementById('sel-mes').value);
+  const localSel = session.isAdmin ? document.getElementById('sel-local').value : session.local_id;
+  document.getElementById('refresh-btn').innerHTML = '<span class="spinner"></span>';
+
+  try {
+    const desde = `${año}-${String(mes).padStart(2,'0')}-01`;
+    const hastaDate = new Date(año, mes, 0);
+    const hasta = hastaDate.toISOString().split('T')[0];
+
+    let q = sb.from('ventas_diarias_view')
+      .select('*')
+      .gte('fecha', desde).lte('fecha', hasta)
+      .order('fecha');
+    if (localSel && localSel !== 'todos') q = q.eq('local', localSel);
+    const { data, error } = await q;
+    if (error) throw error;
+
+    if (session.isAdmin && localSel === 'todos') {
+      renderAdminConsolidado(data || [], año, mes);
+    } else {
+      renderGrillaLocal(data || [], año, mes, localSel);
+    }
+  } catch (e) {
+    document.getElementById('contenido').innerHTML = `<div class="empty"><div class="icon">⚠️</div>Error: ${escHtml(e.message)}</div>`;
+  } finally {
+    document.getElementById('refresh-btn').innerHTML = '↻';
+  }
+}
+
+// ─── Grilla mensual de un local ──────────────────────────────────────
+function renderGrillaLocal(ventas, año, mes, localId) {
+  const cont = document.getElementById('contenido');
+  const diasMes = new Date(año, mes, 0).getDate();
+  const hoy = hoyISO();
+  const porFecha = {};
+  ventas.forEach(v => { porFecha[v.fecha] = v; });
+
+  // KPIs del mes
+  let totShopping = 0, totTotal = 0, totEfectivo = 0, totTarjeta = 0, totQR = 0, totVales = 0, totOnline = 0, totFcOf = 0, totCant = 0;
+  ventas.forEach(v => {
+    totShopping += +v.shopping || 0;
+    totTotal    += +v.total    || 0;
+    totEfectivo += +v.efectivo || 0;
+    totTarjeta  += +v.tarjeta  || 0;
+    totQR       += +v.qr       || 0;
+    totVales    += +v.vales    || 0;
+    totOnline   += +v.online   || 0;
+    totFcOf     += +v.fc_oficina || 0;
+    totCant     += +v.cant_transacciones || 0;
+  });
+  const ticketProm = totCant > 0 ? Math.round(totShopping / totCant) : 0;
+  const diasConVenta = ventas.filter(v => (v.shopping||0) > 0).length;
+  const promDiario = diasConVenta > 0 ? Math.round(totTotal / diasConVenta) : 0;
+
+  // Render
+  let acum = 0;
+  const filas = [];
+  for (let d = 1; d <= diasMes; d++) {
+    const fecha = `${año}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const v = porFecha[fecha];
+    const shopping = v ? +v.shopping || 0 : 0;
+    const total = v ? +v.total || 0 : 0;
+    acum += total;
+    const esHoy = fecha === hoy;
+    const klass = [
+      !v ? 'row-empty' : '',
+      esHoy ? 'row-today' : '',
+      v?.controlado ? 'row-controlado' : '',
+    ].filter(Boolean).join(' ');
+    filas.push(`
+      <tr class="${klass}" onclick="abrirEditar('${fecha}','${localId}',${JSON.stringify(v||null).replace(/"/g, '&quot;')})" style="cursor:pointer;">
+        <td>${fmtFecha(fecha)}</td>
+        <td>${v ? fmt$(v.efectivo) : '—'}</td>
+        <td>${v ? fmt$(v.tarjeta) : '—'}</td>
+        <td>${v ? fmt$(v.qr) : '—'}</td>
+        <td>${v ? fmt$(v.vales) : '—'}</td>
+        <td class="cell-derived">${v ? fmt$(shopping) : '—'}</td>
+        <td>${v ? (v.cant_transacciones || '—') : '—'}</td>
+        <td>${v ? fmt$(v.online) : '—'}</td>
+        <td>${v ? fmt$(v.fc_oficina) : '—'}</td>
+        <td class="cell-derived big">${v ? fmt$(total) : '—'}</td>
+        <td class="cell-derived">${fmt$(acum)}</td>
+      </tr>
+    `);
+  }
+
+  cont.innerHTML = `
+    <div class="kpi-row">
+      <div class="kpi"><div class="kpi-label">Total mes</div><div class="kpi-value">${fmt$(totTotal)}</div><div class="kpi-sub">${diasConVenta} días con venta</div></div>
+      <div class="kpi"><div class="kpi-label">Shopping</div><div class="kpi-value">${fmt$(totShopping)}</div><div class="kpi-sub">Físico (Ef+Tj+QR+Vl)</div></div>
+      <div class="kpi"><div class="kpi-label">Ticket promedio</div><div class="kpi-value">$${fmt$(ticketProm)}</div><div class="kpi-sub">${totCant} transacciones</div></div>
+      <div class="kpi"><div class="kpi-label">Promedio diario</div><div class="kpi-value">$${fmt$(promDiario)}</div></div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th><th>Efectivo</th><th>Tarjeta</th><th>QR (MP)</th><th>Vales</th>
+            <th>Shopping</th><th>Cant</th><th>Online</th><th>Fc Oficina</th><th>Total</th><th>Acumulado</th>
+          </tr>
+        </thead>
+        <tbody>${filas.join('')}</tbody>
+        <tfoot>
+          <tr class="row-total">
+            <td>TOTAL</td>
+            <td>${fmt$(totEfectivo)}</td>
+            <td>${fmt$(totTarjeta)}</td>
+            <td>${fmt$(totQR)}</td>
+            <td>${fmt$(totVales)}</td>
+            <td>${fmt$(totShopping)}</td>
+            <td>${totCant}</td>
+            <td>${fmt$(totOnline)}</td>
+            <td>${fmt$(totFcOf)}</td>
+            <td>${fmt$(totTotal)}</td>
+            <td>—</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  `;
+}
+
+// ─── Vista admin consolidada (todos los locales) ─────────────────────
+function renderAdminConsolidado(ventas, año, mes) {
+  const cont = document.getElementById('contenido');
+  const diasMes = new Date(año, mes, 0).getDate();
+  // Estructura: porFechaLocal[fecha][local] = total
+  const porFecha = {};
+  ventas.forEach(v => {
+    if (!porFecha[v.fecha]) porFecha[v.fecha] = {};
+    porFecha[v.fecha][v.local] = +v.total || 0;
+  });
+
+  const locales = ['alcorta', 'unicenter', 'oficina'];
+  const totLocales = { alcorta: 0, unicenter: 0, oficina: 0 };
+  const acumLocales = { alcorta: 0, unicenter: 0, oficina: 0 };
+  const filas = [];
+  for (let d = 1; d <= diasMes; d++) {
+    const fecha = `${año}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dia = porFecha[fecha] || {};
+    const cells = locales.map(loc => {
+      const v = dia[loc] || 0;
+      totLocales[loc] += v;
+      acumLocales[loc] += v;
+      return `<td>${v ? fmt$(v) : '<span style="color:#cbd5e1">—</span>'}</td><td class="cell-derived">${fmt$(acumLocales[loc])}</td>`;
+    }).join('');
+    const totalDia = locales.reduce((s, loc) => s + (dia[loc]||0), 0);
+    filas.push(`<tr><td>${fmtFecha(fecha)}</td>${cells}<td class="cell-derived big">${totalDia ? fmt$(totalDia) : '—'}</td></tr>`);
+  }
+  const granTotal = totLocales.alcorta + totLocales.unicenter + totLocales.oficina;
+
+  cont.innerHTML = `
+    <div class="kpi-row">
+      <div class="kpi"><div class="kpi-label">Total general</div><div class="kpi-value">${fmt$(granTotal)}</div></div>
+      <div class="kpi"><div class="kpi-label">🛍️ Alcorta</div><div class="kpi-value">${fmt$(totLocales.alcorta)}</div></div>
+      <div class="kpi"><div class="kpi-label">🏬 Unicenter</div><div class="kpi-value">${fmt$(totLocales.unicenter)}</div></div>
+      <div class="kpi"><div class="kpi-label">💻 Oficina</div><div class="kpi-value">${fmt$(totLocales.oficina)}</div></div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th rowspan="2" style="vertical-align:bottom;">Fecha</th>
+            <th colspan="2" style="text-align:center;">🛍️ Alcorta</th>
+            <th colspan="2" style="text-align:center;">🏬 Unicenter</th>
+            <th colspan="2" style="text-align:center;">💻 Oficina</th>
+            <th rowspan="2" style="vertical-align:bottom;">Total día</th>
+          </tr>
+          <tr>
+            <th>Diaria</th><th>Acumulado</th>
+            <th>Diaria</th><th>Acumulado</th>
+            <th>Diaria</th><th>Acumulado</th>
+          </tr>
+        </thead>
+        <tbody>${filas.join('')}</tbody>
+        <tfoot>
+          <tr class="row-total">
+            <td>TOTAL</td>
+            <td>${fmt$(totLocales.alcorta)}</td><td>—</td>
+            <td>${fmt$(totLocales.unicenter)}</td><td>—</td>
+            <td>${fmt$(totLocales.oficina)}</td><td>—</td>
+            <td>${fmt$(granTotal)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  `;
+}
+
+// ─── Modal de carga/edición de un día ────────────────────────────────
+function abrirCarga() {
+  const fecha = hoyISO();
+  const localId = session.isAdmin ? document.getElementById('sel-local').value : session.local_id;
+  if (session.isAdmin && (!localId || localId === 'todos')) {
+    toast('Como admin, primero seleccioná un local específico para cargar', true);
+    return;
+  }
+  abrirEditar(fecha, localId, null);
+}
+
+function abrirEditar(fecha, localId, v) {
+  if (typeof v === 'string') { try { v = JSON.parse(v); } catch { v = null; } }
+  if (session.isAdmin && (!localId || localId === 'todos')) {
+    toast('Elegí un local específico antes', true);
+    return;
+  }
+  const html = `
+    <div id="modal" style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;">
+      <div style="background:white;border-radius:12px;padding:22px;max-width:520px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+        <h3 style="margin:0 0 4px;color:var(--primary);">📊 ${v ? 'Editar' : 'Cargar'} venta del día</h3>
+        <p style="margin:0 0 16px;font-size:12px;color:var(--muted);">${LOCALES[localId]?.icon} ${LOCALES[localId]?.nombre} · ${fmtFecha(fecha)}</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div><label style="font-size:11px;color:var(--muted);">💵 Efectivo</label><input id="f-efectivo" type="number" step="any" value="${v?.efectivo || ''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
+          <div><label style="font-size:11px;color:var(--muted);">💳 Tarjeta</label><input id="f-tarjeta" type="number" step="any" value="${v?.tarjeta || ''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
+          <div><label style="font-size:11px;color:var(--muted);">📱 QR (MP)</label><input id="f-qr" type="number" step="any" value="${v?.qr || ''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
+          <div><label style="font-size:11px;color:var(--muted);">🎟 Vales</label><input id="f-vales" type="number" step="any" value="${v?.vales || ''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
+          <div><label style="font-size:11px;color:var(--muted);">🌐 Online</label><input id="f-online" type="number" step="any" value="${v?.online || ''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
+          <div><label style="font-size:11px;color:var(--muted);">🧾 Fc Oficina</label><input id="f-fc-of" type="number" step="any" value="${v?.fc_oficina || ''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
+          <div><label style="font-size:11px;color:var(--muted);">🛒 Cant. transacciones</label><input id="f-cant" type="number" value="${v?.cant_transacciones || ''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
+          <div><label style="font-size:11px;color:var(--muted);">Control</label>
+            <label style="display:flex;align-items:center;gap:6px;padding:9px;font-size:14px;">
+              <input type="checkbox" id="f-controlado" ${v?.controlado ? 'checked' : ''}> Día controlado
+            </label>
+          </div>
+        </div>
+        <div id="form-error" style="color:var(--primary);font-size:12px;margin-top:10px;display:none;"></div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;">
+          <button onclick="cerrarModal()" style="padding:9px 16px;border:1px solid var(--border);background:white;border-radius:6px;cursor:pointer;font-size:13px;">Cancelar</button>
+          <button id="btn-guardar" onclick="guardarVenta('${fecha}','${localId}',${v ? v.id : 'null'})" class="btn-primary" style="padding:9px 18px;width:auto;">Guardar</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  setTimeout(() => document.getElementById('f-efectivo')?.focus(), 50);
+}
+
+function cerrarModal() { document.getElementById('modal')?.remove(); }
+
+async function guardarVenta(fecha, local, id) {
+  const v = {
+    fecha, local,
+    efectivo: parseFloat(document.getElementById('f-efectivo').value) || 0,
+    tarjeta:  parseFloat(document.getElementById('f-tarjeta').value)  || 0,
+    qr:       parseFloat(document.getElementById('f-qr').value)       || 0,
+    vales:    parseFloat(document.getElementById('f-vales').value)    || 0,
+    online:   parseFloat(document.getElementById('f-online').value)   || 0,
+    fc_oficina: parseFloat(document.getElementById('f-fc-of').value)  || 0,
+    cant_transacciones: parseInt(document.getElementById('f-cant').value) || 0,
+    controlado: document.getElementById('f-controlado').checked,
+    cargado_por: session.email,
+    origen: 'manual',
+  };
+  if (v.controlado) {
+    v.controlado_por = session.email;
+    v.controlado_at = new Date().toISOString();
+  }
+  document.getElementById('btn-guardar').disabled = true;
+  try {
+    const { error } = await sb.from('ventas_diarias')
+      .upsert(v, { onConflict: 'local,fecha' });
+    if (error) throw error;
+    toast('✓ Guardado');
+    cerrarModal();
+    cargar();
+  } catch (e) {
+    const err = document.getElementById('form-error');
+    err.style.display = 'block';
+    err.textContent = 'Error: ' + e.message;
+    document.getElementById('btn-guardar').disabled = false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// INIT — restaurar sesión si existe
+// ═══════════════════════════════════════════════════════════════════════
+(async function init() {
+  const { data: { session: authSession } } = await sb.auth.getSession();
+  if (authSession?.user) {
+    const email = authSession.user.email;
+    const isAdmin = email === ADMIN_EMAIL;
+    let local_id = null;
+    if (!isAdmin) {
+      for (const [id, em] of Object.entries(LOCAL_EMAILS)) {
+        if (em === email) { local_id = id; break; }
+      }
+    }
+    session = { email, local_id, isAdmin };
+    enterApp();
+  }
+})();
+
+// Service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+}
+</script>
+</body>
+</html>
