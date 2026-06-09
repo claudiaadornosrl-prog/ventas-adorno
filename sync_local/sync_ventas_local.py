@@ -167,56 +167,60 @@ def consultar_dragonfish_rango(desde, hasta):
         cur = conn.cursor()
 
         # ── VAL: desglose por medio de pago, agrupado por fecha ──────
+        # ── VAL: agrupamos por fecha SIN HORA (CAST AS date) para no romper
+        # cuando JJFECHA es DATETIME y tiene múltiples timestamps en el mismo día.
         cur.execute(f"""
-            SELECT CONVERT(varchar(10), JJFECHA, 23) AS f,
+            SELECT CONVERT(varchar(10), CAST(JJFECHA AS date), 23) AS f,
               SUM(CASE WHEN JJCO LIKE '0%'  THEN MONTOSISTE ELSE 0 END) AS efectivo,
               SUM(CASE WHEN JJCO LIKE 'TJ%' THEN MONTOSISTE ELSE 0 END) AS tarjeta,
               SUM(CASE WHEN JJCO LIKE 'QR%' THEN MONTOSISTE ELSE 0 END) AS qr,
               SUM(CASE WHEN JJCO LIKE 'VC%' THEN MONTOSISTE ELSE 0 END) AS vales
             FROM [{DB_FISICA}].ZooLogic.VAL
-            WHERE JJFECHA BETWEEN ? AND ? AND (ESVUELTO = 0 OR ESVUELTO IS NULL)
-            GROUP BY JJFECHA
+            WHERE CAST(JJFECHA AS date) BETWEEN ? AND ?
+              AND (ESVUELTO = 0 OR ESVUELTO IS NULL)
+            GROUP BY CAST(JJFECHA AS date)
         """, desde_str, hasta_str)
         for row in cur.fetchall():
             f = str(row[0])[:10]
             if f in out:
-                out[f]['efectivo'] = float(row[1] or 0)
-                out[f]['tarjeta']  = float(row[2] or 0)
-                out[f]['qr']       = float(row[3] or 0)
-                out[f]['vales']    = float(row[4] or 0)
+                # += en vez de = como defensa extra por si hubiera duplicados
+                out[f]['efectivo'] += float(row[1] or 0)
+                out[f]['tarjeta']  += float(row[2] or 0)
+                out[f]['qr']       += float(row[3] or 0)
+                out[f]['vales']    += float(row[4] or 0)
 
         # ── COMPROBANTEV física: cantidad de transacciones por fecha ─
         cur.execute(f"""
-            SELECT CONVERT(varchar(10), FFCH, 23) AS f, COUNT(*)
+            SELECT CONVERT(varchar(10), CAST(FFCH AS date), 23) AS f, COUNT(*)
             FROM [{DB_FISICA}].ZooLogic.COMPROBANTEV
-            WHERE FFCH BETWEEN ? AND ? AND ANULADO = 0
-            GROUP BY FFCH
+            WHERE CAST(FFCH AS date) BETWEEN ? AND ? AND ANULADO = 0
+            GROUP BY CAST(FFCH AS date)
         """, desde_str, hasta_str)
         for row in cur.fetchall():
             f = str(row[0])[:10]
             if f in out:
-                out[f]['cant_transacciones'] = int(row[1] or 0)
+                out[f]['cant_transacciones'] += int(row[1] or 0)
 
         # ── COMPROBANTEV online (si existe): total online por fecha ──
         if DB_ONLINE:
             cur.execute(f"""
-                SELECT CONVERT(varchar(10), FFCH, 23) AS f, COALESCE(SUM(FTOTAL), 0)
+                SELECT CONVERT(varchar(10), CAST(FFCH AS date), 23) AS f, COALESCE(SUM(FTOTAL), 0)
                 FROM [{DB_ONLINE}].ZooLogic.COMPROBANTEV
-                WHERE FFCH BETWEEN ? AND ? AND ANULADO = 0
-                GROUP BY FFCH
+                WHERE CAST(FFCH AS date) BETWEEN ? AND ? AND ANULADO = 0
+                GROUP BY CAST(FFCH AS date)
             """, desde_str, hasta_str)
             for row in cur.fetchall():
                 f = str(row[0])[:10]
                 if f in out:
-                    out[f]['online'] = float(row[1] or 0)
+                    out[f]['online'] += float(row[1] or 0)
 
         # ── Oficina: todo va a 'online' (no desglosamos por medio de pago) ──
         if LOCAL == 'oficina':
             cur.execute(f"""
-                SELECT CONVERT(varchar(10), FFCH, 23) AS f, COALESCE(SUM(FTOTAL), 0)
+                SELECT CONVERT(varchar(10), CAST(FFCH AS date), 23) AS f, COALESCE(SUM(FTOTAL), 0)
                 FROM [{DB_FISICA}].ZooLogic.COMPROBANTEV
-                WHERE FFCH BETWEEN ? AND ? AND ANULADO = 0
-                GROUP BY FFCH
+                WHERE CAST(FFCH AS date) BETWEEN ? AND ? AND ANULADO = 0
+                GROUP BY CAST(FFCH AS date)
             """, desde_str, hasta_str)
             for row in cur.fetchall():
                 f = str(row[0])[:10]
