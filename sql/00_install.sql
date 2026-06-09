@@ -118,14 +118,17 @@ AS $$
     );
 $$;
 
--- Helper: el local del usuario (basado en su email — alcorta@..., unicenter@..., etc.)
+-- Helper: el local del usuario (basado en su email)
+-- alcorta@claudiaadorno.com       → alcorta
+-- unicenter@claudiaadorno.com     → unicenter
+-- administracion@claudiaadorno.com → oficina
 CREATE OR REPLACE FUNCTION ventas_local_usuario() RETURNS text
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
 AS $$
     SELECT CASE
-        WHEN u.email LIKE 'alcorta%'   THEN 'alcorta'
-        WHEN u.email LIKE 'unicenter%' THEN 'unicenter'
-        WHEN u.email LIKE 'oficina%'   THEN 'oficina'
+        WHEN u.email = 'alcorta@claudiaadorno.com'        THEN 'alcorta'
+        WHEN u.email = 'unicenter@claudiaadorno.com'      THEN 'unicenter'
+        WHEN u.email = 'administracion@claudiaadorno.com' THEN 'oficina'
         ELSE NULL
     END
     FROM auth.users u
