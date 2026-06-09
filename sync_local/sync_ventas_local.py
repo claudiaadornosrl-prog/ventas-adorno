@@ -102,10 +102,34 @@ log.info(f"Polling: cada {POLL_SECONDS}s")
 #  Helpers SQL Server
 # ══════════════════════════════════════════════════════════════════
 
+def _elegir_driver():
+    """Auto-detecta el mejor driver ODBC disponible (probamos en orden de preferencia)."""
+    disponibles = [d.strip() for d in pyodbc.drivers()]
+    preferencia = [
+        'ODBC Driver 18 for SQL Server',
+        'ODBC Driver 17 for SQL Server',
+        'ODBC Driver 13 for SQL Server',
+        'ODBC Driver 11 for SQL Server',
+        'SQL Server Native Client 11.0',
+        'SQL Server Native Client 10.0',
+        'SQL Server',
+    ]
+    for d in preferencia:
+        if d in disponibles:
+            return d
+    if disponibles:
+        return disponibles[0]
+    raise RuntimeError('No hay drivers ODBC para SQL Server instalados')
+
+_DRIVER = None
 def get_conn():
     """Conexión a SQL Server local con Windows auth."""
+    global _DRIVER
+    if _DRIVER is None:
+        _DRIVER = _elegir_driver()
+        log.info(f"Driver ODBC elegido: {_DRIVER}")
     return pyodbc.connect(
-        f"DRIVER={{ODBC Driver 17 for SQL Server}};"
+        f"DRIVER={{{_DRIVER}}};"
         f"SERVER={SQL_SERVER};"
         f"Trusted_Connection=yes;",
         timeout=15
@@ -116,13 +140,14 @@ def consultar_dragonfish(fecha):
     Consulta el Dragonfish local para una fecha y arma el dict listo para
     insertar en ventas_diarias.
 
-    Estrategia (validada con datos reales):
-      - DB física: COMPCAJADET (arqueo) → desglose por CODVAL
-            efectivo = SUM(CODVAL='0')
-            tarjeta  = SUM(CODVAL='TJ')
-            qr       = SUM(CODVAL IN ('QR','QR2'))   # MP integrado + no integrado
-            vales    = SUM(CODVAL='VC')              # Vale de Cambio (suele ser negativo)
-        Cantidad transacciones = COUNT(COMPROBANTEV) en DB física
+    Estrategia VALIDADA contra Excel del cliente (Unicenter 5/6 → exacto 5.595.100):
+      - DB física → tabla VAL (cashflow en tiempo real, igual al Z del cierre):
+            efectivo = SUM(MONTOSISTE) WHERE JJCO LIKE '0%'  (PESOS)
+            tarjeta  = SUM(MONTOSISTE) WHERE JJCO LIKE 'TJ%' (Tarjetas + (Int.) Tarjetas)
+            qr       = SUM(MONTOSISTE) WHERE JJCO LIKE 'QR%' (MP integrado + (Int.) MP + QR2)
+            vales    = SUM(MONTOSISTE) WHERE JJCO LIKE 'VC%' (Vale de Cambio)
+            ESVUELTO = 0 para no contar los vueltos
+        Cantidad transacciones = COUNT(COMPROBANTEV) en DB física por FFCH (facturas del día)
       - DB online (si existe): SUM(FTOTAL) de COMPROBANTEV → 'online'
     """
     fecha_str = fecha.strftime('%Y-%m-%d') if isinstance(fecha, (datetime, date)) else str(fecha)[:10]
@@ -137,15 +162,16 @@ def consultar_dragonfish(fecha):
     try:
         cur = conn.cursor()
 
-        # ── DB física (Shopping) ────────────────────────────────────
+        # ── DB física: desglose por medio de pago desde VAL ─────────
+        # VAL se actualiza en tiempo real con cada venta (no espera al cierre Z)
         cur.execute(f"""
             SELECT
-              SUM(CASE WHEN CODVAL='0'           THEN MONTO ELSE 0 END) AS efectivo,
-              SUM(CASE WHEN CODVAL='TJ'          THEN MONTO ELSE 0 END) AS tarjeta,
-              SUM(CASE WHEN CODVAL IN ('QR','QR2') THEN MONTO ELSE 0 END) AS qr,
-              SUM(CASE WHEN CODVAL='VC'          THEN MONTO ELSE 0 END) AS vales
-            FROM [{DB_FISICA}].ZooLogic.COMPCAJADET
-            WHERE JJFECHA = ?
+              SUM(CASE WHEN JJCO LIKE '0%'  THEN MONTOSISTE ELSE 0 END) AS efectivo,
+              SUM(CASE WHEN JJCO LIKE 'TJ%' THEN MONTOSISTE ELSE 0 END) AS tarjeta,
+              SUM(CASE WHEN JJCO LIKE 'QR%' THEN MONTOSISTE ELSE 0 END) AS qr,
+              SUM(CASE WHEN JJCO LIKE 'VC%' THEN MONTOSISTE ELSE 0 END) AS vales
+            FROM [{DB_FISICA}].ZooLogic.VAL
+            WHERE JJFECHA = ? AND (ESVUELTO = 0 OR ESVUELTO IS NULL)
         """, fecha_str)
         row = cur.fetchone()
         if row:
@@ -154,7 +180,7 @@ def consultar_dragonfish(fecha):
             out['qr']       = float(row[2] or 0)
             out['vales']    = float(row[3] or 0)
 
-        # Cantidad de transacciones (solo DB física)
+        # Cantidad de transacciones (facturas no anuladas del día — FFCH en COMPROBANTEV)
         cur.execute(f"""
             SELECT COUNT(*) FROM [{DB_FISICA}].ZooLogic.COMPROBANTEV
             WHERE FFCH = ? AND ANULADO = 0
@@ -231,20 +257,60 @@ def supa_upsert_venta_diaria(data):
 # ══════════════════════════════════════════════════════════════════
 
 def procesar_job(job):
+    """
+    Procesa un job. Si tipo='mes', itera del fecha_desde al fecha_hasta inclusive.
+    Si tipo='dia' (default), solo procesa job['fecha'].
+    """
     job_id = job['id']
-    fecha = job['fecha']
-    log.info(f"[job#{job_id}] Procesando {LOCAL} {fecha}…")
+    tipo = (job.get('tipo') or 'dia').lower()
+    log.info(f"[job#{job_id}] tipo={tipo}")
     try:
-        # marcar como 'en_proceso' para evitar que otro worker lo tome
         supa_marcar_job(job_id, 'en_proceso')
+        from datetime import datetime as _dt, timedelta as _td
 
-        data = consultar_dragonfish(fecha)
-        log.info(f"[job#{job_id}] Resultado: ef={data['efectivo']} tj={data['tarjeta']} "
-                 f"qr={data['qr']} vl={data['vales']} on={data['online']} cant={data['cant_transacciones']}")
+        # Armar lista de fechas a procesar
+        fechas = []
+        if tipo == 'mes':
+            d_ini = _dt.strptime(job['fecha_desde'][:10], '%Y-%m-%d').date()
+            d_fin = _dt.strptime(job['fecha_hasta'][:10], '%Y-%m-%d').date()
+            d = d_ini
+            while d <= d_fin:
+                fechas.append(d.strftime('%Y-%m-%d'))
+                d += _td(days=1)
+        else:
+            fechas.append(job['fecha'])
+        log.info(f"[job#{job_id}] {len(fechas)} día(s) a procesar")
 
-        supa_upsert_venta_diaria(data)
-        supa_marcar_job(job_id, 'completado', payload=data)
-        log.info(f"[job#{job_id}] ✓ Completado")
+        ok = 0
+        errores = []
+        for f in fechas:
+            try:
+                data = consultar_dragonfish(f)
+                # Saltear días sin datos — no pisar lo que ya esté cargado manual
+                if data['cant_transacciones'] == 0 and not any([
+                    data['efectivo'], data['tarjeta'], data['qr'],
+                    data['vales'], data['online'], data['fc_oficina']
+                ]):
+                    log.info(f"[job#{job_id}] {f}: sin datos, saltando")
+                    continue
+                supa_upsert_venta_diaria(data)
+                ok += 1
+                log.info(f"[job#{job_id}] {f}: ef={data['efectivo']} tj={data['tarjeta']} "
+                         f"qr={data['qr']} on={data['online']} cant={data['cant_transacciones']}")
+            except Exception as e:
+                errores.append(f"{f}: {e}")
+                log.error(f"[job#{job_id}] {f}: ERROR {e}")
+
+        payload = {
+            'dias_procesados': ok,
+            'rango': f"{fechas[0]} a {fechas[-1]}" if fechas else None,
+            'errores': errores[:10] if errores else None,
+        }
+        if errores and ok == 0:
+            supa_marcar_job(job_id, 'error', error='; '.join(errores[:3]), payload=payload)
+        else:
+            supa_marcar_job(job_id, 'completado', payload=payload)
+        log.info(f"[job#{job_id}] ✓ {ok} días procesados, {len(errores)} errores")
     except Exception as e:
         err = traceback.format_exc()
         log.error(f"[job#{job_id}] ✗ ERROR: {err}")
