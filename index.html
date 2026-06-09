@@ -165,6 +165,7 @@ td input { width: 100%; padding: 4px; border: 1px solid var(--primary); border-r
     <select id="sel-mes" onchange="cargar()"></select>
     <select id="sel-local" onchange="cargar()" style="display:none;"></select>
     <div class="spacer"></div>
+    <button onclick="abrirCargaDragonfish()" title="Pedirle al servicio local de Dragonfish que sincronice un día">🐉 Cargar desde Dragonfish</button>
     <button class="primary" onclick="abrirCarga()">+ Cargar venta del día</button>
   </div>
 
@@ -536,38 +537,61 @@ function abrirEditar(fecha, localId, v) {
 
 function cerrarModal() { document.getElementById('modal')?.remove(); }
 
-async function guardarVenta(fecha, local, id) {
-  const v = {
-    fecha, local,
-    efectivo: parseFloat(document.getElementById('f-efectivo').value) || 0,
-    tarjeta:  parseFloat(document.getElementById('f-tarjeta').value)  || 0,
-    qr:       parseFloat(document.getElementById('f-qr').value)       || 0,
-    vales:    parseFloat(document.getElementById('f-vales').value)    || 0,
-    online:   parseFloat(document.getElementById('f-online').value)   || 0,
-    fc_oficina: parseFloat(document.getElementById('f-fc-of').value)  || 0,
-    cant_transacciones: parseInt(document.getElementById('f-cant').value) || 0,
-    controlado: document.getElementById('f-controlado').checked,
-    cargado_por: session.email,
-    origen: 'manual',
-  };
-  if (v.controlado) {
-    v.controlado_por = session.email;
-    v.controlado_at = new Date().toISOString();
+// ─── Cargar desde Dragonfish: inserta un job + polling ───────────────
+async function abrirCargaDragonfish() {
+  const localId = session.isAdmin ? document.getElementById('sel-local').value : session.local_id;
+  if (session.isAdmin && (!localId || localId === 'todos')) {
+    toast('Como admin, elegí un local específico antes', true);
+    return;
   }
-  document.getElementById('btn-guardar').disabled = true;
+  const fecha = prompt('¿Qué día querés sincronizar desde Dragonfish?\n(formato YYYY-MM-DD, ej: 2026-06-09)', hoyISO());
+  if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return;
+
+  toast('🐉 Pidiendo al servicio local…');
   try {
-    const { error } = await sb.from('ventas_diarias')
-      .upsert(v, { onConflict: 'local,fecha' });
+    // Insertar job en cola
+    const { data: job, error } = await sb.from('dragonfish_jobs').insert({
+      local: localId, fecha, estado: 'pendiente',
+      solicitado_por: session.email,
+    }).select().single();
     if (error) throw error;
-    toast('✓ Guardado');
-    cerrarModal();
-    cargar();
+    pollJob(job.id, localId, fecha);
   } catch (e) {
-    const err = document.getElementById('form-error');
-    err.style.display = 'block';
-    err.textContent = 'Error: ' + e.message;
-    document.getElementById('btn-guardar').disabled = false;
+    toast('Error: ' + e.message, true);
   }
+}
+
+async function pollJob(jobId, localId, fecha) {
+  const MAX_INTENTOS = 60;  // 60 × 3s = 3 min máximo
+  let intentos = 0;
+  const tickear = async () => {
+    intentos++;
+    try {
+      const { data: j } = await sb.from('dragonfish_jobs').select('*').eq('id', jobId).single();
+      if (!j) return;
+      if (j.estado === 'completado') {
+        const p = j.payload || {};
+        const tot = (p.efectivo||0)+(p.tarjeta||0)+(p.qr||0)+(p.vales||0)+(p.online||0)+(p.fc_oficina||0);
+        toast(`✓ ${LOCALES[localId]?.nombre} ${fmtFecha(fecha)}: $${fmt$(tot)}`);
+        cargar();
+        return;
+      }
+      if (j.estado === 'error') {
+        toast(`✗ Error sync: ${j.error_msg || 'desconocido'}`, true);
+        return;
+      }
+      // sigue pendiente o en_proceso
+      if (intentos >= MAX_INTENTOS) {
+        toast(`⏳ Sigue pendiente. ¿Está prendida la PC del local? Job #${jobId}`, true);
+        return;
+      }
+      setTimeout(tickear, 3000);
+    } catch (e) {
+      console.warn('poll error', e);
+      setTimeout(tickear, 5000);
+    }
+  };
+  tickear();
 }
 
 // ═══════════════════════════════════════════════════════════════════════
