@@ -160,11 +160,19 @@ td input { width: 100%; padding: 4px; border: 1px solid var(--primary); border-r
     </div>
   </div>
 
+  <div id="alerta-cerrar-mes" style="display:none;background:linear-gradient(90deg,#fef3c7,#fde68a);border-bottom:1px solid #f59e0b;padding:10px 16px;display:none;align-items:center;gap:10px;flex-wrap:wrap;">
+    <span style="font-size:18px;">🎉</span>
+    <span id="alerta-cerrar-mes-text" style="flex:1;font-size:14px;color:#78350f;font-weight:600;"></span>
+    <button id="alerta-cerrar-mes-btn" onclick="cerrarMesDesdeAlerta()" style="padding:6px 14px;background:#92400e;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">🔒 Cerrar ahora</button>
+    <button onclick="document.getElementById('alerta-cerrar-mes').style.display='none';" style="padding:4px 8px;background:transparent;border:none;color:#78350f;font-size:18px;cursor:pointer;" title="Cerrar aviso">×</button>
+  </div>
+
   <div class="toolbar">
     <select id="sel-año" onchange="cargar()"></select>
     <select id="sel-mes" onchange="cargar()"></select>
     <select id="sel-local" onchange="cargar()" style="display:none;"></select>
     <div class="spacer"></div>
+    <button id="btn-solicitudes" onclick="abrirGestionSolicitudes()" style="display:none;background:#fef3c7;color:#92400e;border-color:#fcd34d;font-weight:600;" title="Solicitudes de corrección pendientes de las vendedoras"></button>
     <button id="btn-dragonfish" onclick="abrirCargaDragonfish('3d')" title="Trae desde Dragonfish los últimos 3 días (hoy, ayer y antesdeayer) — rápido, ideal para uso diario">🐉 Actualizar (últimos 3 días)</button>
     <button id="btn-dragonfish-mes" onclick="abrirCargaDragonfish('mes')" style="display:none;" title="Re-sincroniza TODO el mes seleccionado desde Dragonfish (admin) — más lento, ideal antes de cerrar o ante una corrección retroactiva">🐉 Resincronizar mes</button>
     <button class="primary" id="btn-cargar-dia" onclick="abrirCarga()">+ Cargar venta del día</button>
@@ -333,9 +341,88 @@ function enterApp() {
     selLocal.style.display = '';
     selLocal.innerHTML = '<option value="todos">Todos (consolidado)</option>' +
       Object.entries(LOCALES).map(([id, l]) => `<option value="${id}">${l.icon} ${l.nombre}</option>`).join('');
+  } else {
+    // Vendedoras: esconder "+ Cargar venta del día" (solo admin carga manual completo)
+    const btnDia = document.getElementById('btn-cargar-dia');
+    if (btnDia) btnDia.style.display = 'none';
   }
 
   cargar();
+  // Chequear si hay meses listos para cerrar (en background, no bloquea)
+  chequearMesesListosParaCerrar();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Aviso "mes listo para cerrar" — banner amarillo arriba
+// Trigger: hay mes pasado con datos del último día calendario Y sin cerrar.
+// ═══════════════════════════════════════════════════════════════════════
+let _mesListoCerrar = null;  // {local, año, mes} para que el botón sepa qué cerrar
+
+async function chequearMesesListosParaCerrar() {
+  try {
+    const localesACheckear = session.isAdmin
+      ? Object.keys(LOCALES)
+      : [session.local_id];
+
+    const hoy = new Date();
+    // Chequear hasta 3 meses hacia atrás
+    const candidatos = [];
+    for (let i = 1; i <= 3; i++) {
+      const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+      const año = d.getFullYear();
+      const mes = d.getMonth() + 1;
+      const ultDia = new Date(año, mes, 0).getDate();
+      const fechaUlt = `${año}-${String(mes).padStart(2,'0')}-${String(ultDia).padStart(2,'0')}`;
+      for (const localId of localesACheckear) {
+        candidatos.push({ localId, año, mes, fechaUlt });
+      }
+    }
+
+    const listos = [];
+    for (const c of candidatos) {
+      // ¿Está cerrado? Si sí, saltear.
+      const { data: cerr } = await sb.from('meses_cerrados_ventas')
+        .select('id').eq('local', c.localId)
+        .eq('año', c.año).eq('mes', c.mes).maybeSingle();
+      if (cerr) continue;
+      // ¿Tiene datos del último día del mes?
+      const { data: vd } = await sb.from('ventas_diarias')
+        .select('id').eq('local', c.localId).eq('fecha', c.fechaUlt).maybeSingle();
+      if (vd) listos.push(c);
+    }
+
+    if (!listos.length) {
+      document.getElementById('alerta-cerrar-mes').style.display = 'none';
+      _mesListoCerrar = null;
+      return;
+    }
+
+    // Tomar el mes más reciente (primero del array porque iteramos i=1 primero)
+    const mLpc = listos[0];
+    _mesListoCerrar = mLpc;
+    const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const txt = listos.length === 1
+      ? `${meses[mLpc.mes-1]} ${mLpc.año} de ${LOCALES[mLpc.localId].nombre} está listo para cerrar`
+      : `${listos.length} mes(es) listos para cerrar. El más reciente: ${meses[mLpc.mes-1]} ${mLpc.año} de ${LOCALES[mLpc.localId].nombre}`;
+    document.getElementById('alerta-cerrar-mes-text').textContent = txt;
+    // Si no es admin, ocultar el botón "Cerrar ahora" (solo admin cierra)
+    document.getElementById('alerta-cerrar-mes-btn').style.display = session.isAdmin ? '' : 'none';
+    document.getElementById('alerta-cerrar-mes').style.display = 'flex';
+  } catch (e) {
+    console.warn('chequearMesesListosParaCerrar:', e);
+  }
+}
+
+function cerrarMesDesdeAlerta() {
+  if (!_mesListoCerrar) return;
+  // Posicionar selectores en el mes/local del aviso y disparar cierre
+  document.getElementById('sel-año').value = _mesListoCerrar.año;
+  document.getElementById('sel-mes').value = _mesListoCerrar.mes;
+  if (session.isAdmin) {
+    document.getElementById('sel-local').value = _mesListoCerrar.localId;
+  }
+  cargar();
+  setTimeout(() => cerrarMesActual(), 400);
 }
 
 async function cargar() {
@@ -370,11 +457,30 @@ async function cargar() {
     const { data, error } = await q;
     if (error) throw error;
 
+    // Traer correcciones aplicadas + pendientes para el rango (para resaltar celdas)
+    let aplicadas = [];
+    let pendientes = [];
+    if (localUnico) {
+      const [resAp, resPe] = await Promise.all([
+        sb.from('ventas_correcciones_aplicadas')
+          .select('*').eq('local', localUnico)
+          .gte('fecha', desde).lte('fecha', hasta),
+        sb.from('ventas_correcciones')
+          .select('*').eq('local', localUnico).eq('estado', 'pendiente')
+          .gte('fecha', desde).lte('fecha', hasta)
+          .order('solicitado_at', { ascending: false }),
+      ]);
+      aplicadas = resAp.data || [];
+      pendientes = resPe.data || [];
+    }
+
     if (session.isAdmin && localSel === 'todos') {
       renderAdminConsolidado(data || [], año, mes);
     } else {
-      renderGrillaLocal(data || [], año, mes, localSel);
+      renderGrillaLocal(data || [], año, mes, localSel, aplicadas, pendientes);
     }
+    // Refrescar badge de solicitudes pendientes (para admin)
+    if (session.isAdmin) refrescarBadgeSolicitudes();
   } catch (e) {
     document.getElementById('contenido').innerHTML = `<div class="empty"><div class="icon">⚠️</div>Error: ${escHtml(e.message)}</div>`;
   } finally {
@@ -383,7 +489,16 @@ async function cargar() {
 }
 
 // ─── Grilla mensual de un local ──────────────────────────────────────
-function renderGrillaLocal(ventas, año, mes, localId) {
+function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes) {
+  aplicadas = aplicadas || [];
+  pendientes = pendientes || [];
+  // Map de correcciones aplicadas por (fecha, campo)
+  const mapAp = {};
+  aplicadas.forEach(c => { mapAp[`${c.fecha}_${c.campo}`] = c; });
+  // Map de pendientes por (fecha, campo)
+  const mapPe = {};
+  pendientes.forEach(c => { mapPe[`${c.fecha}_${c.campo}`] = c; });
+
   const cont = document.getElementById('contenido');
   const diasMes = new Date(año, mes, 0).getDate();
   const hoy = hoyISO();
@@ -422,17 +537,51 @@ function renderGrillaLocal(ventas, año, mes, localId) {
       esHoy ? 'row-today' : '',
       v?.controlado ? 'row-controlado' : '',
     ].filter(Boolean).join(' ');
+    // Helper: render de una celda numérica con resaltado por corrección
+    const celda = (campo, valor) => {
+      const k = `${fecha}_${campo}`;
+      const ap = mapAp[k];
+      const pe = mapPe[k];
+      let style = '';
+      let title = '';
+      let badge = '';
+      if (ap) {
+        style = 'background:#fef3c7;';   // amarillo claro
+        title = `Corregido manualmente: ${fmt$(ap.valor_anterior)} → ${fmt$(ap.valor_propuesto)}\nMotivo: ${ap.motivo}\nPor: ${ap.solicitado_por||'?'} · Aprobó: ${ap.resuelto_por||'?'}`;
+      }
+      if (pe) {
+        style += 'border:2px solid #f59e0b;';
+        badge = ' 📝';
+        title = (title?title+'\n\n':'') + `Solicitud pendiente: ${fmt$(pe.valor_anterior)} → ${fmt$(pe.valor_propuesto)}\nMotivo: ${pe.motivo}\nPor: ${pe.solicitado_por}`;
+      }
+      // Determinar acción al click según rol y campo
+      let onclick;
+      if (session.isAdmin) {
+        // Admin: click en cualquier celda abre el editar completo
+        onclick = `event.stopPropagation(); abrirEditar('${fecha}','${localId}',${JSON.stringify(v||null).replace(/"/g,'&quot;')})`;
+      } else if (campo === 'fc_oficina') {
+        // Vendedora: fc_oficina sigue editable (mini modal con SOLO ese campo)
+        onclick = `event.stopPropagation(); abrirEditarFcOficina('${fecha}','${localId}',${JSON.stringify(v||null).replace(/"/g,'&quot;')})`;
+      } else {
+        // Vendedora + otra celda: pedir corrección
+        const valActual = v ? (v[campo] || 0) : 0;
+        onclick = `event.stopPropagation(); abrirSolicitudCorreccion('${fecha}','${localId}','${campo}',${valActual})`;
+      }
+      const display = v ? (campo === 'cant_transacciones' ? (valor || '—') : fmt$(valor)) : '—';
+      return `<td class="editable" style="${style}cursor:pointer;" title="${escHtml(title)}" onclick="${onclick}">${display}${badge}</td>`;
+    };
+
     filas.push(`
-      <tr class="${klass}" onclick="abrirEditar('${fecha}','${localId}',${JSON.stringify(v||null).replace(/"/g, '&quot;')})" style="cursor:pointer;">
+      <tr class="${klass}">
         <td>${fmtFecha(fecha)}</td>
-        <td>${v ? fmt$(v.efectivo) : '—'}</td>
-        <td>${v ? fmt$(v.tarjeta) : '—'}</td>
-        <td>${v ? fmt$(v.qr) : '—'}</td>
-        <td>${v ? fmt$(v.vales) : '—'}</td>
+        ${celda('efectivo', v?.efectivo)}
+        ${celda('tarjeta', v?.tarjeta)}
+        ${celda('qr', v?.qr)}
+        ${celda('vales', v?.vales)}
         <td class="cell-derived">${v ? fmt$(shopping) : '—'}</td>
-        <td>${v ? (v.cant_transacciones || '—') : '—'}</td>
-        <td>${v ? fmt$(v.online) : '—'}</td>
-        <td>${v ? fmt$(v.fc_oficina) : '—'}</td>
+        ${celda('cant_transacciones', v?.cant_transacciones)}
+        ${celda('online', v?.online)}
+        ${celda('fc_oficina', v?.fc_oficina)}
         <td class="cell-derived big">${v ? fmt$(total) : '—'}</td>
         <td class="cell-derived">${fmt$(acum)}</td>
       </tr>
@@ -593,6 +742,179 @@ function abrirEditar(fecha, localId, v) {
 
 function cerrarModal() { document.getElementById('modal')?.remove(); }
 
+// ─── Modal específico: editar solo Fc Oficina (para vendedoras) ──────
+function abrirEditarFcOficina(fecha, localId, v) {
+  if (typeof v === 'string') { try { v = JSON.parse(v); } catch { v = null; } }
+  const actual = v?.fc_oficina ?? 0;
+  const html = `
+    <div id="modal" style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;">
+      <div style="background:white;border-radius:12px;padding:22px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+        <h3 style="margin:0 0 4px;color:var(--primary);">🧾 Fc Oficina</h3>
+        <p style="margin:0 0 16px;font-size:12px;color:var(--muted);">${LOCALES[localId]?.icon} ${LOCALES[localId]?.nombre} · ${fmtFecha(fecha)}</p>
+        <label style="font-size:12px;color:var(--muted);font-weight:600;">Monto Fc Oficina</label>
+        <input id="f-fc-of" type="number" step="any" value="${actual||''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;margin-top:6px;">
+        <div id="form-error" style="color:var(--primary);font-size:12px;margin-top:10px;display:none;"></div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;">
+          <button onclick="cerrarModal()" style="padding:9px 16px;border:1px solid var(--border);background:white;border-radius:6px;cursor:pointer;font-size:13px;">Cancelar</button>
+          <button id="btn-guardar-fcof" onclick="guardarFcOficina('${fecha}','${localId}',${v ? v.id : 'null'})" class="btn-primary" style="padding:9px 18px;width:auto;">Guardar</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  setTimeout(() => document.getElementById('f-fc-of')?.focus(), 50);
+}
+
+async function guardarFcOficina(fecha, localId, vId) {
+  const btn = document.getElementById('btn-guardar-fcof');
+  const errEl = document.getElementById('form-error');
+  const valor = parseFloat(document.getElementById('f-fc-of').value || '0');
+  if (errEl) { errEl.style.display='none'; errEl.textContent=''; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    const data = { local: localId, fecha, fc_oficina: valor, cargado_por: session.email };
+    const res = vId
+      ? await sb.from('ventas_diarias').update({ fc_oficina: valor }).eq('id', vId)
+      : await sb.from('ventas_diarias').upsert(data, { onConflict: 'local,fecha' });
+    if (res.error) throw res.error;
+    cerrarModal(); toast('✓ Fc Oficina guardado'); cargar();
+  } catch (e) {
+    if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
+  }
+}
+
+// ─── Modal "Solicitar corrección" (para vendedoras) ──────────────────
+const CAMPO_LABEL = {
+  efectivo: '💵 Efectivo', tarjeta: '💳 Tarjeta', qr: '📱 QR (MP)', vales: '🎟 Vales',
+  online: '🌐 Online', fc_oficina: '🧾 Fc Oficina', cant_transacciones: '🛒 Cant. transacciones',
+};
+function abrirSolicitudCorreccion(fecha, localId, campo, valorActual) {
+  const html = `
+    <div id="modal" style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;">
+      <div style="background:white;border-radius:12px;padding:22px;max-width:460px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+        <h3 style="margin:0 0 4px;color:var(--primary);">📩 Pedir corrección</h3>
+        <p style="margin:0 0 14px;font-size:12px;color:var(--muted);">${LOCALES[localId]?.icon} ${LOCALES[localId]?.nombre} · ${fmtFecha(fecha)} · ${CAMPO_LABEL[campo]||campo}</p>
+        <div style="background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:13px;">
+          <div style="color:var(--muted);font-size:11px;">Valor actual del sistema:</div>
+          <div style="font-weight:700;font-size:16px;">${campo==='cant_transacciones' ? valorActual : '$ '+fmt$(valorActual)}</div>
+        </div>
+        <label style="font-size:12px;font-weight:600;color:var(--muted);">Valor correcto que propones</label>
+        <input id="f-correcto" type="number" step="any" placeholder="${valorActual||0}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;margin:6px 0 12px;">
+        <label style="font-size:12px;font-weight:600;color:var(--muted);">Motivo (qué pasó, evidencia, etc.)</label>
+        <textarea id="f-motivo" rows="3" placeholder="Ej: hubo un cierre raro en Dragonfish, el efectivo correcto según el arqueo es 120, no 100."
+          style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;margin-top:6px;"></textarea>
+        <div id="form-error" style="color:var(--primary);font-size:12px;margin-top:10px;display:none;"></div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;">
+          <button onclick="cerrarModal()" style="padding:9px 16px;border:1px solid var(--border);background:white;border-radius:6px;cursor:pointer;font-size:13px;">Cancelar</button>
+          <button id="btn-pedir" onclick="enviarSolicitudCorreccion('${fecha}','${localId}','${campo}',${valorActual})" class="btn-primary" style="padding:9px 18px;width:auto;">Enviar pedido →</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  setTimeout(() => document.getElementById('f-correcto')?.focus(), 50);
+}
+
+async function enviarSolicitudCorreccion(fecha, localId, campo, valorActual) {
+  const btn = document.getElementById('btn-pedir');
+  const errEl = document.getElementById('form-error');
+  const propuesto = parseFloat(document.getElementById('f-correcto').value);
+  const motivo = document.getElementById('f-motivo').value.trim();
+  if (errEl) { errEl.style.display='none'; errEl.textContent=''; }
+  if (isNaN(propuesto)) { errEl.textContent='Poné el valor correcto'; errEl.style.display='block'; return; }
+  if (!motivo || motivo.length < 5) { errEl.textContent='Escribí un motivo (mínimo 5 caracteres)'; errEl.style.display='block'; return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+  try {
+    const { error } = await sb.from('ventas_correcciones').insert({
+      local: localId, fecha, campo,
+      valor_anterior: valorActual, valor_propuesto: propuesto,
+      motivo, solicitado_por: session.email,
+    });
+    if (error) throw error;
+    cerrarModal();
+    toast('✓ Solicitud enviada. JP la va a revisar.');
+    cargar();
+  } catch (e) {
+    if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Enviar pedido →'; }
+  }
+}
+
+// ─── Admin: badge + modal con solicitudes pendientes ─────────────────
+async function refrescarBadgeSolicitudes() {
+  try {
+    const { data, error, count } = await sb.from('ventas_correcciones')
+      .select('id', { count: 'exact', head: true })
+      .eq('estado', 'pendiente');
+    if (error) return;
+    const btn = document.getElementById('btn-solicitudes');
+    if (!btn) return;
+    if (count > 0) {
+      btn.style.display = '';
+      btn.innerHTML = `📩 Solicitudes <span style="background:white;color:var(--primary);border-radius:999px;padding:1px 7px;font-weight:700;margin-left:4px;">${count}</span>`;
+    } else {
+      btn.style.display = 'none';
+    }
+  } catch(_) {}
+}
+
+async function abrirGestionSolicitudes() {
+  const { data: solicitudes, error } = await sb.from('ventas_correcciones')
+    .select('*').eq('estado', 'pendiente')
+    .order('solicitado_at', { ascending: false });
+  if (error) { toast('Error: '+error.message, true); return; }
+  const filas = (solicitudes||[]).map(s => `
+    <div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <strong>${LOCALES[s.local]?.icon} ${LOCALES[s.local]?.nombre} · ${fmtFecha(s.fecha)} · ${CAMPO_LABEL[s.campo]||s.campo}</strong>
+        <span style="font-size:11px;color:var(--muted);">${new Date(s.solicitado_at).toLocaleString('es-AR')}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px;margin-bottom:8px;">
+        <div><span style="color:var(--muted);">Actual:</span> <strong>${s.campo==='cant_transacciones'?s.valor_anterior:'$ '+fmt$(s.valor_anterior)}</strong></div>
+        <div><span style="color:var(--muted);">Propone:</span> <strong style="color:var(--primary);">${s.campo==='cant_transacciones'?s.valor_propuesto:'$ '+fmt$(s.valor_propuesto)}</strong></div>
+      </div>
+      <div style="background:#f9fafb;padding:8px 10px;border-radius:6px;font-size:13px;margin-bottom:8px;">${escHtml(s.motivo)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Por: ${escHtml(s.solicitado_por)}</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="resolverSolicitud(${s.id},'rechazada')" style="padding:7px 14px;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:6px;font-size:13px;cursor:pointer;">✗ Rechazar</button>
+        <button onclick="resolverSolicitud(${s.id},'aprobada')" style="padding:7px 14px;background:var(--green);color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;font-weight:600;">✓ Aprobar y aplicar</button>
+      </div>
+    </div>
+  `).join('');
+  const html = `
+    <div id="modal" style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;">
+      <div style="background:white;border-radius:12px;padding:22px;max-width:640px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <h3 style="margin:0;color:var(--primary);">📩 Solicitudes pendientes (${(solicitudes||[]).length})</h3>
+          <button onclick="cerrarModal()" style="background:transparent;border:none;font-size:22px;cursor:pointer;color:var(--muted);">×</button>
+        </div>
+        ${(solicitudes||[]).length === 0
+          ? '<div style="text-align:center;padding:40px;color:var(--muted);">No hay solicitudes pendientes 🎉</div>'
+          : filas}
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+async function resolverSolicitud(id, estado) {
+  const comentario = estado === 'rechazada'
+    ? prompt('Comentario al rechazo (opcional):') || ''
+    : '';
+  try {
+    const { error } = await sb.from('ventas_correcciones').update({
+      estado,
+      resuelto_por: session.email,
+      comentario_admin: comentario || null,
+    }).eq('id', id);
+    if (error) throw error;
+    toast(estado === 'aprobada' ? '✓ Aplicado a la grilla' : '✓ Rechazado');
+    cerrarModal();
+    refrescarBadgeSolicitudes();
+    cargar();
+  } catch (e) {
+    toast('Error: '+e.message, true);
+  }
+}
+
 // ─── Guardar venta diaria (insert o update) ──────────────────────────
 async function guardarVenta(fecha, localId, vId) {
   const btn = document.getElementById('btn-guardar');
@@ -709,6 +1031,8 @@ async function pollJob(jobId, localId, label) {
         const n = p.dias_procesados || 0;
         toast(`✓ ${LOCALES[localId]?.nombre} ${label}: ${n} día(s) sincronizado(s)`);
         cargar();
+        // Después de cada sync, re-chequear si algún mes pasado quedó listo para cerrar
+        chequearMesesListosParaCerrar();
         return;
       }
       if (j.estado === 'error') {
@@ -757,13 +1081,12 @@ function _actualizarBotonesCierre(cerradoRow, localUnico) {
     if (btnDF) btnDF.disabled = true;
     if (btnDia) btnDia.disabled = true;
   } else {
-    // Mes abierto: mostrar botón Cerrar (solo admin) + botón Resincronizar mes (admin)
+    // Mes abierto: botón Resincronizar mes para todos (vendedoras también, por si hay correcciones viejas).
+    // Cerrar mes solo admin.
     statusEl.style.display = '';
     statusEl.innerHTML = `<span style="background:#fef3c7;color:#92400e;padding:3px 9px;border-radius:10px;font-weight:600;">🔓 Mes abierto</span> · podés editar y sincronizar`;
-    if (session.isAdmin) {
-      btnCerrar.style.display = '';
-      if (btnDFmes) btnDFmes.style.display = '';
-    }
+    if (btnDFmes) btnDFmes.style.display = '';
+    if (session.isAdmin) btnCerrar.style.display = '';
   }
 }
 

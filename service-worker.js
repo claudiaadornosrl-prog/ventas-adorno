@@ -1,5 +1,5 @@
 // Service Worker — Ventas Adorno
-const CACHE_VERSION = 'ventas-adorno-v9-sync-rapido-3dias';
+const CACHE_VERSION = 'ventas-adorno-v12-bloqueo-edicion-y-correcciones';
 const CACHE_ASSETS = ['./', './index.html', './manifest.webmanifest', './favicon.svg'];
 
 self.addEventListener('install', e => {
