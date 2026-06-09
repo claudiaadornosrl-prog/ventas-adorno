@@ -83,7 +83,10 @@ th { background: #f9fafb; padding: 10px 8px; text-align: right; font-size: 11px;
 th:first-child { text-align: left; }
 td { padding: 8px; border-bottom: 1px solid #f3f4f6; text-align: right; font-variant-numeric: tabular-nums; }
 td:first-child { text-align: left; font-weight: 600; }
-tr:hover { background: #fafbfc; }
+/* Zebra striping — filas alternadas como Excel */
+tbody tr:nth-child(even) { background: #f8fafc; }
+tbody tr:nth-child(odd)  { background: #ffffff; }
+tbody tr:hover { background: #fef3c7; }
 td.editable { cursor: pointer; }
 td.editable:hover { background: #fef3c7; }
 td input { width: 100%; padding: 4px; border: 1px solid var(--primary); border-radius: 4px; text-align: right; font: inherit; font-variant-numeric: tabular-nums; }
