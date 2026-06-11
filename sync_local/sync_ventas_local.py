@@ -156,7 +156,7 @@ def consultar_dragonfish_rango(desde, hasta):
         f = d.strftime('%Y-%m-%d')
         out[f] = dict(
             local=LOCAL, fecha=f,
-            efectivo=0, tarjeta=0, qr=0, vales=0,
+            efectivo=0, efectivo_negro=0, tarjeta=0, qr=0, vales=0,
             cant_transacciones=0,
             online=0, fc_oficina=0,
         )
@@ -214,6 +214,21 @@ def consultar_dragonfish_rango(desde, hasta):
                 if f in out:
                     out[f]['online'] += float(row[1] or 0)
 
+            # ── Efectivo de bases 2 (NEGRO): VAL con JJCO LIKE '0%' ──
+            # JP confirmó que UNI2/ALCO2 también usan código 0 para efectivo.
+            cur.execute(f"""
+                SELECT CONVERT(varchar(10), CAST(JJFECHA AS date), 23) AS f,
+                  SUM(CASE WHEN JJCO LIKE '0%' THEN MONTOSISTE ELSE 0 END) AS efectivo_negro
+                FROM [{DB_ONLINE}].ZooLogic.VAL
+                WHERE CAST(JJFECHA AS date) BETWEEN ? AND ?
+                  AND (ESVUELTO = 0 OR ESVUELTO IS NULL)
+                GROUP BY CAST(JJFECHA AS date)
+            """, desde_str, hasta_str)
+            for row in cur.fetchall():
+                f = str(row[0])[:10]
+                if f in out:
+                    out[f]['efectivo_negro'] += float(row[1] or 0)
+
         # ── Oficina: todo va a 'online' (no desglosamos por medio de pago) ──
         if LOCAL == 'oficina':
             cur.execute(f"""
@@ -226,7 +241,8 @@ def consultar_dragonfish_rango(desde, hasta):
                 f = str(row[0])[:10]
                 if f in out:
                     out[f]['online'] = float(row[1] or 0)
-                    out[f]['efectivo'] = out[f]['tarjeta'] = out[f]['qr'] = out[f]['vales'] = 0
+                    out[f]['efectivo'] = out[f]['efectivo_negro'] = 0
+                    out[f]['tarjeta'] = out[f]['qr'] = out[f]['vales'] = 0
     finally:
         conn.close()
     return out
