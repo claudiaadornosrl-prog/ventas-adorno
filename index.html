@@ -1459,6 +1459,23 @@ async function cerrarTurnoAhora(fecha, localId) {
     ? `admin:${session?.email || '?'}`
     : `local:${localId}`;
 
+  // PRE-SYNC: traer los pagos MP de los últimos 30 min para evitar discrepancia
+  // por lag del scraper horario. Si falla, seguimos igual (la edge function es
+  // un "best effort" — el cruce funciona sin ella, solo es menos preciso).
+  toast('🔄 Sincronizando últimos pagos MP...');
+  try {
+    const { data: syncRes, error: syncErr } = await sb.functions.invoke('sync-mp-on-demand', {
+      body: { minutes_back: 30 },
+    });
+    if (syncErr) {
+      console.warn('sync-mp-on-demand falló (sigo igual):', syncErr);
+    } else if (syncRes?.sincronizados !== undefined) {
+      console.log(`Sync MP: ${syncRes.sincronizados} movs actualizados`);
+    }
+  } catch (e) {
+    console.warn('sync-mp-on-demand exception (sigo igual):', e);
+  }
+
   try {
     const { data, error } = await sb.rpc('cerrar_turno', {
       p_local: localId,
@@ -1548,41 +1565,70 @@ function mostrarResultadoTurno(turno, fecha, localId) {
           </div>
         </div>
 
-        ${tieneDisc && movs.length ? `
-          <details style="margin-bottom:8px;">
-            <summary style="cursor:pointer;font-weight:600;color:#dc2626;padding:8px 0;">
-              ▶ Ver ${movs.length} movimiento${movs.length>1?'s':''} de MP del turno
-            </summary>
-            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;margin-top:8px;max-height:300px;overflow:auto;">
-              <table style="width:100%;font-size:12px;">
-                <thead style="background:#f8fafc;position:sticky;top:0;">
-                  <tr>
-                    <th style="text-align:left;padding:8px;">Hora</th>
-                    <th style="text-align:left;padding:8px;">POS</th>
-                    <th style="text-align:left;padding:8px;">Canal</th>
-                    <th style="text-align:right;padding:8px;">Importe</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${movs.map(m => `
-                    <tr style="border-top:1px solid #f1f5f9;">
-                      <td style="padding:6px 8px;">${new Date(m.cargado_at).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</td>
-                      <td style="padding:6px 8px;">${escHtml(m.pos_name || '—')}</td>
-                      <td style="padding:6px 8px;"><span style="background:${m.canal==='qr'?'#dbeafe':'#fef3c7'};padding:1px 6px;border-radius:8px;font-size:10px;">${escHtml((m.canal||'').toUpperCase())}</span></td>
-                      <td style="padding:6px 8px;text-align:right;font-weight:600;">${fmt$(+m.importe)}</td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-            </div>
-            <div style="margin-top:6px;font-size:11px;color:#64748b;">
-              Si la diferencia es positiva, MP cobró más de lo que Dragonfish registró
-              (probablemente alguna venta no se cargó en el POS).<br>
-              Si es negativa, Dragonfish registró más que MP (probablemente alguna venta
-              quedó en proceso o se anuló desde MP).
-            </div>
-          </details>
-        ` : ''}
+        ${(() => {
+          // Detalle nuevo: 2 listas lado a lado con verde si tiene_match, rojo si no
+          const data = t.mp_movs_no_match || {};
+          const movsCuenta = Array.isArray(data) ? data : (data.movs_cuenta || []);
+          const txsDf      = Array.isArray(data) ? [] : (data.txs_dragonfish || []);
+          const summary    = data.summary || null;
+          if (!movsCuenta.length && !txsDf.length) return '';
+          const fmtHora = (s) => s ? new Date(s).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}) : '—';
+          const renderFila = (m, tieneMatch) => `
+            <tr style="border-top:1px solid #f1f5f9;background:${tieneMatch?'#fff':'#fef2f2'};">
+              <td style="padding:6px 8px;">${fmtHora(m.hora)}</td>
+              <td style="padding:6px 8px;text-align:right;font-weight:600;">${fmt$(+m.importe)}</td>
+              <td style="padding:6px 8px;text-align:center;">${tieneMatch ? '<span style="color:#16a34a;">✓</span>' : '<span style="color:#dc2626;font-weight:700;">✗</span>'}</td>
+            </tr>`;
+          return `
+            ${summary ? `
+              <div style="display:flex;gap:14px;flex-wrap:wrap;background:#f8fafc;padding:10px 14px;border-radius:6px;margin-bottom:10px;font-size:12px;">
+                <div><strong>MP cuenta:</strong> ${summary.cuenta_n} movs ${summary.cuenta_sin_match > 0 ? `<span style="color:#dc2626;">(${summary.cuenta_sin_match} sin match)</span>` : ''}</div>
+                <div><strong>Dragonfish:</strong> ${summary.df_n} movs ${summary.df_sin_match > 0 ? `<span style="color:#dc2626;">(${summary.df_sin_match} sin match)</span>` : ''}</div>
+              </div>
+            ` : ''}
+            <details ${tieneDisc?'open':''} style="margin-bottom:8px;">
+              <summary style="cursor:pointer;font-weight:600;color:#475569;padding:8px 0;">
+                ▶ Comparar transacción por transacción
+              </summary>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
+                <div>
+                  <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:4px;">MP cuenta (${movsCuenta.length})</div>
+                  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;max-height:280px;overflow:auto;">
+                    <table style="width:100%;font-size:11px;">
+                      <thead style="background:#f8fafc;position:sticky;top:0;">
+                        <tr>
+                          <th style="text-align:left;padding:6px;">Hora</th>
+                          <th style="text-align:right;padding:6px;">Importe</th>
+                          <th style="text-align:center;padding:6px;">¿Match?</th>
+                        </tr>
+                      </thead>
+                      <tbody>${movsCuenta.map(m => renderFila(m, m.tiene_match)).join('')}</tbody>
+                    </table>
+                  </div>
+                </div>
+                <div>
+                  <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:4px;">Dragonfish (${txsDf.length})</div>
+                  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;max-height:280px;overflow:auto;">
+                    <table style="width:100%;font-size:11px;">
+                      <thead style="background:#f8fafc;position:sticky;top:0;">
+                        <tr>
+                          <th style="text-align:left;padding:6px;">Hora</th>
+                          <th style="text-align:right;padding:6px;">Importe</th>
+                          <th style="text-align:center;padding:6px;">¿Match?</th>
+                        </tr>
+                      </thead>
+                      <tbody>${txsDf.map(m => renderFila(m, m.tiene_match)).join('')}</tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+              <div style="margin-top:8px;font-size:11px;color:#64748b;line-height:1.4;">
+                <strong>✗ MP cuenta sin match</strong> = pago entró a MP pero Dragonfish no lo registró (¿venta no cargada en POS?).<br>
+                <strong>✗ Dragonfish sin match</strong> = venta marcada en POS pero no llegó (todavía) a MP (¿en proceso? ¿anulada? ¿lag del sync?).
+              </div>
+            </details>
+          `;
+        })()}
       ` : '<div style="color:#64748b;font-size:13px;text-align:center;padding:8px;">Cuenta MP no disponible para este local — sin cruce automático.</div>'}
 
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">

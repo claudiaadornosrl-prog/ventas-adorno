@@ -1,5 +1,5 @@
 // Service Worker — Ventas Adorno
-const CACHE_VERSION = 'ventas-adorno-v17-rename-mp-tarjeta-jul26';
+const CACHE_VERSION = 'ventas-adorno-v18-cruce-fila-por-fila';
 const CACHE_ASSETS = ['./', './index.html', './manifest.webmanifest', './favicon.svg'];
 
 self.addEventListener('install', e => {

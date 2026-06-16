@@ -379,6 +379,91 @@ def supa_bulk_upsert_ventas(rows):
                       json=body, timeout=30)
     r.raise_for_status()
 
+
+def consultar_transacciones_mp_rango(desde, hasta):
+    """Trae cada transacción MP individual del rango (no agregada).
+
+    Una fila de la tabla VAL de Dragonfish = una transacción de venta.
+    Filtramos por JJCO LIKE 'QR%' (que en Dragonfish = MP, tanto QR como Point).
+
+    Devuelve list de dicts con shape ventas_transacciones.
+    """
+    desde_str = desde.strftime('%Y-%m-%d') if isinstance(desde, (datetime, date)) else str(desde)[:10]
+    hasta_str = hasta.strftime('%Y-%m-%d') if isinstance(hasta, (datetime, date)) else str(hasta)[:10]
+    out = []
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        # ── Base FISICA: MP "blanco" ─────────────────────────────────
+        cur.execute(f"""
+            SELECT JJFECHA, JJCO, MONTOSISTE
+            FROM [{DB_FISICA}].ZooLogic.VAL
+            WHERE CAST(JJFECHA AS date) BETWEEN ? AND ?
+              AND (ESVUELTO = 0 OR ESVUELTO IS NULL)
+              AND JJCO LIKE 'QR%'
+              AND MONTOSISTE > 0
+        """, desde_str, hasta_str)
+        for jjfecha, jjco, monto in cur.fetchall():
+            out.append(_armar_transaccion_mp(jjfecha, jjco, monto, base='fisica'))
+
+        # ── Base ONLINE (negro): MP "negro" ───────────────────────────
+        if DB_ONLINE:
+            cur.execute(f"""
+                SELECT JJFECHA, JJCO, MONTOSISTE
+                FROM [{DB_ONLINE}].ZooLogic.VAL
+                WHERE CAST(JJFECHA AS date) BETWEEN ? AND ?
+                  AND (ESVUELTO = 0 OR ESVUELTO IS NULL)
+                  AND JJCO LIKE 'QR%'
+                  AND MONTOSISTE > 0
+            """, desde_str, hasta_str)
+            for jjfecha, jjco, monto in cur.fetchall():
+                out.append(_armar_transaccion_mp(jjfecha, jjco, monto, base='online'))
+    finally:
+        conn.close()
+    return out
+
+
+def _armar_transaccion_mp(jjfecha, jjco, monto, base):
+    """Convierte una fila de VAL a un dict para insertar en ventas_transacciones."""
+    import hashlib
+    # JJFECHA puede ser datetime o str. Normalizamos a ISO con TZ Argentina.
+    if isinstance(jjfecha, datetime):
+        # Le pegamos -03:00 (BAires) porque Dragonfish guarda hora local sin TZ.
+        aprobado_at = jjfecha.strftime('%Y-%m-%dT%H:%M:%S') + '-03:00'
+        fecha_only = jjfecha.strftime('%Y-%m-%d')
+    else:
+        s = str(jjfecha)
+        aprobado_at = s + '-03:00' if 'T' in s and '+' not in s and '-03' not in s else s
+        fecha_only = s[:10]
+
+    # Hash externo: local + jjfecha + jjco + monto. Único razonable.
+    raw = f"{LOCAL}|{aprobado_at}|{jjco}|{monto}|{base}"
+    h = hashlib.md5(raw.encode('utf-8')).hexdigest()
+
+    return {
+        'local':        LOCAL,
+        'fecha':        fecha_only,
+        'aprobado_at':  aprobado_at,
+        'importe':      float(monto or 0),
+        'codigo_jjco':  str(jjco or ''),
+        'tipo':         'mp',
+        'base':         base,
+        'hash_externo': h,
+    }
+
+
+def supa_bulk_upsert_transacciones(rows):
+    """Inserta transacciones individuales en ventas_transacciones con dedup
+    por (local, hash_externo). Las que ya están las ignora."""
+    if not rows:
+        return 0
+    url = f"{SUPABASE_URL}/rest/v1/ventas_transacciones?on_conflict=local,hash_externo"
+    r = requests.post(url, headers={**HDRS,
+                                     'Prefer': 'resolution=ignore-duplicates,return=minimal'},
+                      json=rows, timeout=60)
+    r.raise_for_status()
+    return len(rows)
+
 # ══════════════════════════════════════════════════════════════════
 #  Loop principal
 # ══════════════════════════════════════════════════════════════════
@@ -431,8 +516,24 @@ def procesar_job(job):
         else:
             log.info(f"[job#{job_id}] sin datos en el rango, nada para upsertear")
 
+        # 4) Subir TAMBIÉN cada transacción MP individual (para cruce fila por
+        #    fila contra la cuenta MP al cerrar un turno).
+        n_tx = 0
+        try:
+            t0 = time.time()
+            txs = consultar_transacciones_mp_rango(d_ini, d_fin)
+            if txs:
+                n_tx = supa_bulk_upsert_transacciones(txs)
+                log.info(f"[job#{job_id}] transacciones MP OK en {time.time()-t0:.2f}s — {n_tx} transacciones subidas")
+            else:
+                log.info(f"[job#{job_id}] sin transacciones MP en el rango")
+        except Exception as etx:
+            # No rompemos el job si esto falla — el agregado ya está OK.
+            log.warning(f"[job#{job_id}] no pude sincronizar transacciones MP: {etx}")
+
         payload = {
             'dias_procesados': len(rows),
+            'transacciones_mp': n_tx,
             'rango': f"{d_ini_str} a {d_fin_str}",
         }
         supa_marcar_job(job_id, 'completado', payload=payload)
