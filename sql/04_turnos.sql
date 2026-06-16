@@ -4,13 +4,14 @@
 -- Permite "abrir" la fila de un día en sus turnos (1 turno, 2 turnos, o más).
 --   - ventas_diarias sigue siendo el agregado del día (compatible con todo).
 --   - ventas_turnos guarda cada cierre individual con su rango horario.
---   - Trigger en ventas_turnos actualiza ventas_diarias automáticamente.
 --
 -- Workflow:
 --   1) Las ventas se sincronizan en ventas_diarias como hoy (sync_local 60s).
 --   2) Cuando la encargada cierra turno (botón en PWA), llama cerrar_turno().
 --      → snapshot: valores = (totales actuales del día) - (turnos ya cerrados).
 --      → rango horario: desde = max(hasta) del último turno o 00:00, hasta = NOW.
+--      → cruza con MP por extra.date_approved + margen de gracia ±15min.
+--      → compara fila por fila contra ventas_transacciones (Dragonfish detalle).
 --   3) Próximo turno arranca implícito desde el cierre anterior.
 --   4) No hay "cerrar día" — el día queda cerrado a las 00:00 del día siguiente.
 -- ═══════════════════════════════════════════════════════════════════════
@@ -20,12 +21,8 @@ CREATE TABLE IF NOT EXISTS ventas_turnos (
     local               text NOT NULL CHECK (local IN ('alcorta','unicenter','oficina')),
     fecha               date NOT NULL,
     numero              int  NOT NULL,                  -- 1, 2, 3...
-
-    -- Rango horario del turno
     desde               timestamptz NOT NULL,           -- arranque (cierre anterior o 00:00)
     hasta               timestamptz NOT NULL,           -- cuando se cerró (= NOW al click)
-
-    -- Valores DEL TURNO (no acumulado del día)
     efectivo            numeric(14,2) DEFAULT 0,
     tarjeta             numeric(14,2) DEFAULT 0,
     qr                  numeric(14,2) DEFAULT 0,        -- = MP (point + qr)
@@ -33,17 +30,12 @@ CREATE TABLE IF NOT EXISTS ventas_turnos (
     online              numeric(14,2) DEFAULT 0,
     fc_oficina          numeric(14,2) DEFAULT 0,
     cant_transacciones  int DEFAULT 0,
-
-    -- Cruce con Mercado Pago (calculado al cerrar)
-    mp_cuenta           numeric(14,2),                  -- lo que llegó a MP real (por rango horario)
-    discrepancia_mp     numeric(14,2),                  -- mp_cuenta - qr (campo QR = MP en dragonfish)
-    mp_movs_no_match    jsonb,                          -- detalle de los movs MP que no aparecen en Dragonfish
-
-    -- Meta
-    cerrado_por         text,                           -- 'admin:juanpsimonelli@gmail.com' o 'local:alcorta'
+    mp_cuenta           numeric(14,2),                  -- lo que llegó a MP real
+    discrepancia_mp     numeric(14,2),                  -- mp_cuenta - qr
+    mp_movs_no_match    jsonb,                          -- detalle de no-matches (movs_cuenta + txs_dragonfish + summary)
+    cerrado_por         text,
     cerrado_at          timestamptz NOT NULL DEFAULT now(),
     notas               text,
-
     created_at          timestamptz NOT NULL DEFAULT now(),
     UNIQUE (local, fecha, numero)
 );
@@ -57,19 +49,11 @@ COMMENT ON TABLE ventas_turnos IS
 -- ═══════════════════════════════════════════════════════════════════════
 -- Función: cerrar_turno(local, fecha)
 -- ═══════════════════════════════════════════════════════════════════════
--- Crea un registro en ventas_turnos con los valores del turno actual.
--- - numero = max(numero) + 1 del día/local, o 1 si es el primero.
--- - desde  = max(hasta) del turno anterior, o fecha a las 00:00.
--- - hasta  = NOW().
--- - valores = (ventas_diarias del día) - (sum de turnos previos del día).
---
--- Args:
---   p_local       text — 'alcorta' | 'unicenter' | 'oficina'
---   p_fecha       date — la fecha del día a cerrar el turno
---   p_cerrado_por text — quien cerró (email admin o 'local:<nombre>')
---   p_notas       text — opcional
---
--- Retorna la fila creada en ventas_turnos.
+-- Versión actualizada (post QA 16/06/2026):
+--   - Cruce MP por extra.date_approved (no cargado_at) con fallback a cargado_at
+--   - Margen de gracia 15min hacia adelante del cierre (timing del sync MP)
+--   - Bug timezone medianoche BA arreglado
+--   - Detalle fila por fila contra ventas_transacciones (matches/no-matches)
 -- ═══════════════════════════════════════════════════════════════════════
 CREATE OR REPLACE FUNCTION cerrar_turno(
     p_local       text,
@@ -81,6 +65,7 @@ DECLARE
     v_numero      int;
     v_desde       timestamptz;
     v_hasta       timestamptz := now();
+    v_hasta_mp    timestamptz;
     v_vd          ventas_diarias%ROWTYPE;
     v_prev        record;
     v_efectivo    numeric;
@@ -96,15 +81,24 @@ DECLARE
     v_cuenta_mp   bigint;
     v_resultado   ventas_turnos%ROWTYPE;
 BEGIN
-    -- 1) Buscar el último turno cerrado del día
+    -- 1) Calcular número de turno y desde (cierre anterior o medianoche BA)
+    -- FIX timezone: (p_fecha::text || ' 00:00')::timestamp AT TIME ZONE 'BA'
+    -- representa correctamente las 00:00 del día en hora Argentina.
     SELECT
-        COALESCE(MAX(numero), 0) + 1                     AS sig_numero,
-        COALESCE(MAX(hasta), (p_fecha::timestamp at time zone 'America/Argentina/Buenos_Aires')) AS desde_calc
+        COALESCE(MAX(numero), 0) + 1,
+        COALESCE(
+            MAX(hasta),
+            ((p_fecha::text || ' 00:00')::timestamp AT TIME ZONE 'America/Argentina/Buenos_Aires')
+        )
     INTO v_numero, v_desde
     FROM ventas_turnos
     WHERE local = p_local AND fecha = p_fecha;
 
-    -- 2) Sumar turnos previos del día para calcular el delta
+    -- Margen de gracia: 15 min después del click para tolerar movs MP procesados
+    -- en los últimos segundos antes del cierre que aún no llegaron al scraper.
+    v_hasta_mp := v_hasta + INTERVAL '15 minutes';
+
+    -- 2) Sumar turnos previos del día
     SELECT
         COALESCE(SUM(efectivo), 0)          AS efec,
         COALESCE(SUM(tarjeta), 0)           AS tarj,
@@ -127,7 +121,7 @@ BEGIN
             USING HINT = 'Esperar al próximo sync (60s) o cargar manual primero.';
     END IF;
 
-    -- 4) Calcular valores del turno = totales del día - turnos previos
+    -- 4) Delta = totales del día - turnos previos
     v_efectivo   := COALESCE(v_vd.efectivo, 0)   - v_prev.efec;
     v_tarjeta    := COALESCE(v_vd.tarjeta, 0)    - v_prev.tarj;
     v_qr         := COALESCE(v_vd.qr, 0)         - v_prev.qr_;
@@ -136,42 +130,85 @@ BEGIN
     v_fc_oficina := COALESCE(v_vd.fc_oficina, 0) - v_prev.fcof;
     v_cant       := COALESCE(v_vd.cant_transacciones, 0) - v_prev.ctx;
 
-    -- 5) Cruzar con Mercado Pago (cuenta MP Locales = id 12)
-    --    Sumar movs MP de la cuenta + local + rango horario del turno
+    -- 5) Buscar la cuenta MP Locales
     SELECT id INTO v_cuenta_mp
     FROM tesoreria_cuentas
     WHERE nombre = 'MP Locales' AND tipo = 'mp'
     LIMIT 1;
 
+    -- 6) CRUCE MP detallado: comparar 2 listas (cuenta MP vs Dragonfish)
+    --    - movs_cuenta: tesoreria_movimientos del rango horario del turno
+    --    - txs_dragonfish: ventas_transacciones del mismo rango
+    --    Match por importe + hora ±5min. Reporta tiene_match en cada lado.
     IF v_cuenta_mp IS NOT NULL AND p_local IN ('alcorta','unicenter') THEN
-        SELECT COALESCE(SUM(m.importe), 0) INTO v_mp_cuenta
-        FROM tesoreria_movimientos m
-        WHERE m.cuenta_id = v_cuenta_mp
-          AND m.local = p_local
-          AND m.fecha = p_fecha
-          AND m.cargado_at BETWEEN v_desde AND v_hasta;
+        WITH movs_cuenta AS (
+            SELECT m.id, m.importe,
+                   COALESCE((m.extra->>'date_approved')::timestamptz, m.cargado_at) AS hora,
+                   m.canal,
+                   m.extra->>'pos_name' AS pos_name
+            FROM tesoreria_movimientos m
+            WHERE m.cuenta_id = v_cuenta_mp
+              AND m.local = p_local
+              AND m.fecha = p_fecha
+              AND COALESCE((m.extra->>'date_approved')::timestamptz, m.cargado_at)
+                  BETWEEN v_desde AND v_hasta_mp
+        ),
+        txs_df AS (
+            SELECT t.id, t.importe, t.aprobado_at AS hora, t.codigo_jjco, t.base
+            FROM ventas_transacciones t
+            WHERE t.local = p_local
+              AND t.fecha = p_fecha
+              AND t.tipo = 'mp'
+              AND t.aprobado_at BETWEEN v_desde AND v_hasta_mp
+        ),
+        cuenta_con_flag AS (
+            SELECT mc.*, EXISTS(
+                SELECT 1 FROM txs_df td
+                WHERE td.importe = mc.importe
+                  AND ABS(EXTRACT(EPOCH FROM (td.hora - mc.hora))) < 300
+            ) AS tiene_match
+            FROM movs_cuenta mc
+        ),
+        df_con_flag AS (
+            SELECT td.*, EXISTS(
+                SELECT 1 FROM movs_cuenta mc
+                WHERE mc.importe = td.importe
+                  AND ABS(EXTRACT(EPOCH FROM (td.hora - mc.hora))) < 300
+            ) AS tiene_match
+            FROM txs_df td
+        )
+        SELECT
+            (SELECT COALESCE(SUM(importe), 0) FROM movs_cuenta),
+            jsonb_build_object(
+                'movs_cuenta', COALESCE(
+                    (SELECT jsonb_agg(jsonb_build_object(
+                        'id', id, 'hora', hora, 'importe', importe,
+                        'canal', canal, 'pos_name', pos_name,
+                        'tiene_match', tiene_match
+                    ) ORDER BY hora) FROM cuenta_con_flag),
+                    '[]'::jsonb),
+                'txs_dragonfish', COALESCE(
+                    (SELECT jsonb_agg(jsonb_build_object(
+                        'id', id, 'hora', hora, 'importe', importe,
+                        'codigo_jjco', codigo_jjco, 'base', base,
+                        'tiene_match', tiene_match
+                    ) ORDER BY hora) FROM df_con_flag),
+                    '[]'::jsonb),
+                'summary', jsonb_build_object(
+                    'cuenta_n',   (SELECT COUNT(*) FROM movs_cuenta),
+                    'cuenta_sum', (SELECT COALESCE(SUM(importe),0) FROM movs_cuenta),
+                    'df_n',       (SELECT COUNT(*) FROM txs_df),
+                    'df_sum',     (SELECT COALESCE(SUM(importe),0) FROM txs_df),
+                    'cuenta_sin_match', (SELECT COUNT(*) FROM cuenta_con_flag WHERE NOT tiene_match),
+                    'df_sin_match',     (SELECT COUNT(*) FROM df_con_flag WHERE NOT tiene_match)
+                )
+            )
+        INTO v_mp_cuenta, v_no_match;
 
         v_discrep := v_mp_cuenta - v_qr;
-
-        -- Detalle: listar movs MP del turno como JSON (para mostrar en PWA)
-        SELECT jsonb_agg(jsonb_build_object(
-            'id',          m.id,
-            'fecha',       m.fecha,
-            'importe',     m.importe,
-            'canal',       m.canal,
-            'pos_name',    m.extra->>'pos_name',
-            'descripcion', LEFT(COALESCE(m.descripcion,''), 80),
-            'cargado_at',  m.cargado_at
-        ) ORDER BY m.cargado_at DESC)
-        INTO v_no_match
-        FROM tesoreria_movimientos m
-        WHERE m.cuenta_id = v_cuenta_mp
-          AND m.local = p_local
-          AND m.fecha = p_fecha
-          AND m.cargado_at BETWEEN v_desde AND v_hasta;
     END IF;
 
-    -- 6) Insertar el turno
+    -- 7) Insertar el turno
     INSERT INTO ventas_turnos (
         local, fecha, numero,
         desde, hasta,
@@ -195,7 +232,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION cerrar_turno(text, date, text, text) TO authenticated;
 
 COMMENT ON FUNCTION cerrar_turno IS
-'Cierra el turno actual de un local. Calcula valores como (ventas_diarias - turnos previos del día), cruza con MP y devuelve la fila creada.';
+'Cierra el turno actual de un local. Calcula valores como (ventas_diarias - turnos previos del día), cruza con MP fila por fila contra ventas_transacciones y devuelve la fila creada.';
 
 -- ═══════════════════════════════════════════════════════════════════════
 -- Vista: turnos del día con discrepancia visible
@@ -245,20 +282,3 @@ CREATE POLICY vt_delete ON ventas_turnos FOR DELETE
     USING (ventas_is_admin());
 
 NOTIFY pgrst, 'reload schema';
-
--- ═══════════════════════════════════════════════════════════════════════
--- ¿Cómo usar?
--- ═══════════════════════════════════════════════════════════════════════
--- Desde la PWA (Supabase JS):
---   const { data, error } = await sb.rpc('cerrar_turno', {
---     p_local: 'alcorta',
---     p_fecha: '2026-06-16',
---     p_cerrado_por: session.email,
---     p_notas: null
---   });
---   data → la fila ventas_turnos recién creada (con discrepancia_mp y mp_movs_no_match)
---
--- Para ver los turnos de un día:
---   SELECT * FROM ventas_turnos_view
---   WHERE local='alcorta' AND fecha='2026-06-16'
---   ORDER BY numero;
