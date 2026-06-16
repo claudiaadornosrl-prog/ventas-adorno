@@ -718,10 +718,17 @@ async function cargar() {
 }
 
 // ─── Grilla mensual de un local ──────────────────────────────────────
+// Tarjeta (Clover) se discontinuó al cierre de junio 2026.
+// A partir de julio 2026 la columna no se muestra en la planilla.
+const FECHA_FIN_TARJETA = '2026-06-30';
+
 function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, turnos) {
   aplicadas = aplicadas || [];
   pendientes = pendientes || [];
   turnos = turnos || [];
+  // ¿Mostramos la columna Tarjeta en este mes?
+  const primerDiaMes = `${año}-${String(mes).padStart(2,'0')}-01`;
+  const mostrarTarjeta = primerDiaMes <= FECHA_FIN_TARJETA;
   // Map de correcciones aplicadas por (fecha, campo)
   const mapAp = {};
   aplicadas.forEach(c => { mapAp[`${c.fecha}_${c.campo}`] = c; });
@@ -839,7 +846,7 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
       <tr class="${klass}">
         <td>${fmtFecha(fecha)}</td>
         ${celda('efectivo', v?.efectivo)}
-        ${celda('tarjeta', v?.tarjeta)}
+        ${mostrarTarjeta ? celda('tarjeta', v?.tarjeta) : ''}
         ${celda('qr', v?.qr)}
         ${celda('vales', v?.vales)}
         <td class="cell-derived">${v ? fmt$(shopping) : '—'}</td>
@@ -865,7 +872,7 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
       <table>
         <thead>
           <tr>
-            <th>Fecha</th><th>Efectivo</th><th>Tarjeta</th><th>QR (MP)</th><th>Vales</th>
+            <th>Fecha</th><th>Efectivo</th>${mostrarTarjeta ? '<th>Tarjeta</th>' : ''}<th>MP</th><th>Vales</th>
             <th>Shopping</th><th>Cant</th><th>Online</th><th>Fc Oficina</th><th>Total</th><th>Acumulado</th>
             <th style="white-space:nowrap;">🔒 Turnos</th>
           </tr>
@@ -875,7 +882,7 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
           <tr class="row-total">
             <td>TOTAL</td>
             <td>${fmt$(totEfectivo)}</td>
-            <td>${fmt$(totTarjeta)}</td>
+            ${mostrarTarjeta ? `<td>${fmt$(totTarjeta)}</td>` : ''}
             <td>${fmt$(totQR)}</td>
             <td>${fmt$(totVales)}</td>
             <td>${fmt$(totShopping)}</td>
@@ -977,6 +984,9 @@ function abrirEditar(fecha, localId, v) {
     toast('Elegí un local específico antes', true);
     return;
   }
+  // Si la fecha es posterior al 30/6/2026, Tarjeta (Clover) ya no se usa.
+  // Igualmente la mantenemos si la fila tiene un valor cargado (histórico).
+  const mostrarCampoTarjeta = (fecha <= FECHA_FIN_TARJETA) || (v && +v.tarjeta > 0);
   const html = `
     <div id="modal" style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;">
       <div style="background:white;border-radius:12px;padding:22px;max-width:520px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
@@ -984,8 +994,10 @@ function abrirEditar(fecha, localId, v) {
         <p style="margin:0 0 16px;font-size:12px;color:var(--muted);">${LOCALES[localId]?.icon} ${LOCALES[localId]?.nombre} · ${fmtFecha(fecha)}</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <div><label style="font-size:11px;color:var(--muted);">💵 Efectivo</label><input id="f-efectivo" type="number" step="any" value="${v?.efectivo || ''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
-          <div><label style="font-size:11px;color:var(--muted);">💳 Tarjeta</label><input id="f-tarjeta" type="number" step="any" value="${v?.tarjeta || ''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
-          <div><label style="font-size:11px;color:var(--muted);">📱 QR (MP)</label><input id="f-qr" type="number" step="any" value="${v?.qr || ''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
+          ${mostrarCampoTarjeta
+            ? `<div><label style="font-size:11px;color:var(--muted);">💳 Tarjeta</label><input id="f-tarjeta" type="number" step="any" value="${v?.tarjeta || ''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>`
+            : `<input id="f-tarjeta" type="hidden" value="${v?.tarjeta || ''}">`}
+          <div><label style="font-size:11px;color:var(--muted);">📱 MP</label><input id="f-qr" type="number" step="any" value="${v?.qr || ''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
           <div><label style="font-size:11px;color:var(--muted);">🎟 Vales</label><input id="f-vales" type="number" step="any" value="${v?.vales || ''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
           <div><label style="font-size:11px;color:var(--muted);">🌐 Online</label><input id="f-online" type="number" step="any" value="${v?.online || ''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
           <div><label style="font-size:11px;color:var(--muted);">🧾 Fc Oficina</label><input id="f-fc-of" type="number" step="any" value="${v?.fc_oficina || ''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
@@ -1052,7 +1064,7 @@ async function guardarFcOficina(fecha, localId, vId) {
 
 // ─── Modal "Solicitar corrección" (para vendedoras) ──────────────────
 const CAMPO_LABEL = {
-  efectivo: '💵 Efectivo', tarjeta: '💳 Tarjeta', qr: '📱 QR (MP)', vales: '🎟 Vales',
+  efectivo: '💵 Efectivo', tarjeta: '💳 Tarjeta', qr: '📱 MP', vales: '🎟 Vales',
   online: '🌐 Online', fc_oficina: '🧾 Fc Oficina', cant_transacciones: '🛒 Cant. transacciones',
 };
 function abrirSolicitudCorreccion(fecha, localId, campo, valorActual) {
@@ -1500,13 +1512,15 @@ function mostrarResultadoTurno(turno, fecha, localId) {
           <div style="font-size:18px;font-weight:700;">${fmt$(+t.efectivo||0)}</div>
         </div>
         <div style="background:#f8fafc;padding:12px;border-radius:8px;">
-          <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;">QR (MP) Dragonfish</div>
+          <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;">MP Dragonfish</div>
           <div style="font-size:18px;font-weight:700;">${fmt$(+t.qr||0)}</div>
         </div>
+        ${(fecha <= FECHA_FIN_TARJETA || +t.tarjeta > 0) ? `
         <div style="background:#f8fafc;padding:12px;border-radius:8px;">
           <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;">Tarjeta (Clover)</div>
           <div style="font-size:18px;font-weight:700;">${fmt$(+t.tarjeta||0)}</div>
         </div>
+        ` : ''}
         <div style="background:#f8fafc;padding:12px;border-radius:8px;">
           <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;">Vales</div>
           <div style="font-size:18px;font-weight:700;">${fmt$(+t.vales||0)}</div>
@@ -1607,10 +1621,10 @@ function abrirTurnos(fecha, localId) {
               <div style="font-weight:700;font-size:15px;">Turno ${t.numero} <span style="font-weight:400;color:#64748b;font-size:12px;">· ${horaDesde} → ${horaHasta}</span></div>
               <div style="font-size:11px;color:#64748b;">por ${escHtml(t.cerrado_por || '?')}</div>
             </div>
-            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:12px;">
+            <div style="display:grid;grid-template-columns:repeat(${(fecha <= FECHA_FIN_TARJETA || +t.tarjeta > 0) ? 4 : 3},1fr);gap:8px;font-size:12px;">
               <div><div style="color:#64748b;text-transform:uppercase;font-size:10px;">Efectivo</div><div style="font-weight:600;">${fmt$(+t.efectivo||0)}</div></div>
-              <div><div style="color:#64748b;text-transform:uppercase;font-size:10px;">Tarjeta</div><div style="font-weight:600;">${fmt$(+t.tarjeta||0)}</div></div>
-              <div><div style="color:#64748b;text-transform:uppercase;font-size:10px;">QR (MP)</div><div style="font-weight:600;">${fmt$(+t.qr||0)}</div></div>
+              ${(fecha <= FECHA_FIN_TARJETA || +t.tarjeta > 0) ? `<div><div style="color:#64748b;text-transform:uppercase;font-size:10px;">Tarjeta</div><div style="font-weight:600;">${fmt$(+t.tarjeta||0)}</div></div>` : ''}
+              <div><div style="color:#64748b;text-transform:uppercase;font-size:10px;">MP</div><div style="font-weight:600;">${fmt$(+t.qr||0)}</div></div>
               <div><div style="color:#64748b;text-transform:uppercase;font-size:10px;">Total</div><div style="font-weight:700;">${fmt$(+t.total_turno||0)}</div></div>
             </div>
             ${t.mp_cuenta !== null ? `
