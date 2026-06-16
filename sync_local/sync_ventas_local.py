@@ -157,6 +157,7 @@ def consultar_dragonfish_rango(desde, hasta):
         out[f] = dict(
             local=LOCAL, fecha=f,
             efectivo=0, efectivo_negro=0, tarjeta=0, qr=0, vales=0,
+            transferencia=0, cc=0,
             cant_transacciones=0,
             online=0, fc_oficina=0,
         )
@@ -229,23 +230,140 @@ def consultar_dragonfish_rango(desde, hasta):
                 if f in out:
                     out[f]['efectivo_negro'] += float(row[1] or 0)
 
-        # ── Oficina: todo va a 'online' (no desglosamos por medio de pago) ──
-        if LOCAL == 'oficina':
-            cur.execute(f"""
-                SELECT CONVERT(varchar(10), CAST(FFCH AS date), 23) AS f, COALESCE(SUM(FTOTAL), 0)
-                FROM [{DB_FISICA}].ZooLogic.COMPROBANTEV
-                WHERE CAST(FFCH AS date) BETWEEN ? AND ? AND ANULADO = 0
-                GROUP BY CAST(FFCH AS date)
-            """, desde_str, hasta_str)
-            for row in cur.fetchall():
-                f = str(row[0])[:10]
-                if f in out:
-                    out[f]['online'] = float(row[1] or 0)
-                    out[f]['efectivo'] = out[f]['efectivo_negro'] = 0
-                    out[f]['tarjeta'] = out[f]['qr'] = out[f]['vales'] = 0
+        # OJO: para Oficina NO usamos esta función. La lógica de Oficina
+        # vive en consultar_oficina_facturas_rango() porque necesita filtrar
+        # solo facturas electrónicas (A/B/C) y desglosar por vendedor + JJCO.
     finally:
         conn.close()
     return out
+
+
+# ══════════════════════════════════════════════════════════════════
+#  Oficina: facturas electrónicas con bucket por vendedor + método pago
+# ══════════════════════════════════════════════════════════════════
+def consultar_oficina_facturas_rango(desde, hasta):
+    """Lee facturas/NC electrónicas (FLETRA A/B/C, FACTTIPO 27/28) de Oficina
+    y las distribuye en 3 buckets de ventas_diarias según el vendedor (FVEN):
+
+      - FVEN=OFICINA   → ventas_diarias(local=oficina) con desglose por JJCO
+                         (efectivo / transferencia / qr / cc / tarjeta / online)
+      - FVEN=ALCORTA   → ventas_diarias(local=alcorta).fc_oficina
+      - FVEN=UNICENTER → ventas_diarias(local=unicenter).fc_oficina
+
+    NO incluye remitos. El JOIN COMPROBANTEV.CODIGO = VAL.JJNUM trae el
+    método de pago real de cada factura.
+
+    Returns: list[dict] listo para bulk upsert a ventas_diarias.
+    """
+    desde_str = desde.strftime('%Y-%m-%d') if isinstance(desde, (datetime, date)) else str(desde)[:10]
+    hasta_str = hasta.strftime('%Y-%m-%d') if isinstance(hasta, (datetime, date)) else str(hasta)[:10]
+
+    # Mapeo vendedor → local
+    VENDEDOR_A_LOCAL = {
+        'OFICINA':   'oficina',
+        'ALCORTA':   'alcorta',
+        'UNICENTER': 'unicenter',
+    }
+
+    # Mapeo JJCO → columna de ventas_diarias (solo aplica a FVEN=OFICINA)
+    def jjco_a_columna(jjco: str) -> str:
+        j = (jjco or '').upper().strip()
+        if j.startswith('0'):     return 'efectivo'
+        if j.startswith('TRANS'): return 'transferencia'
+        if j.startswith('QR'):    return 'qr'
+        if j == 'C':              return 'cc'
+        if j.startswith('TJ'):    return 'tarjeta'
+        return 'online'  # cualquier otro código (incluyendo 'CC' largo, 'VC', etc.)
+
+    # Acumulador {(local, fecha) → fila}
+    def fila_vacia(local: str, fecha: str) -> dict:
+        return dict(
+            local=local, fecha=fecha,
+            efectivo=0, transferencia=0, qr=0, cc=0, tarjeta=0,
+            vales=0, online=0, fc_oficina=0, cant_transacciones=0,
+        )
+
+    acum: dict = {}
+
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+
+        # ── 1) Importes por (fecha, FVEN, JJCO) ─────────────────────────
+        # JOIN COMPROBANTEV ↔ VAL por VAL.JJNUM = COMPROBANTEV.CODIGO
+        # Solo facturas A/B/C (excluye remitos)
+        # NOTA: usamos c.SIGNOMOV (1 factura, -1 NC) en lugar de v.SIGNO
+        # porque v.SIGNO viene en 0 en Dragonfish ADMIN y rompía el cálculo.
+        cur.execute(f"""
+            SELECT
+                CONVERT(varchar(10), CAST(c.FFCH AS date), 23) AS fecha,
+                RTRIM(c.FVEN) AS vendedor,
+                RTRIM(v.JJCO) AS jjco,
+                SUM(v.MONTOSISTE * c.SIGNOMOV) AS total
+            FROM [{DB_FISICA}].ZooLogic.COMPROBANTEV c
+            JOIN [{DB_FISICA}].ZooLogic.VAL v ON v.JJNUM = c.CODIGO
+            WHERE CAST(c.FFCH AS date) BETWEEN ? AND ?
+              AND c.ANULADO = 0
+              AND c.FLETRA IN ('A','B','C')
+              AND (v.ESVUELTO = 0 OR v.ESVUELTO IS NULL)
+            GROUP BY CAST(c.FFCH AS date), RTRIM(c.FVEN), RTRIM(v.JJCO)
+        """, desde_str, hasta_str)
+
+        for row in cur.fetchall():
+            fecha = str(row[0])[:10]
+            vendedor = (row[1] or '').upper()
+            jjco = row[2] or ''
+            total = float(row[3] or 0)
+
+            local = VENDEDOR_A_LOCAL.get(vendedor)
+            if not local:
+                log.warning(f"[oficina] vendedor desconocido en COMPROBANTEV: {vendedor!r} (se ignora)")
+                continue
+
+            key = (local, fecha)
+            if key not in acum:
+                acum[key] = fila_vacia(local, fecha)
+
+            if local == 'oficina':
+                # Distribuir según el código JJCO en su columna
+                columna = jjco_a_columna(jjco)
+                acum[key][columna] += total
+            else:
+                # alcorta / unicenter → todo a fc_oficina del local destino
+                acum[key]['fc_oficina'] += total
+
+        # ── 2) Cantidad de transacciones por (fecha, FVEN) ──────────────
+        # Solo cuenta facturas A/B/C, no remitos. Una factura puede tener
+        # varios pagos en VAL pero cuenta como 1 transacción.
+        cur.execute(f"""
+            SELECT
+                CONVERT(varchar(10), CAST(FFCH AS date), 23) AS fecha,
+                RTRIM(FVEN) AS vendedor,
+                COUNT(*) AS cant
+            FROM [{DB_FISICA}].ZooLogic.COMPROBANTEV
+            WHERE CAST(FFCH AS date) BETWEEN ? AND ?
+              AND ANULADO = 0
+              AND FLETRA IN ('A','B','C')
+            GROUP BY CAST(FFCH AS date), RTRIM(FVEN)
+        """, desde_str, hasta_str)
+
+        for row in cur.fetchall():
+            fecha = str(row[0])[:10]
+            vendedor = (row[1] or '').upper()
+            cant = int(row[2] or 0)
+
+            local = VENDEDOR_A_LOCAL.get(vendedor)
+            if not local:
+                continue
+
+            key = (local, fecha)
+            if key not in acum:
+                acum[key] = fila_vacia(local, fecha)
+            acum[key]['cant_transacciones'] += cant
+    finally:
+        conn.close()
+
+    return list(acum.values())
 
 
 def consultar_dragonfish(fecha):
@@ -267,6 +385,7 @@ def consultar_dragonfish(fecha):
     out = dict(
         local=LOCAL, fecha=fecha_str,
         efectivo=0, tarjeta=0, qr=0, vales=0,
+        transferencia=0, cc=0,
         cant_transacciones=0,
         online=0, fc_oficina=0,
     )
@@ -494,19 +613,31 @@ def procesar_job(job):
         log.info(f"[job#{job_id}] rango {d_ini_str} → {d_fin_str} ({ndias} día(s))")
 
         # 1) Consultar TODO el rango con 1 sola query (BETWEEN + GROUP BY)
+        # Para Oficina usamos una lógica especial que distribuye por vendedor:
+        # las ventas FVEN=ALCORTA/UNICENTER se mandan a la planilla de su local.
         t0 = time.time()
-        rango = consultar_dragonfish_rango(d_ini, d_fin)
-        log.info(f"[job#{job_id}] Dragonfish OK en {time.time()-t0:.2f}s — {len(rango)} fechas")
+        if LOCAL == 'oficina':
+            rows_oficina = consultar_oficina_facturas_rango(d_ini, d_fin)
+            log.info(f"[job#{job_id}] Dragonfish (oficina) OK en {time.time()-t0:.2f}s — "
+                     f"{len(rows_oficina)} filas (oficina + alcorta + unicenter)")
+            # Filtrar filas totalmente vacías
+            rows = [r for r in rows_oficina if r['cant_transacciones'] > 0 or any([
+                r['efectivo'], r['transferencia'], r['qr'], r['cc'], r['tarjeta'],
+                r['vales'], r['online'], r['fc_oficina']
+            ])]
+        else:
+            rango = consultar_dragonfish_rango(d_ini, d_fin)
+            log.info(f"[job#{job_id}] Dragonfish OK en {time.time()-t0:.2f}s — {len(rango)} fechas")
 
-        # 2) Filtrar las que tienen al menos un dato (saltear días vacíos)
-        rows = []
-        for f, data in sorted(rango.items()):
-            if data['cant_transacciones'] == 0 and not any([
-                data['efectivo'], data['tarjeta'], data['qr'],
-                data['vales'], data['online'], data['fc_oficina']
-            ]):
-                continue
-            rows.append(data)
+            # Filtrar las que tienen al menos un dato (saltear días vacíos)
+            rows = []
+            for f, data in sorted(rango.items()):
+                if data['cant_transacciones'] == 0 and not any([
+                    data['efectivo'], data['tarjeta'], data['qr'],
+                    data['vales'], data['online'], data['fc_oficina']
+                ]):
+                    continue
+                rows.append(data)
 
         # 3) Bulk upsert a Supabase (1 sola request en lugar de N)
         if rows:

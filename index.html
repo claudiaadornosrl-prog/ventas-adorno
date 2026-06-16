@@ -752,17 +752,21 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
   ventas.forEach(v => { porFecha[v.fecha] = v; });
 
   // KPIs del mes
-  let totShopping = 0, totTotal = 0, totEfectivo = 0, totTarjeta = 0, totQR = 0, totVales = 0, totOnline = 0, totFcOf = 0, totCant = 0;
+  let totShopping = 0, totTotal = 0, totEfectivo = 0, totTarjeta = 0, totQR = 0,
+      totTransferencia = 0, totCC = 0,
+      totVales = 0, totOnline = 0, totFcOf = 0, totCant = 0;
   ventas.forEach(v => {
-    totShopping += +v.shopping || 0;
-    totTotal    += +v.total    || 0;
-    totEfectivo += +v.efectivo || 0;
-    totTarjeta  += +v.tarjeta  || 0;
-    totQR       += +v.qr       || 0;
-    totVales    += +v.vales    || 0;
-    totOnline   += +v.online   || 0;
-    totFcOf     += +v.fc_oficina || 0;
-    totCant     += +v.cant_transacciones || 0;
+    totShopping      += +v.shopping || 0;
+    totTotal         += +v.total    || 0;
+    totEfectivo      += +v.efectivo || 0;
+    totTarjeta       += +v.tarjeta  || 0;
+    totQR            += +v.qr       || 0;
+    totTransferencia += +v.transferencia || 0;
+    totCC            += +v.cc       || 0;
+    totVales         += +v.vales    || 0;
+    totOnline        += +v.online   || 0;
+    totFcOf          += +v.fc_oficina || 0;
+    totCant          += +v.cant_transacciones || 0;
   });
   const ticketProm = totCant > 0 ? Math.round(totShopping / totCant) : 0;
   const diasConVenta = ventas.filter(v => (v.shopping||0) > 0).length;
@@ -848,6 +852,8 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
         ${celda('efectivo', v?.efectivo)}
         ${mostrarTarjeta ? celda('tarjeta', v?.tarjeta) : ''}
         ${celda('qr', v?.qr)}
+        ${celda('transferencia', v?.transferencia)}
+        ${celda('cc', v?.cc)}
         ${celda('vales', v?.vales)}
         <td class="cell-derived">${v ? fmt$(shopping) : '—'}</td>
         ${celda('cant_transacciones', v?.cant_transacciones)}
@@ -872,7 +878,7 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
       <table>
         <thead>
           <tr>
-            <th>Fecha</th><th>Efectivo</th>${mostrarTarjeta ? '<th>Tarjeta</th>' : ''}<th>MP</th><th>Vales</th>
+            <th>Fecha</th><th>Efectivo</th>${mostrarTarjeta ? '<th>Tarjeta</th>' : ''}<th>MP</th><th>Transferencia</th><th>CC</th><th>Vales</th>
             <th>Shopping</th><th>Cant</th><th>Online</th><th>Fc Oficina</th><th>Total</th><th>Acumulado</th>
             <th style="white-space:nowrap;">🔒 Turnos</th>
           </tr>
@@ -884,6 +890,8 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
             <td>${fmt$(totEfectivo)}</td>
             ${mostrarTarjeta ? `<td>${fmt$(totTarjeta)}</td>` : ''}
             <td>${fmt$(totQR)}</td>
+            <td>${fmt$(totTransferencia)}</td>
+            <td>${fmt$(totCC)}</td>
             <td>${fmt$(totVales)}</td>
             <td>${fmt$(totShopping)}</td>
             <td>${totCant}</td>
