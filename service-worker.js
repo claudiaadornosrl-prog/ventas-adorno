@@ -1,5 +1,5 @@
 // Service Worker — Ventas Adorno
-const CACHE_VERSION = 'ventas-adorno-v15-sync-finmes-ultimo-dia';
+const CACHE_VERSION = 'ventas-adorno-v16-turnos-cruce-mp';
 const CACHE_ASSETS = ['./', './index.html', './manifest.webmanifest', './favicon.svg'];
 
 self.addEventListener('install', e => {

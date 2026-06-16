@@ -683,8 +683,9 @@ async function cargar() {
     // Traer correcciones aplicadas + pendientes para el rango (para resaltar celdas)
     let aplicadas = [];
     let pendientes = [];
+    let turnos = [];
     if (localUnico) {
-      const [resAp, resPe] = await Promise.all([
+      const [resAp, resPe, resTu] = await Promise.all([
         sb.from('ventas_correcciones_aplicadas')
           .select('*').eq('local', localUnico)
           .gte('fecha', desde).lte('fecha', hasta),
@@ -692,15 +693,20 @@ async function cargar() {
           .select('*').eq('local', localUnico).eq('estado', 'pendiente')
           .gte('fecha', desde).lte('fecha', hasta)
           .order('solicitado_at', { ascending: false }),
+        sb.from('ventas_turnos_view')
+          .select('*').eq('local', localUnico)
+          .gte('fecha', desde).lte('fecha', hasta)
+          .order('numero'),
       ]);
       aplicadas = resAp.data || [];
       pendientes = resPe.data || [];
+      turnos = resTu.data || [];
     }
 
     if (session.isAdmin && localSel === 'todos') {
       renderAdminConsolidado(data || [], año, mes);
     } else {
-      renderGrillaLocal(data || [], año, mes, localSel, aplicadas, pendientes);
+      renderGrillaLocal(data || [], año, mes, localSel, aplicadas, pendientes, turnos);
     }
     // Refrescar badge de solicitudes pendientes (para admin)
     if (session.isAdmin) refrescarBadgeSolicitudes();
@@ -712,15 +718,25 @@ async function cargar() {
 }
 
 // ─── Grilla mensual de un local ──────────────────────────────────────
-function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes) {
+function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, turnos) {
   aplicadas = aplicadas || [];
   pendientes = pendientes || [];
+  turnos = turnos || [];
   // Map de correcciones aplicadas por (fecha, campo)
   const mapAp = {};
   aplicadas.forEach(c => { mapAp[`${c.fecha}_${c.campo}`] = c; });
   // Map de pendientes por (fecha, campo)
   const mapPe = {};
   pendientes.forEach(c => { mapPe[`${c.fecha}_${c.campo}`] = c; });
+  // Map de turnos por fecha (arreglo ordenado por numero)
+  const mapTurnos = {};
+  turnos.forEach(t => {
+    if (!mapTurnos[t.fecha]) mapTurnos[t.fecha] = [];
+    mapTurnos[t.fecha].push(t);
+  });
+  // Guardar global para que abrirTurnos() pueda leer sin re-query
+  window._turnosPorFecha = mapTurnos;
+  window._localActual = localId;
 
   const cont = document.getElementById('contenido');
   const diasMes = new Date(año, mes, 0).getDate();
@@ -794,6 +810,31 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes) {
       return `<td class="editable" style="${style}cursor:pointer;" title="${escHtml(title)}" onclick="${onclick}">${display}${badge}</td>`;
     };
 
+    // ── Columna de turnos ──
+    // Si hay turnos cerrados, mostramos badge con cantidad y si hay discrepancia
+    // Si es HOY y hay venta cargada, mostramos botón "🔒 Cerrar turno"
+    const turnosDelDia = mapTurnos[fecha] || [];
+    const nTurnos = turnosDelDia.length;
+    const conDiscrep = turnosDelDia.filter(t =>
+      t.estado_discrepancia && t.estado_discrepancia !== 'ok'
+    ).length;
+
+    let celdaTurno = '<td class="cell-derived">—</td>';
+    if (nTurnos > 0 || v) {
+      const badgeColor = conDiscrep > 0 ? '#fee2e2' : '#dcfce7';
+      const badgeTxt   = conDiscrep > 0 ? '#991b1b' : '#166534';
+      const badge = nTurnos > 0
+        ? `<span style="background:${badgeColor};color:${badgeTxt};padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">${nTurnos} turno${nTurnos>1?'s':''}${conDiscrep>0?' ⚠':''}</span>`
+        : '';
+      const botonCerrar = (esHoy && v && (+v.shopping||0) > 0)
+        ? `<button onclick="event.stopPropagation();cerrarTurnoAhora('${fecha}','${localId}')" title="Cerrar el turno actual" style="background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;margin-left:6px;">🔒 Cerrar</button>`
+        : '';
+      const verLink = nTurnos > 0
+        ? `<button onclick="event.stopPropagation();abrirTurnos('${fecha}','${localId}')" title="Ver detalle de turnos" style="background:none;border:1px solid #cbd5e1;color:#475569;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;margin-left:4px;">Ver</button>`
+        : '';
+      celdaTurno = `<td style="text-align:center;white-space:nowrap;">${badge}${verLink}${botonCerrar}</td>`;
+    }
+
     filas.push(`
       <tr class="${klass}">
         <td>${fmtFecha(fecha)}</td>
@@ -807,6 +848,7 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes) {
         ${celda('fc_oficina', v?.fc_oficina)}
         <td class="cell-derived big">${v ? fmt$(total) : '—'}</td>
         <td class="cell-derived">${fmt$(acum)}</td>
+        ${celdaTurno}
       </tr>
     `);
   }
@@ -825,6 +867,7 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes) {
           <tr>
             <th>Fecha</th><th>Efectivo</th><th>Tarjeta</th><th>QR (MP)</th><th>Vales</th>
             <th>Shopping</th><th>Cant</th><th>Online</th><th>Fc Oficina</th><th>Total</th><th>Acumulado</th>
+            <th style="white-space:nowrap;">🔒 Turnos</th>
           </tr>
         </thead>
         <tbody>${filas.join('')}</tbody>
@@ -840,6 +883,7 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes) {
             <td>${fmt$(totOnline)}</td>
             <td>${fmt$(totFcOf)}</td>
             <td>${fmt$(totTotal)}</td>
+            <td>—</td>
             <td>—</td>
           </tr>
         </tfoot>
@@ -1384,6 +1428,207 @@ async function reabrirMesActual() {
     enterApp();
   }
 })();
+
+// ═══════════════════════════════════════════════════════════════════════
+// TURNOS · cerrar + ver detalle
+// ═══════════════════════════════════════════════════════════════════════
+
+/** Cierra el turno actual del local en la fecha dada.
+ *  Llama a la función SQL cerrar_turno() vía RPC y muestra el resultado. */
+async function cerrarTurnoAhora(fecha, localId) {
+  const yaCerrados = (window._turnosPorFecha?.[fecha] || []).length;
+  const numero = yaCerrados + 1;
+  const msg = `¿Cerrar turno ${numero} del ${fmtFecha(fecha)} en ${localId.toUpperCase()}?\n\n`
+            + `Esto guarda un snapshot con los valores actuales del día menos los turnos previos\n`
+            + `y cruza con la cuenta MP para detectar discrepancias.`;
+  if (!confirm(msg)) return;
+
+  const cerradoPor = session?.isAdmin
+    ? `admin:${session?.email || '?'}`
+    : `local:${localId}`;
+
+  try {
+    const { data, error } = await sb.rpc('cerrar_turno', {
+      p_local: localId,
+      p_fecha: fecha,
+      p_cerrado_por: cerradoPor,
+      p_notas: null,
+    });
+    if (error) throw error;
+    toast(`✓ Turno ${data.numero} cerrado`);
+    // Mostrar resultado inmediato + detalle de discrepancia
+    mostrarResultadoTurno(data, fecha, localId);
+    // Refrescar grilla
+    if (typeof verPlanilla === 'function') {
+      verPlanilla();
+    } else {
+      location.reload();
+    }
+  } catch (e) {
+    alert('Error al cerrar turno: ' + e.message);
+  }
+}
+
+/** Modal con el detalle del último turno cerrado: valores + discrepancia con MP. */
+function mostrarResultadoTurno(turno, fecha, localId) {
+  document.getElementById('modal-turno')?.remove();
+  const wrap = document.createElement('div');
+  wrap.id = 'modal-turno';
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  wrap.onclick = (e) => { if (e.target === wrap) wrap.remove(); };
+
+  const t = turno;
+  const tieneDisc = t.discrepancia_mp !== null && Math.abs(t.discrepancia_mp) >= 1;
+  const colorDisc = tieneDisc ? '#dc2626' : '#16a34a';
+  const movs = t.mp_movs_no_match || [];
+  const horaDesde = new Date(t.desde).toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'});
+  const horaHasta = new Date(t.hasta).toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'});
+
+  wrap.innerHTML = `
+    <div style="background:#fff;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.25);max-width:720px;width:100%;max-height:85vh;overflow:auto;padding:24px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <h3 style="margin:0;font-size:18px;">🔒 Turno ${t.numero} · ${localId.toUpperCase()} · ${fmtFecha(fecha)}</h3>
+        <button onclick="document.getElementById('modal-turno').remove();" style="background:none;border:none;cursor:pointer;font-size:18px;color:#64748b;padding:0 6px;">✕</button>
+      </div>
+      <div style="font-size:13px;color:#64748b;margin-bottom:16px;">
+        ${horaDesde} → ${horaHasta} · cerrado por ${escHtml(t.cerrado_por || '?')}
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:18px;">
+        <div style="background:#f8fafc;padding:12px;border-radius:8px;">
+          <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;">Efectivo</div>
+          <div style="font-size:18px;font-weight:700;">${fmt$(+t.efectivo||0)}</div>
+        </div>
+        <div style="background:#f8fafc;padding:12px;border-radius:8px;">
+          <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;">QR (MP) Dragonfish</div>
+          <div style="font-size:18px;font-weight:700;">${fmt$(+t.qr||0)}</div>
+        </div>
+        <div style="background:#f8fafc;padding:12px;border-radius:8px;">
+          <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;">Tarjeta (Clover)</div>
+          <div style="font-size:18px;font-weight:700;">${fmt$(+t.tarjeta||0)}</div>
+        </div>
+        <div style="background:#f8fafc;padding:12px;border-radius:8px;">
+          <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;">Vales</div>
+          <div style="font-size:18px;font-weight:700;">${fmt$(+t.vales||0)}</div>
+        </div>
+      </div>
+
+      ${t.mp_cuenta !== null ? `
+        <div style="background:${tieneDisc?'#fef2f2':'#f0fdf4'};border-left:4px solid ${colorDisc};border-radius:8px;padding:14px 16px;margin-bottom:16px;">
+          <div style="font-size:12px;font-weight:600;color:${colorDisc};text-transform:uppercase;margin-bottom:6px;">
+            Cruce con cuenta Mercado Pago
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+            <div>
+              <div style="font-size:11px;color:#64748b;">Dragonfish dijo</div>
+              <div style="font-size:16px;font-weight:600;">${fmt$(+t.qr||0)}</div>
+            </div>
+            <div>
+              <div style="font-size:11px;color:#64748b;">MP cuenta dijo</div>
+              <div style="font-size:16px;font-weight:600;">${fmt$(+t.mp_cuenta||0)}</div>
+            </div>
+            <div>
+              <div style="font-size:11px;color:${colorDisc};">Diferencia</div>
+              <div style="font-size:16px;font-weight:700;color:${colorDisc};">${tieneDisc?'⚠ ':''}${fmt$(+t.discrepancia_mp||0)}</div>
+            </div>
+          </div>
+        </div>
+
+        ${tieneDisc && movs.length ? `
+          <details style="margin-bottom:8px;">
+            <summary style="cursor:pointer;font-weight:600;color:#dc2626;padding:8px 0;">
+              ▶ Ver ${movs.length} movimiento${movs.length>1?'s':''} de MP del turno
+            </summary>
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;margin-top:8px;max-height:300px;overflow:auto;">
+              <table style="width:100%;font-size:12px;">
+                <thead style="background:#f8fafc;position:sticky;top:0;">
+                  <tr>
+                    <th style="text-align:left;padding:8px;">Hora</th>
+                    <th style="text-align:left;padding:8px;">POS</th>
+                    <th style="text-align:left;padding:8px;">Canal</th>
+                    <th style="text-align:right;padding:8px;">Importe</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${movs.map(m => `
+                    <tr style="border-top:1px solid #f1f5f9;">
+                      <td style="padding:6px 8px;">${new Date(m.cargado_at).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</td>
+                      <td style="padding:6px 8px;">${escHtml(m.pos_name || '—')}</td>
+                      <td style="padding:6px 8px;"><span style="background:${m.canal==='qr'?'#dbeafe':'#fef3c7'};padding:1px 6px;border-radius:8px;font-size:10px;">${escHtml((m.canal||'').toUpperCase())}</span></td>
+                      <td style="padding:6px 8px;text-align:right;font-weight:600;">${fmt$(+m.importe)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+            <div style="margin-top:6px;font-size:11px;color:#64748b;">
+              Si la diferencia es positiva, MP cobró más de lo que Dragonfish registró
+              (probablemente alguna venta no se cargó en el POS).<br>
+              Si es negativa, Dragonfish registró más que MP (probablemente alguna venta
+              quedó en proceso o se anuló desde MP).
+            </div>
+          </details>
+        ` : ''}
+      ` : '<div style="color:#64748b;font-size:13px;text-align:center;padding:8px;">Cuenta MP no disponible para este local — sin cruce automático.</div>'}
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+        <button onclick="document.getElementById('modal-turno').remove();" style="background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:10px 20px;cursor:pointer;font-size:13px;font-weight:600;">OK, listo</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(wrap);
+}
+
+/** Lista los turnos cerrados de un día con sus discrepancias. */
+function abrirTurnos(fecha, localId) {
+  const turnosDia = window._turnosPorFecha?.[fecha] || [];
+  if (!turnosDia.length) { toast('Este día no tiene turnos cerrados'); return; }
+
+  document.getElementById('modal-turno')?.remove();
+  const wrap = document.createElement('div');
+  wrap.id = 'modal-turno';
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  wrap.onclick = (e) => { if (e.target === wrap) wrap.remove(); };
+
+  wrap.innerHTML = `
+    <div style="background:#fff;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.25);max-width:780px;width:100%;max-height:85vh;overflow:auto;padding:24px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <h3 style="margin:0;font-size:18px;">🕐 Turnos · ${localId.toUpperCase()} · ${fmtFecha(fecha)}</h3>
+        <button onclick="document.getElementById('modal-turno').remove();" style="background:none;border:none;cursor:pointer;font-size:18px;color:#64748b;padding:0 6px;">✕</button>
+      </div>
+      ${turnosDia.map(t => {
+        const tieneDisc = t.discrepancia_mp !== null && Math.abs(t.discrepancia_mp) >= 1;
+        const colorDisc = tieneDisc ? '#dc2626' : '#16a34a';
+        const horaDesde = new Date(t.desde).toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'});
+        const horaHasta = new Date(t.hasta).toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'});
+        return `
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+              <div style="font-weight:700;font-size:15px;">Turno ${t.numero} <span style="font-weight:400;color:#64748b;font-size:12px;">· ${horaDesde} → ${horaHasta}</span></div>
+              <div style="font-size:11px;color:#64748b;">por ${escHtml(t.cerrado_por || '?')}</div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:12px;">
+              <div><div style="color:#64748b;text-transform:uppercase;font-size:10px;">Efectivo</div><div style="font-weight:600;">${fmt$(+t.efectivo||0)}</div></div>
+              <div><div style="color:#64748b;text-transform:uppercase;font-size:10px;">Tarjeta</div><div style="font-weight:600;">${fmt$(+t.tarjeta||0)}</div></div>
+              <div><div style="color:#64748b;text-transform:uppercase;font-size:10px;">QR (MP)</div><div style="font-weight:600;">${fmt$(+t.qr||0)}</div></div>
+              <div><div style="color:#64748b;text-transform:uppercase;font-size:10px;">Total</div><div style="font-weight:700;">${fmt$(+t.total_turno||0)}</div></div>
+            </div>
+            ${t.mp_cuenta !== null ? `
+              <div style="margin-top:10px;padding:8px 12px;background:${tieneDisc?'#fef2f2':'#f0fdf4'};border-left:3px solid ${colorDisc};border-radius:4px;font-size:12px;">
+                Cuenta MP: ${fmt$(+t.mp_cuenta)} · Diferencia: <strong style="color:${colorDisc};">${tieneDisc?'⚠ ':''}${fmt$(+t.discrepancia_mp)}</strong>
+                ${tieneDisc ? `<button onclick="event.stopPropagation();mostrarResultadoTurno(${JSON.stringify(t).replace(/"/g,'&quot;')}, '${fecha}', '${localId}')" style="margin-left:8px;background:#dc2626;color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;">Ver detalle</button>` : ''}
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('')}
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+        <button onclick="document.getElementById('modal-turno').remove();" style="background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:10px 20px;cursor:pointer;font-size:13px;font-weight:600;">OK</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(wrap);
+}
 
 // Service worker
 if ('serviceWorker' in navigator) {
