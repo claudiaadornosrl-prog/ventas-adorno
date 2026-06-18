@@ -49,6 +49,10 @@ _load_env()
 
 LOCAL          = os.environ.get('VENTAS_LOCAL', '').strip().lower()
 SQL_SERVER     = os.environ.get('VENTAS_SQL_SERVER', '').strip() or r'localhost\ZOOLOGIC2026'
+# Si la DB_ONLINE está en OTRA PC (caso Alcorta: ALCO2 en 192.168.0.220), setear estas:
+SQL_SERVER_ONLINE = os.environ.get('VENTAS_SQL_SERVER_ONLINE', '').strip()
+SQL_USER_ONLINE   = os.environ.get('VENTAS_SQL_USER_ONLINE', '').strip()
+SQL_PASS_ONLINE   = os.environ.get('VENTAS_SQL_PASSWORD_ONLINE', '').strip()
 SUPABASE_URL   = os.environ.get('SUPABASE_URL', 'https://kwwiykssrpabncpqtmwi.supabase.co').rstrip('/')
 SUPABASE_KEY   = os.environ.get('SUPABASE_SERVICE_KEY', '').strip()
 POLL_SECONDS   = int(os.environ.get('POLL_SECONDS', '10'))
@@ -96,6 +100,7 @@ log.info(f"Local: {LOCAL}")
 log.info(f"SQL Server: {SQL_SERVER}")
 log.info(f"DB física (Shopping): {DB_FISICA}")
 log.info(f"DB online: {DB_ONLINE or 'no aplica'}")
+log.info(f"SQL Server ONLINE: {SQL_SERVER_ONLINE or 'misma instancia local'}")
 log.info(f"Polling: cada {POLL_SECONDS}s")
 
 # ══════════════════════════════════════════════════════════════════
@@ -123,7 +128,7 @@ def _elegir_driver():
 
 _DRIVER = None
 def get_conn():
-    """Conexión a SQL Server local con Windows auth."""
+    """Conexión a SQL Server local con Windows auth (donde está DB_FISICA)."""
     global _DRIVER
     if _DRIVER is None:
         _DRIVER = _elegir_driver()
@@ -135,6 +140,32 @@ def get_conn():
         f"TrustServerCertificate=yes;",   # ODBC 18 lo necesita para conexiones sin cert SSL
         timeout=15
     )
+
+def get_conn_online():
+    """Conexión al SQL Server donde está DB_ONLINE.
+
+    - Si VENTAS_SQL_SERVER_ONLINE está configurado en .env → abre conexión
+      separada al server remoto con SQL Auth (caso Alcorta: ALCO2 en otra PC).
+    - Sino → abre con la misma config que get_conn() (caso default: misma
+      instancia SQL para ambas DBs, como Unicenter o setups single-server).
+
+    Devuelve una conn NUEVA — el caller debe cerrarla.
+    """
+    global _DRIVER
+    if _DRIVER is None:
+        _DRIVER = _elegir_driver()
+        log.info(f"Driver ODBC elegido: {_DRIVER}")
+    if SQL_SERVER_ONLINE:
+        return pyodbc.connect(
+            f"DRIVER={{{_DRIVER}}};"
+            f"SERVER={SQL_SERVER_ONLINE};"
+            f"DATABASE={DB_ONLINE};"
+            f"UID={SQL_USER_ONLINE};"
+            f"PWD={SQL_PASS_ONLINE};"
+            f"TrustServerCertificate=yes;",
+            timeout=15
+        )
+    return get_conn()
 
 def consultar_dragonfish_rango(desde, hasta):
     """
@@ -170,16 +201,24 @@ def consultar_dragonfish_rango(desde, hasta):
         # ── VAL: desglose por medio de pago, agrupado por fecha ──────
         # ── VAL: agrupamos por fecha SIN HORA (CAST AS date) para no romper
         # cuando JJFECHA es DATETIME y tiene múltiples timestamps en el mismo día.
+        # ── JOIN con COMPROBANTEV para restar notas de crédito (SIGNOMOV=-1).
+        #    Las ventas tienen SIGNOMOV=+1, las NC -1. Si VAL no tiene comprobante
+        #    asociado todavía (venta en proceso), asumimos +1 con COALESCE.
+        #    Esta lógica reproduce exactamente el cashflow de Dragonfish.
         cur.execute(f"""
-            SELECT CONVERT(varchar(10), CAST(JJFECHA AS date), 23) AS f,
-              SUM(CASE WHEN JJCO LIKE '0%'  THEN MONTOSISTE ELSE 0 END) AS efectivo,
-              SUM(CASE WHEN JJCO LIKE 'TJ%' THEN MONTOSISTE ELSE 0 END) AS tarjeta,
-              SUM(CASE WHEN JJCO LIKE 'QR%' THEN MONTOSISTE ELSE 0 END) AS qr,
-              SUM(CASE WHEN JJCO LIKE 'VC%' THEN MONTOSISTE ELSE 0 END) AS vales
-            FROM [{DB_FISICA}].ZooLogic.VAL
-            WHERE CAST(JJFECHA AS date) BETWEEN ? AND ?
-              AND (ESVUELTO = 0 OR ESVUELTO IS NULL)
-            GROUP BY CAST(JJFECHA AS date)
+            SELECT CONVERT(varchar(10), CAST(v.JJFECHA AS date), 23) AS f,
+              SUM(CASE WHEN v.JJCO LIKE '0%'  THEN v.MONTOSISTE * COALESCE(c.SIGNOMOV, 1) ELSE 0 END) AS efectivo,
+              SUM(CASE WHEN v.JJCO LIKE 'TJ%' THEN v.MONTOSISTE * COALESCE(c.SIGNOMOV, 1) ELSE 0 END) AS tarjeta,
+              -- qr agrupa TODO lo que cobra MP: QR/QR2 (cliente paga con app)
+              -- + MP (Point Smart: cliente paga con tarjeta vía el dispositivo).
+              -- En Dragonfish, las ventas por Point Smart usan JJCO='MP'.
+              SUM(CASE WHEN v.JJCO LIKE 'QR%' OR v.JJCO LIKE 'MP%' THEN v.MONTOSISTE * COALESCE(c.SIGNOMOV, 1) ELSE 0 END) AS qr,
+              SUM(CASE WHEN v.JJCO LIKE 'VC%' THEN v.MONTOSISTE * COALESCE(c.SIGNOMOV, 1) ELSE 0 END) AS vales
+            FROM [{DB_FISICA}].ZooLogic.VAL v
+            LEFT JOIN [{DB_FISICA}].ZooLogic.COMPROBANTEV c ON c.CODIGO = v.JJNUM
+            WHERE CAST(v.JJFECHA AS date) BETWEEN ? AND ?
+              AND (v.ESVUELTO = 0 OR v.ESVUELTO IS NULL)
+            GROUP BY CAST(v.JJFECHA AS date)
         """, desde_str, hasta_str)
         for row in cur.fetchall():
             f = str(row[0])[:10]
@@ -191,10 +230,12 @@ def consultar_dragonfish_rango(desde, hasta):
                 out[f]['vales']    += float(row[4] or 0)
 
         # ── COMPROBANTEV física: cantidad de transacciones por fecha ─
+        # FLETRA <> 'R' excluye remitos (que no son ventas).
         cur.execute(f"""
             SELECT CONVERT(varchar(10), CAST(FFCH AS date), 23) AS f, COUNT(*)
             FROM [{DB_FISICA}].ZooLogic.COMPROBANTEV
             WHERE CAST(FFCH AS date) BETWEEN ? AND ? AND ANULADO = 0
+              AND FLETRA <> 'R'
             GROUP BY CAST(FFCH AS date)
         """, desde_str, hasta_str)
         for row in cur.fetchall():
@@ -202,33 +243,45 @@ def consultar_dragonfish_rango(desde, hasta):
             if f in out:
                 out[f]['cant_transacciones'] += int(row[1] or 0)
 
-        # ── COMPROBANTEV online (si existe): total online por fecha ──
+        # ── DB_ONLINE: queries en conn SEPARADA (puede ser otra PC) ──
         if DB_ONLINE:
-            cur.execute(f"""
-                SELECT CONVERT(varchar(10), CAST(FFCH AS date), 23) AS f, COALESCE(SUM(FTOTAL), 0)
-                FROM [{DB_ONLINE}].ZooLogic.COMPROBANTEV
-                WHERE CAST(FFCH AS date) BETWEEN ? AND ? AND ANULADO = 0
-                GROUP BY CAST(FFCH AS date)
-            """, desde_str, hasta_str)
-            for row in cur.fetchall():
-                f = str(row[0])[:10]
-                if f in out:
-                    out[f]['online'] += float(row[1] or 0)
+            conn_o = get_conn_online()
+            try:
+                cur_o = conn_o.cursor()
+                # ── COMPROBANTEV online: total online por fecha ──
+                # FLETRA <> 'R' excluye remitos (los remitos no son ventas).
+                # Bug histórico: un remito de $17.100 en UNI2 12-jun aparecía como
+                # online cuando no debía contarse.
+                cur_o.execute(f"""
+                    SELECT CONVERT(varchar(10), CAST(FFCH AS date), 23) AS f, COALESCE(SUM(FTOTAL), 0)
+                    FROM [{DB_ONLINE}].ZooLogic.COMPROBANTEV
+                    WHERE CAST(FFCH AS date) BETWEEN ? AND ? AND ANULADO = 0
+                      AND FLETRA <> 'R'
+                    GROUP BY CAST(FFCH AS date)
+                """, desde_str, hasta_str)
+                for row in cur_o.fetchall():
+                    f = str(row[0])[:10]
+                    if f in out:
+                        out[f]['online'] += float(row[1] or 0)
 
-            # ── Efectivo de bases 2 (NEGRO): VAL con JJCO LIKE '0%' ──
-            # JP confirmó que UNI2/ALCO2 también usan código 0 para efectivo.
-            cur.execute(f"""
-                SELECT CONVERT(varchar(10), CAST(JJFECHA AS date), 23) AS f,
-                  SUM(CASE WHEN JJCO LIKE '0%' THEN MONTOSISTE ELSE 0 END) AS efectivo_negro
-                FROM [{DB_ONLINE}].ZooLogic.VAL
-                WHERE CAST(JJFECHA AS date) BETWEEN ? AND ?
-                  AND (ESVUELTO = 0 OR ESVUELTO IS NULL)
-                GROUP BY CAST(JJFECHA AS date)
-            """, desde_str, hasta_str)
-            for row in cur.fetchall():
-                f = str(row[0])[:10]
-                if f in out:
-                    out[f]['efectivo_negro'] += float(row[1] or 0)
+                # ── Efectivo de bases 2 (NEGRO): VAL con JJCO LIKE '0%' ──
+                # JP confirmó que UNI2/ALCO2 también usan código 0 para efectivo.
+                # JOIN con COMPROBANTEV para netear contra notas de crédito.
+                cur_o.execute(f"""
+                    SELECT CONVERT(varchar(10), CAST(v.JJFECHA AS date), 23) AS f,
+                      SUM(CASE WHEN v.JJCO LIKE '0%' THEN v.MONTOSISTE * COALESCE(c.SIGNOMOV, 1) ELSE 0 END) AS efectivo_negro
+                    FROM [{DB_ONLINE}].ZooLogic.VAL v
+                    LEFT JOIN [{DB_ONLINE}].ZooLogic.COMPROBANTEV c ON c.CODIGO = v.JJNUM
+                    WHERE CAST(v.JJFECHA AS date) BETWEEN ? AND ?
+                      AND (v.ESVUELTO = 0 OR v.ESVUELTO IS NULL)
+                    GROUP BY CAST(v.JJFECHA AS date)
+                """, desde_str, hasta_str)
+                for row in cur_o.fetchall():
+                    f = str(row[0])[:10]
+                    if f in out:
+                        out[f]['efectivo_negro'] += float(row[1] or 0)
+            finally:
+                conn_o.close()
 
         # OJO: para Oficina NO usamos esta función. La lógica de Oficina
         # vive en consultar_oficina_facturas_rango() porque necesita filtrar
@@ -270,7 +323,8 @@ def consultar_oficina_facturas_rango(desde, hasta):
         j = (jjco or '').upper().strip()
         if j.startswith('0'):     return 'efectivo'
         if j.startswith('TRANS'): return 'transferencia'
-        if j.startswith('QR'):    return 'qr'
+        if j.startswith('QR'):    return 'qr'      # MP via QR
+        if j.startswith('MP'):    return 'qr'      # MP Point Smart (tarjeta vía dispositivo)
         if j == 'C':              return 'cc'
         if j.startswith('TJ'):    return 'tarjeta'
         return 'online'  # cualquier otro código (incluyendo 'CC' largo, 'VC', etc.)
@@ -375,7 +429,8 @@ def consultar_dragonfish(fecha):
       - DB física → tabla VAL (cashflow en tiempo real, igual al Z del cierre):
             efectivo = SUM(MONTOSISTE) WHERE JJCO LIKE '0%'  (PESOS)
             tarjeta  = SUM(MONTOSISTE) WHERE JJCO LIKE 'TJ%' (Tarjetas + (Int.) Tarjetas)
-            qr       = SUM(MONTOSISTE) WHERE JJCO LIKE 'QR%' (MP integrado + (Int.) MP + QR2)
+            qr       = SUM(MONTOSISTE) WHERE JJCO LIKE 'QR%' OR JJCO LIKE 'MP%'
+                       (MP integrado + (Int.) MP + QR2 + Point Smart)
             vales    = SUM(MONTOSISTE) WHERE JJCO LIKE 'VC%' (Vale de Cambio)
             ESVUELTO = 0 para no contar los vueltos
         Cantidad transacciones = COUNT(COMPROBANTEV) en DB física por FFCH (facturas del día)
@@ -396,14 +451,19 @@ def consultar_dragonfish(fecha):
 
         # ── DB física: desglose por medio de pago desde VAL ─────────
         # VAL se actualiza en tiempo real con cada venta (no espera al cierre Z)
+        # JOIN con COMPROBANTEV para netear notas de crédito (SIGNOMOV=-1).
         cur.execute(f"""
             SELECT
-              SUM(CASE WHEN JJCO LIKE '0%'  THEN MONTOSISTE ELSE 0 END) AS efectivo,
-              SUM(CASE WHEN JJCO LIKE 'TJ%' THEN MONTOSISTE ELSE 0 END) AS tarjeta,
-              SUM(CASE WHEN JJCO LIKE 'QR%' THEN MONTOSISTE ELSE 0 END) AS qr,
-              SUM(CASE WHEN JJCO LIKE 'VC%' THEN MONTOSISTE ELSE 0 END) AS vales
-            FROM [{DB_FISICA}].ZooLogic.VAL
-            WHERE JJFECHA = ? AND (ESVUELTO = 0 OR ESVUELTO IS NULL)
+              SUM(CASE WHEN v.JJCO LIKE '0%'  THEN v.MONTOSISTE * COALESCE(c.SIGNOMOV, 1) ELSE 0 END) AS efectivo,
+              SUM(CASE WHEN v.JJCO LIKE 'TJ%' THEN v.MONTOSISTE * COALESCE(c.SIGNOMOV, 1) ELSE 0 END) AS tarjeta,
+              -- qr agrupa TODO lo que cobra MP: QR/QR2 (cliente paga con app)
+              -- + MP (Point Smart: cliente paga con tarjeta vía el dispositivo).
+              -- En Dragonfish, las ventas por Point Smart usan JJCO='MP'.
+              SUM(CASE WHEN v.JJCO LIKE 'QR%' OR v.JJCO LIKE 'MP%' THEN v.MONTOSISTE * COALESCE(c.SIGNOMOV, 1) ELSE 0 END) AS qr,
+              SUM(CASE WHEN v.JJCO LIKE 'VC%' THEN v.MONTOSISTE * COALESCE(c.SIGNOMOV, 1) ELSE 0 END) AS vales
+            FROM [{DB_FISICA}].ZooLogic.VAL v
+            LEFT JOIN [{DB_FISICA}].ZooLogic.COMPROBANTEV c ON c.CODIGO = v.JJNUM
+            WHERE v.JJFECHA = ? AND (v.ESVUELTO = 0 OR v.ESVUELTO IS NULL)
         """, fecha_str)
         row = cur.fetchone()
         if row:
@@ -413,28 +473,35 @@ def consultar_dragonfish(fecha):
             out['vales']    = float(row[3] or 0)
 
         # Cantidad de transacciones (facturas no anuladas del día — FFCH en COMPROBANTEV)
+        # FLETRA <> 'R' excluye remitos.
         cur.execute(f"""
             SELECT COUNT(*) FROM [{DB_FISICA}].ZooLogic.COMPROBANTEV
-            WHERE FFCH = ? AND ANULADO = 0
+            WHERE FFCH = ? AND ANULADO = 0 AND FLETRA <> 'R'
         """, fecha_str)
         row = cur.fetchone()
         out['cant_transacciones'] = int(row[0] or 0) if row else 0
 
         # ── DB online (suma FTOTAL → 'online') ──────────────────────
+        # Conn separada (puede ser otra PC vía SQL Auth).
         if DB_ONLINE:
-            cur.execute(f"""
-                SELECT COALESCE(SUM(FTOTAL), 0) FROM [{DB_ONLINE}].ZooLogic.COMPROBANTEV
-                WHERE FFCH = ? AND ANULADO = 0
-            """, fecha_str)
-            row = cur.fetchone()
-            out['online'] = float(row[0] or 0) if row else 0
+            conn_o = get_conn_online()
+            try:
+                cur_o = conn_o.cursor()
+                cur_o.execute(f"""
+                    SELECT COALESCE(SUM(FTOTAL), 0) FROM [{DB_ONLINE}].ZooLogic.COMPROBANTEV
+                    WHERE FFCH = ? AND ANULADO = 0 AND FLETRA <> 'R'
+                """, fecha_str)
+                row = cur_o.fetchone()
+                out['online'] = float(row[0] or 0) if row else 0
+            finally:
+                conn_o.close()
 
         # ── Caso especial OFICINA: aún no separamos por medio de pago ─
         if LOCAL == 'oficina':
             # En oficina, las ventas son todas transferencia/MP. Sumamos todo el FTOTAL al campo 'online'
             cur.execute(f"""
                 SELECT COALESCE(SUM(FTOTAL), 0) FROM [{DB_FISICA}].ZooLogic.COMPROBANTEV
-                WHERE FFCH = ? AND ANULADO = 0
+                WHERE FFCH = ? AND ANULADO = 0 AND FLETRA <> 'R'
             """, fecha_str)
             row = cur.fetchone()
             out['online'] = float(row[0] or 0) if row else 0
@@ -503,7 +570,8 @@ def consultar_transacciones_mp_rango(desde, hasta):
     """Trae cada transacción MP individual del rango (no agregada).
 
     Una fila de la tabla VAL de Dragonfish = una transacción de venta.
-    Filtramos por JJCO LIKE 'QR%' (que en Dragonfish = MP, tanto QR como Point).
+    Filtramos por JJCO LIKE 'QR%' OR JJCO LIKE 'MP%' (en Dragonfish: QR/QR2
+    cliente paga con app + MP cuando paga con tarjeta vía Point Smart).
 
     Devuelve list de dicts con shape ventas_transacciones.
     """
@@ -514,29 +582,37 @@ def consultar_transacciones_mp_rango(desde, hasta):
     try:
         cur = conn.cursor()
         # ── Base FISICA: MP "blanco" ─────────────────────────────────
+        # JOIN con COMPROBANTEV para netear notas de crédito (SIGNOMOV=-1).
         cur.execute(f"""
-            SELECT JJFECHA, JJCO, MONTOSISTE
-            FROM [{DB_FISICA}].ZooLogic.VAL
-            WHERE CAST(JJFECHA AS date) BETWEEN ? AND ?
-              AND (ESVUELTO = 0 OR ESVUELTO IS NULL)
-              AND JJCO LIKE 'QR%'
-              AND MONTOSISTE > 0
+            SELECT v.JJFECHA, v.JJCO, v.MONTOSISTE * COALESCE(c.SIGNOMOV, 1) AS monto_neto
+            FROM [{DB_FISICA}].ZooLogic.VAL v
+            LEFT JOIN [{DB_FISICA}].ZooLogic.COMPROBANTEV c ON c.CODIGO = v.JJNUM
+            WHERE CAST(v.JJFECHA AS date) BETWEEN ? AND ?
+              AND (v.ESVUELTO = 0 OR v.ESVUELTO IS NULL)
+              AND (v.JJCO LIKE 'QR%' OR v.JJCO LIKE 'MP%')
+              AND v.MONTOSISTE * COALESCE(c.SIGNOMOV, 1) > 0
         """, desde_str, hasta_str)
         for jjfecha, jjco, monto in cur.fetchall():
             out.append(_armar_transaccion_mp(jjfecha, jjco, monto, base='fisica'))
 
-        # ── Base ONLINE (negro): MP "negro" ───────────────────────────
+        # ── Base ONLINE (negro): MP "negro" ── (conn SEPARADA: puede ser otra PC)
         if DB_ONLINE:
-            cur.execute(f"""
-                SELECT JJFECHA, JJCO, MONTOSISTE
-                FROM [{DB_ONLINE}].ZooLogic.VAL
-                WHERE CAST(JJFECHA AS date) BETWEEN ? AND ?
-                  AND (ESVUELTO = 0 OR ESVUELTO IS NULL)
-                  AND JJCO LIKE 'QR%'
-                  AND MONTOSISTE > 0
-            """, desde_str, hasta_str)
-            for jjfecha, jjco, monto in cur.fetchall():
-                out.append(_armar_transaccion_mp(jjfecha, jjco, monto, base='online'))
+            conn_o = get_conn_online()
+            try:
+                cur_o = conn_o.cursor()
+                cur_o.execute(f"""
+                    SELECT v.JJFECHA, v.JJCO, v.MONTOSISTE * COALESCE(c.SIGNOMOV, 1) AS monto_neto
+                    FROM [{DB_ONLINE}].ZooLogic.VAL v
+                    LEFT JOIN [{DB_ONLINE}].ZooLogic.COMPROBANTEV c ON c.CODIGO = v.JJNUM
+                    WHERE CAST(v.JJFECHA AS date) BETWEEN ? AND ?
+                      AND (v.ESVUELTO = 0 OR v.ESVUELTO IS NULL)
+                      AND (v.JJCO LIKE 'QR%' OR v.JJCO LIKE 'MP%')
+                      AND v.MONTOSISTE * COALESCE(c.SIGNOMOV, 1) > 0
+                """, desde_str, hasta_str)
+                for jjfecha, jjco, monto in cur_o.fetchall():
+                    out.append(_armar_transaccion_mp(jjfecha, jjco, monto, base='online'))
+            finally:
+                conn_o.close()
     finally:
         conn.close()
     return out

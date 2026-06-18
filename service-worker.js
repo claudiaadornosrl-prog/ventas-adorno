@@ -1,5 +1,5 @@
 // Service Worker — Ventas Adorno
-const CACHE_VERSION = 'ventas-adorno-v20-cerrar-oficina';
+const CACHE_VERSION = 'ventas-adorno-v21-cerrar-dia';
 const CACHE_ASSETS = ['./', './index.html', './manifest.webmanifest', './favicon.svg'];
 
 self.addEventListener('install', e => {
