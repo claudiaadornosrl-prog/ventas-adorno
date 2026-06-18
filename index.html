@@ -1841,75 +1841,80 @@ function mostrarResultadoTurno(turno, fecha, localId) {
         </div>
 
         ${(() => {
-          // Detalle nuevo: 2 listas lado a lado con verde si tiene_match, rojo si no
+          // Vista unificada espejo: 1 tabla con columnas
+          // Hora DF | Factura | Importe | Pago MP | Hora MP | Match
           const data = t.mp_movs_no_match || {};
           const movsCuenta = Array.isArray(data) ? data : (data.movs_cuenta || []);
           const txsDf      = Array.isArray(data) ? [] : (data.txs_dragonfish || []);
           const summary    = data.summary || null;
           if (!movsCuenta.length && !txsDf.length) return '';
           const fmtHora = (s) => s ? new Date(s).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}) : '—';
-          // renderFila para MP cuenta (sin número de comprobante)
-          const renderFila = (m, tieneMatch) => `
-            <tr style="border-top:1px solid #f1f5f9;background:${tieneMatch?'#fff':'#fef2f2'};">
-              <td style="padding:6px 8px;">${fmtHora(m.hora)}</td>
-              <td style="padding:6px 8px;text-align:right;font-weight:600;">${fmt$(+m.importe)}</td>
-              <td style="padding:6px 8px;text-align:center;">${tieneMatch ? '<span style="color:#16a34a;">✓</span>' : '<span style="color:#dc2626;font-weight:700;">✗</span>'}</td>
-            </tr>`;
-          // renderFilaDf para Dragonfish: incluye número de comprobante
-          const renderFilaDf = (m, tieneMatch) => `
-            <tr style="border-top:1px solid #f1f5f9;background:${tieneMatch?'#fff':'#fef2f2'};">
-              <td style="padding:6px 8px;">${fmtHora(m.hora)}</td>
-              <td style="padding:6px 8px;font-size:10px;color:#475569;font-family:monospace;">${escHtml(m.numero_comprobante || '—')}</td>
-              <td style="padding:6px 8px;text-align:right;font-weight:600;">${fmt$(+m.importe)}</td>
-              <td style="padding:6px 8px;text-align:center;">${tieneMatch ? '<span style="color:#16a34a;">✓</span>' : '<span style="color:#dc2626;font-weight:700;" title="Factura sin match en MP">✗</span>'}</td>
-            </tr>`;
+
+          // Pairing greedy: para cada tx DF, buscar el primer mov MP no usado con
+          // mismo importe. Lo demás queda como solo-DF o solo-MP al final.
+          const pares = [];
+          const usados = new Set();
+          txsDf.forEach(df => {
+            const idx = movsCuenta.findIndex((mp, i) => !usados.has(i) && +mp.importe === +df.importe);
+            if (idx !== -1) {
+              usados.add(idx);
+              pares.push({ df, mp: movsCuenta[idx], match: true });
+            } else {
+              pares.push({ df, mp: null, match: false });
+            }
+          });
+          // Movs MP que quedaron sin pareja
+          movsCuenta.forEach((mp, i) => {
+            if (!usados.has(i)) pares.push({ df: null, mp, match: false });
+          });
+          // Ordenar: primero los sin match (arriba, lo que importa), después matches
+          pares.sort((a, b) => (a.match === b.match) ? 0 : (a.match ? 1 : -1));
+
+          const renderPar = (p) => {
+            const bg = p.match ? '#fff' : '#fef2f2';
+            const checkmark = p.match
+              ? '<span style="color:#16a34a;font-weight:700;">✓</span>'
+              : '<span style="color:#dc2626;font-weight:700;">✗</span>';
+            return `
+              <tr style="border-top:1px solid #f1f5f9;background:${bg};">
+                <td style="padding:6px 8px;color:#475569;">${p.df ? fmtHora(p.df.hora) : '—'}</td>
+                <td style="padding:6px 8px;font-size:10px;color:#475569;font-family:monospace;">${p.df ? escHtml(p.df.numero_comprobante || '—') : '—'}</td>
+                <td style="padding:6px 8px;text-align:right;font-weight:600;">${p.df ? fmt$(+p.df.importe) : '—'}</td>
+                <td style="padding:6px 8px;text-align:right;font-weight:600;color:#7c3aed;">${p.mp ? fmt$(+p.mp.importe) : '—'}</td>
+                <td style="padding:6px 8px;color:#475569;">${p.mp ? fmtHora(p.mp.hora) : '—'}</td>
+                <td style="padding:6px 8px;text-align:center;">${checkmark}</td>
+              </tr>`;
+          };
+
           return `
             ${summary ? `
               <div style="display:flex;gap:14px;flex-wrap:wrap;background:#f8fafc;padding:10px 14px;border-radius:6px;margin-bottom:10px;font-size:12px;">
-                <div><strong>MP cuenta:</strong> ${summary.cuenta_n} movs ${summary.cuenta_sin_match > 0 ? `<span style="color:#dc2626;">(${summary.cuenta_sin_match} sin match)</span>` : ''}</div>
-                <div><strong>Dragonfish:</strong> ${summary.df_n} movs ${summary.df_sin_match > 0 ? `<span style="color:#dc2626;">(${summary.df_sin_match} sin match)</span>` : ''}</div>
+                <div><strong>Dragonfish:</strong> ${summary.df_n} fact ${summary.df_sin_match > 0 ? `<span style="color:#dc2626;">(${summary.df_sin_match} sin pago)</span>` : ''}</div>
+                <div><strong>MP cuenta:</strong> ${summary.cuenta_n} pagos ${summary.cuenta_sin_match > 0 ? `<span style="color:#dc2626;">(${summary.cuenta_sin_match} sin factura)</span>` : ''}</div>
               </div>
             ` : ''}
             <details ${tieneDisc?'open':''} style="margin-bottom:8px;">
               <summary style="cursor:pointer;font-weight:600;color:#475569;padding:8px 0;">
-                ▶ Comparar transacción por transacción
+                ▶ Comparar factura por pago (${pares.length})
               </summary>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
-                <div>
-                  <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:4px;">MP cuenta (${movsCuenta.length})</div>
-                  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;max-height:280px;overflow:auto;">
-                    <table style="width:100%;font-size:11px;">
-                      <thead style="background:#f8fafc;position:sticky;top:0;">
-                        <tr>
-                          <th style="text-align:left;padding:6px;">Hora</th>
-                          <th style="text-align:right;padding:6px;">Importe</th>
-                          <th style="text-align:center;padding:6px;">¿Match?</th>
-                        </tr>
-                      </thead>
-                      <tbody>${movsCuenta.map(m => renderFila(m, m.tiene_match)).join('')}</tbody>
-                    </table>
-                  </div>
-                </div>
-                <div>
-                  <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:4px;">Dragonfish (${txsDf.length})</div>
-                  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;max-height:280px;overflow:auto;">
-                    <table style="width:100%;font-size:11px;">
-                      <thead style="background:#f8fafc;position:sticky;top:0;">
-                        <tr>
-                          <th style="text-align:left;padding:6px;">Hora</th>
-                          <th style="text-align:left;padding:6px;">N° Factura</th>
-                          <th style="text-align:right;padding:6px;">Importe</th>
-                          <th style="text-align:center;padding:6px;">¿Match?</th>
-                        </tr>
-                      </thead>
-                      <tbody>${txsDf.map(m => renderFilaDf(m, m.tiene_match)).join('')}</tbody>
-                    </table>
-                  </div>
-                </div>
+              <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;max-height:340px;overflow:auto;margin-top:8px;">
+                <table style="width:100%;font-size:11px;border-collapse:collapse;">
+                  <thead style="background:#f8fafc;position:sticky;top:0;z-index:1;">
+                    <tr>
+                      <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0;">Hora DF</th>
+                      <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0;">Factura</th>
+                      <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0;">Importe</th>
+                      <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0;">Pago MP</th>
+                      <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0;">Hora MP</th>
+                      <th style="text-align:center;padding:6px;border-bottom:1px solid #e2e8f0;">Match</th>
+                    </tr>
+                  </thead>
+                  <tbody>${pares.map(renderPar).join('')}</tbody>
+                </table>
               </div>
               <div style="margin-top:8px;font-size:11px;color:#64748b;line-height:1.4;">
-                <strong>✗ MP cuenta sin match</strong> = pago entró a MP pero Dragonfish no lo registró (¿venta no cargada en POS?).<br>
-                <strong>✗ Dragonfish sin match</strong> = venta marcada en POS pero no llegó (todavía) a MP (¿en proceso? ¿anulada? ¿lag del sync?).
+                <strong>✗ Factura sin pago MP</strong> = venta cargada pero el pago no entró a Mercado Pago.<br>
+                <strong>✗ Pago sin factura</strong> = pago entró a MP pero no se cargó en el POS Dragonfish.
               </div>
             </details>
           `;
