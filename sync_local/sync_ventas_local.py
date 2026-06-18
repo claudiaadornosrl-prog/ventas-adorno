@@ -618,9 +618,11 @@ def consultar_transacciones_mp_rango(desde, hasta):
     try:
         cur = conn.cursor()
         # ── Base FISICA: MP "blanco" ─────────────────────────────────
-        # JOIN con COMPROBANTEV para netear notas de crédito (SIGNOMOV=-1).
+        # JOIN con COMPROBANTEV para netear notas de crédito (SIGNOMOV=-1)
+        # y traer el N° de comprobante (FLETRA + FPTOVEN + FNUMCOMP).
         cur.execute(f"""
-            SELECT v.JJFECHA, v.JJCO, v.MONTOSISTE * COALESCE(c.SIGNOMOV, 1) AS monto_neto
+            SELECT v.JJFECHA, v.JJCO, v.MONTOSISTE * COALESCE(c.SIGNOMOV, 1) AS monto_neto,
+                   RTRIM(c.FLETRA) AS letra, c.FPTOVEN AS ptv, c.FNUMCOMP AS num
             FROM [{DB_FISICA}].ZooLogic.VAL v
             LEFT JOIN [{DB_FISICA}].ZooLogic.COMPROBANTEV c ON c.CODIGO = v.JJNUM
             WHERE CAST(v.JJFECHA AS date) BETWEEN ? AND ?
@@ -628,8 +630,9 @@ def consultar_transacciones_mp_rango(desde, hasta):
               AND (v.JJCO LIKE 'QR%' OR v.JJCO LIKE 'MP%')
               AND v.MONTOSISTE * COALESCE(c.SIGNOMOV, 1) > 0
         """, desde_str, hasta_str)
-        for jjfecha, jjco, monto in cur.fetchall():
-            out.append(_armar_transaccion_mp(jjfecha, jjco, monto, base='fisica'))
+        for jjfecha, jjco, monto, letra, ptv, num in cur.fetchall():
+            out.append(_armar_transaccion_mp(jjfecha, jjco, monto, base='fisica',
+                                              letra=letra, ptv=ptv, num=num))
 
         # ── Base ONLINE (negro): MP "negro" ── (conn SEPARADA: puede ser otra PC)
         if DB_ONLINE:
@@ -637,7 +640,8 @@ def consultar_transacciones_mp_rango(desde, hasta):
             try:
                 cur_o = conn_o.cursor()
                 cur_o.execute(f"""
-                    SELECT v.JJFECHA, v.JJCO, v.MONTOSISTE * COALESCE(c.SIGNOMOV, 1) AS monto_neto
+                    SELECT v.JJFECHA, v.JJCO, v.MONTOSISTE * COALESCE(c.SIGNOMOV, 1) AS monto_neto,
+                           RTRIM(c.FLETRA) AS letra, c.FPTOVEN AS ptv, c.FNUMCOMP AS num
                     FROM [{DB_ONLINE}].ZooLogic.VAL v
                     LEFT JOIN [{DB_ONLINE}].ZooLogic.COMPROBANTEV c ON c.CODIGO = v.JJNUM
                     WHERE CAST(v.JJFECHA AS date) BETWEEN ? AND ?
@@ -645,8 +649,9 @@ def consultar_transacciones_mp_rango(desde, hasta):
                       AND (v.JJCO LIKE 'QR%' OR v.JJCO LIKE 'MP%')
                       AND v.MONTOSISTE * COALESCE(c.SIGNOMOV, 1) > 0
                 """, desde_str, hasta_str)
-                for jjfecha, jjco, monto in cur_o.fetchall():
-                    out.append(_armar_transaccion_mp(jjfecha, jjco, monto, base='online'))
+                for jjfecha, jjco, monto, letra, ptv, num in cur_o.fetchall():
+                    out.append(_armar_transaccion_mp(jjfecha, jjco, monto, base='online',
+                                                      letra=letra, ptv=ptv, num=num))
             finally:
                 conn_o.close()
     finally:
@@ -654,8 +659,12 @@ def consultar_transacciones_mp_rango(desde, hasta):
     return out
 
 
-def _armar_transaccion_mp(jjfecha, jjco, monto, base):
-    """Convierte una fila de VAL a un dict para insertar en ventas_transacciones."""
+def _armar_transaccion_mp(jjfecha, jjco, monto, base, letra=None, ptv=None, num=None):
+    """Convierte una fila de VAL a un dict para insertar en ventas_transacciones.
+
+    letra/ptv/num vienen del JOIN con COMPROBANTEV y arman numero_comprobante
+    en formato legible: "B 0020-00055483". Sirve para identificar la factura
+    en caso de discrepancia con MP."""
     import hashlib
     # JJFECHA puede ser datetime o str. Normalizamos a ISO con TZ Argentina.
     if isinstance(jjfecha, datetime):
@@ -671,15 +680,24 @@ def _armar_transaccion_mp(jjfecha, jjco, monto, base):
     raw = f"{LOCAL}|{aprobado_at}|{jjco}|{monto}|{base}"
     h = hashlib.md5(raw.encode('utf-8')).hexdigest()
 
+    # Armar número de comprobante en formato "B 0020-00055483"
+    nro_comp = None
+    if letra and ptv is not None and num is not None:
+        try:
+            nro_comp = f"{letra.strip()} {int(ptv):04d}-{int(num):08d}"
+        except (ValueError, TypeError):
+            nro_comp = None
+
     return {
-        'local':        LOCAL,
-        'fecha':        fecha_only,
-        'aprobado_at':  aprobado_at,
-        'importe':      float(monto or 0),
-        'codigo_jjco':  str(jjco or ''),
-        'tipo':         'mp',
-        'base':         base,
-        'hash_externo': h,
+        'local':              LOCAL,
+        'fecha':              fecha_only,
+        'aprobado_at':        aprobado_at,
+        'importe':            float(monto or 0),
+        'codigo_jjco':        str(jjco or ''),
+        'tipo':               'mp',
+        'base':               base,
+        'hash_externo':       h,
+        'numero_comprobante': nro_comp,
     }
 
 

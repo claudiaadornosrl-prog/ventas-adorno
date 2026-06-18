@@ -1848,11 +1848,20 @@ function mostrarResultadoTurno(turno, fecha, localId) {
           const summary    = data.summary || null;
           if (!movsCuenta.length && !txsDf.length) return '';
           const fmtHora = (s) => s ? new Date(s).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}) : '—';
+          // renderFila para MP cuenta (sin número de comprobante)
           const renderFila = (m, tieneMatch) => `
             <tr style="border-top:1px solid #f1f5f9;background:${tieneMatch?'#fff':'#fef2f2'};">
               <td style="padding:6px 8px;">${fmtHora(m.hora)}</td>
               <td style="padding:6px 8px;text-align:right;font-weight:600;">${fmt$(+m.importe)}</td>
               <td style="padding:6px 8px;text-align:center;">${tieneMatch ? '<span style="color:#16a34a;">✓</span>' : '<span style="color:#dc2626;font-weight:700;">✗</span>'}</td>
+            </tr>`;
+          // renderFilaDf para Dragonfish: incluye número de comprobante
+          const renderFilaDf = (m, tieneMatch) => `
+            <tr style="border-top:1px solid #f1f5f9;background:${tieneMatch?'#fff':'#fef2f2'};">
+              <td style="padding:6px 8px;">${fmtHora(m.hora)}</td>
+              <td style="padding:6px 8px;font-size:10px;color:#475569;font-family:monospace;">${escHtml(m.numero_comprobante || '—')}</td>
+              <td style="padding:6px 8px;text-align:right;font-weight:600;">${fmt$(+m.importe)}</td>
+              <td style="padding:6px 8px;text-align:center;">${tieneMatch ? '<span style="color:#16a34a;">✓</span>' : '<span style="color:#dc2626;font-weight:700;" title="Factura sin match en MP">✗</span>'}</td>
             </tr>`;
           return `
             ${summary ? `
@@ -1888,11 +1897,12 @@ function mostrarResultadoTurno(turno, fecha, localId) {
                       <thead style="background:#f8fafc;position:sticky;top:0;">
                         <tr>
                           <th style="text-align:left;padding:6px;">Hora</th>
+                          <th style="text-align:left;padding:6px;">N° Factura</th>
                           <th style="text-align:right;padding:6px;">Importe</th>
                           <th style="text-align:center;padding:6px;">¿Match?</th>
                         </tr>
                       </thead>
-                      <tbody>${txsDf.map(m => renderFila(m, m.tiene_match)).join('')}</tbody>
+                      <tbody>${txsDf.map(m => renderFilaDf(m, m.tiene_match)).join('')}</tbody>
                     </table>
                   </div>
                 </div>
