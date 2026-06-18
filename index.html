@@ -1848,7 +1848,12 @@ function mostrarResultadoTurno(turno, fecha, localId) {
           const txsDf      = Array.isArray(data) ? [] : (data.txs_dragonfish || []);
           const summary    = data.summary || null;
           if (!movsCuenta.length && !txsDf.length) return '';
-          const fmtHora = (s) => s ? new Date(s).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}) : '—';
+          // Hora compacta en 24h (sin "a.m./p.m." que ocupa más)
+          const fmtHora = (s) => {
+            if (!s) return '—';
+            const d = new Date(s);
+            return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+          };
 
           // Pairing greedy: para cada tx DF, buscar el primer mov MP no usado con
           // mismo importe. Lo demás queda como solo-DF o solo-MP al final.
@@ -1870,6 +1875,12 @@ function mostrarResultadoTurno(turno, fecha, localId) {
           // Ordenar: primero los sin match (arriba, lo que importa), después matches
           pares.sort((a, b) => (a.match === b.match) ? 0 : (a.match ? 1 : -1));
 
+          // Compactar el N° de factura: B 0020-00055483 → B 0020-55483 (saca 3 ceros del NUMCOMP)
+          const fmtFactura = (s) => {
+            if (!s) return '—';
+            return s.replace(/^([A-Z])\s+(\d{4})-0*(\d+)$/, '$1 $2-$3');
+          };
+
           const renderPar = (p) => {
             const bg = p.match ? '#fff' : '#fef2f2';
             const checkmark = p.match
@@ -1877,12 +1888,12 @@ function mostrarResultadoTurno(turno, fecha, localId) {
               : '<span style="color:#dc2626;font-weight:700;">✗</span>';
             return `
               <tr style="border-top:1px solid #f1f5f9;background:${bg};">
-                <td style="padding:6px 8px;color:#475569;">${p.df ? fmtHora(p.df.hora) : '—'}</td>
-                <td style="padding:6px 8px;font-size:10px;color:#475569;font-family:monospace;">${p.df ? escHtml(p.df.numero_comprobante || '—') : '—'}</td>
-                <td style="padding:6px 8px;text-align:right;font-weight:600;">${p.df ? fmt$(+p.df.importe) : '—'}</td>
-                <td style="padding:6px 8px;text-align:right;font-weight:600;color:#7c3aed;">${p.mp ? fmt$(+p.mp.importe) : '—'}</td>
-                <td style="padding:6px 8px;color:#475569;">${p.mp ? fmtHora(p.mp.hora) : '—'}</td>
-                <td style="padding:6px 8px;text-align:center;">${checkmark}</td>
+                <td style="padding:3px 6px;color:#475569;white-space:nowrap;">${p.df ? fmtHora(p.df.hora) : '—'}</td>
+                <td style="padding:3px 6px;font-size:10px;color:#475569;font-family:monospace;white-space:nowrap;">${p.df ? escHtml(fmtFactura(p.df.numero_comprobante)) : '—'}</td>
+                <td style="padding:3px 6px;text-align:right;font-weight:600;white-space:nowrap;">${p.df ? fmt$(+p.df.importe) : '—'}</td>
+                <td style="padding:3px 6px;text-align:right;font-weight:600;color:#7c3aed;white-space:nowrap;">${p.mp ? fmt$(+p.mp.importe) : '—'}</td>
+                <td style="padding:3px 6px;color:#475569;white-space:nowrap;">${p.mp ? fmtHora(p.mp.hora) : '—'}</td>
+                <td style="padding:3px 6px;text-align:center;">${checkmark}</td>
               </tr>`;
           };
 
@@ -1898,15 +1909,15 @@ function mostrarResultadoTurno(turno, fecha, localId) {
                 ▶ Comparar factura por pago (${pares.length})
               </summary>
               <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;max-height:340px;overflow:auto;margin-top:8px;">
-                <table style="width:100%;font-size:11px;border-collapse:collapse;">
+                <table style="width:100%;font-size:11px;border-collapse:collapse;table-layout:auto;">
                   <thead style="background:#f8fafc;position:sticky;top:0;z-index:1;">
                     <tr>
-                      <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0;">Hora DF</th>
-                      <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0;">Factura</th>
-                      <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0;">Importe</th>
-                      <th style="text-align:right;padding:6px;border-bottom:1px solid #e2e8f0;">Pago MP</th>
-                      <th style="text-align:left;padding:6px;border-bottom:1px solid #e2e8f0;">Hora MP</th>
-                      <th style="text-align:center;padding:6px;border-bottom:1px solid #e2e8f0;">Match</th>
+                      <th style="text-align:left;padding:5px;border-bottom:1px solid #e2e8f0;width:42px;">Hora</th>
+                      <th style="text-align:left;padding:5px;border-bottom:1px solid #e2e8f0;">Factura</th>
+                      <th style="text-align:right;padding:5px;border-bottom:1px solid #e2e8f0;">Importe</th>
+                      <th style="text-align:right;padding:5px;border-bottom:1px solid #e2e8f0;">Pago MP</th>
+                      <th style="text-align:left;padding:5px;border-bottom:1px solid #e2e8f0;width:42px;">Hora</th>
+                      <th style="text-align:center;padding:5px;border-bottom:1px solid #e2e8f0;width:32px;">✓</th>
                     </tr>
                   </thead>
                   <tbody>${pares.map(renderPar).join('')}</tbody>
@@ -1921,6 +1932,57 @@ function mostrarResultadoTurno(turno, fecha, localId) {
         })()}
       ` : '<div style="color:#64748b;font-size:13px;text-align:center;padding:8px;">Cuenta MP no disponible para este local — sin cruce automático.</div>'}
 
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+        <button onclick="document.getElementById('modal-turno').remove();" style="background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:10px 20px;cursor:pointer;font-size:13px;font-weight:600;">OK, listo</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(wrap);
+}
+
+/** Lista los turnos cerrados de un día con sus discrepancias. */
+function abrirTurnos(fecha, localId) {
+  const turnosDia = window._turnosPorFecha?.[fecha] || [];
+  if (!turnosDia.length) { toast('Este día no tiene turnos cerrados'); return; }
+
+  document.getElementById('modal-turno')?.remove();
+  const wrap = document.createElement('div');
+  wrap.id = 'modal-turno';
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  wrap.onclick = (e) => { if (e.target === wrap) wrap.remove(); };
+
+  wrap.innerHTML = `
+    <div style="background:#fff;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.25);max-width:780px;width:100%;max-height:85vh;overflow:auto;padding:24px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <h3 style="margin:0;font-size:18px;">🕐 Turnos · ${localId.toUpperCase()} · ${fmtFecha(fecha)}</h3>
+        <button onclick="document.getElementById('modal-turno').remove();" style="background:none;border:none;cursor:pointer;font-size:18px;color:#64748b;padding:0 6px;">✕</button>
+      </div>
+      ${turnosDia.map(t => {
+        const tieneDisc = t.discrepancia_mp !== null && Math.abs(t.discrepancia_mp) >= 1;
+        const colorDisc = tieneDisc ? '#dc2626' : '#16a34a';
+        const horaDesde = new Date(t.desde).toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'});
+        const horaHasta = new Date(t.hasta).toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'});
+        return `
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+              <div style="font-weight:700;font-size:15px;">Turno ${t.numero} <span style="font-weight:400;color:#64748b;font-size:12px;">· ${horaDesde} → ${horaHasta}</span></div>
+              <div style="font-size:11px;color:#64748b;">por ${escHtml(t.cerrado_por || '?')}</div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(${(fecha <= FECHA_FIN_TARJETA || +t.tarjeta > 0) ? 4 : 3},1fr);gap:8px;font-size:12px;">
+              <div><div style="color:#64748b;text-transform:uppercase;font-size:10px;">Efectivo</div><div style="font-weight:600;">${fmt$(+t.efectivo||0)}</div></div>
+              ${(fecha <= FECHA_FIN_TARJETA || +t.tarjeta > 0) ? `<div><div style="color:#64748b;text-transform:uppercase;font-size:10px;">Tarjeta</div><div style="font-weight:600;">${fmt$(+t.tarjeta||0)}</div></div>` : ''}
+              <div><div style="color:#64748b;text-transform:uppercase;font-size:10px;">MP</div><div style="font-weight:600;">${fmt$(+t.qr||0)}</div></div>
+              <div><div style="color:#64748b;text-transform:uppercase;font-size:10px;">Total</div><div style="font-weight:700;">${fmt$(+t.total_turno||0)}</div></div>
+            </div>
+            ${t.mp_cuenta !== null ? `
+              <div style="margin-top:10px;padding:8px 12px;background:${tieneDisc?'#fef2f2':'#f0fdf4'};border-left:3px solid ${colorDisc};border-radius:4px;font-size:12px;">
+                Cuenta MP: ${fmt$(+t.mp_cuenta)} · Diferencia: <strong style="color:${colorDisc};">${tieneDisc?'⚠ ':''}${fmt$(+t.discrepancia_mp)}</strong>
+                ${tieneDisc ? `<button onclick="event.stopPropagation();mostrarResultadoTurno(${JSON.stringify(t).replace(/"/g,'&quot;')}, '${fecha}', '${localId}')" style="margin-left:8px;background:#dc2626;color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;">Ver detalle</button>` : ''}
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('')}
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
         <button onclick="document.getElementById('modal-turno').remove();" style="background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:10px 20px;cursor:pointer;font-size:13px;font-weight:600;">OK, listo</button>
       </div>
