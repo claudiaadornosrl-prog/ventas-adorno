@@ -180,8 +180,8 @@ td input { width: 100%; padding: 4px; border: 1px solid var(--primary); border-r
     <select id="sel-local" onchange="cargar()" style="display:none;"></select>
     <div class="spacer"></div>
     <button id="btn-solicitudes" onclick="abrirGestionSolicitudes()" style="display:none;background:#fef3c7;color:#92400e;border-color:#fcd34d;font-weight:600;" title="Solicitudes de corrección pendientes de las vendedoras"></button>
-    <button id="btn-dragonfish" onclick="abrirCargaDragonfish('3d')" title="Trae desde Dragonfish los últimos 3 días (hoy, ayer y antesdeayer) — rápido, ideal para uso diario">🐉 Actualizar (últimos 3 días)</button>
-    <button id="btn-dragonfish-mes" onclick="abrirCargaDragonfish('mes')" style="display:none;" title="Re-sincroniza TODO el mes seleccionado desde Dragonfish (admin) — más lento, ideal antes de cerrar o ante una corrección retroactiva">🐉 Resincronizar mes</button>
+    <button id="btn-reaperturas" onclick="abrirBandejaReaperturas()" style="background:#ede9fe;color:#5b21b6;border-color:#c4b5fd;font-weight:600;" title="Solicitudes de reapertura de día">🙏 Reaperturas</button>
+    <button id="btn-dragonfish-mes" onclick="abrirCargaDragonfish('mes')" title="Re-sincroniza desde Dragonfish los días NO cerrados del mes seleccionado. Los días con 🏁 (cerrados) no se tocan.">🐉 Resincronizar mes</button>
     <button class="primary" id="btn-cargar-dia" onclick="abrirCarga()">+ Cargar venta del día</button>
     <button id="btn-cerrar-mes" onclick="cerrarMesActual()" style="display:none;background:#fef3c7;color:#92400e;border-color:#fcd34d;">🔒 Cerrar mes</button>
     <button id="btn-reabrir-mes" onclick="reabrirMesActual()" style="display:none;background:#fee2e2;color:#991b1b;border-color:#fca5a5;">🔓 Reabrir mes</button>
@@ -710,6 +710,7 @@ async function cargar() {
     }
     // Refrescar badge de solicitudes pendientes (para admin)
     if (session.isAdmin) refrescarBadgeSolicitudes();
+    refrescarBadgeReaperturas();
   } catch (e) {
     document.getElementById('contenido').innerHTML = `<div class="empty"><div class="icon">⚠️</div>Error: ${escHtml(e.message)}</div>`;
   } finally {
@@ -857,7 +858,10 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
       const linkReabrir = (diaCerrado && session?.isAdmin)
         ? `<button onclick="event.stopPropagation();reabrirDiaAhora('${fecha}','${localId}')" title="Reabrir el día (solo admin)" style="background:none;border:1px solid #f59e0b;color:#92400e;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;margin-left:4px;">🔓 Reabrir</button>`
         : '';
-      celdaTurno = `<td style="text-align:center;white-space:nowrap;">${badge}${verLink}${botonCerrar}${botonCerrarDia}${linkReabrir}</td>`;
+      const botonSolicitar = (diaCerrado && !session?.isAdmin)
+        ? `<button onclick="event.stopPropagation();solicitarReaperturaAhora('${fecha}','${localId}')" title="Pedirle al admin que reabra este día" style="background:none;border:1px solid #c4b5fd;color:#5b21b6;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;margin-left:4px;">🙏 Pedir reapertura</button>`
+        : '';
+      celdaTurno = `<td style="text-align:center;white-space:nowrap;">${badge}${verLink}${botonCerrar}${botonCerrarDia}${linkReabrir}${botonSolicitar}</td>`;
     }
 
     filas.push(`
@@ -1481,10 +1485,29 @@ async function cerrarTurnoAhora(fecha, localId) {
     ? `admin:${session?.email || '?'}`
     : `local:${localId}`;
 
-  // PRE-SYNC: traer los pagos MP de los últimos 30 min para evitar discrepancia
-  // por lag del scraper horario. Si falla, seguimos igual (la edge function es
-  // un "best effort" — el cruce funciona sin ella, solo es menos preciso).
-  toast('🔄 Sincronizando últimos pagos MP...');
+  // PRE-SYNC 1/2: forzar sync de Dragonfish para el DÍA actual antes de cerrar.
+  // Esto trae las últimas ventas que estaban en proceso/sin sincronizar.
+  toast('🐉 Sincronizando ventas del día...');
+  try {
+    const { data: job, error: jobErr } = await sb.from('dragonfish_jobs').insert({
+      local: localId,
+      fecha: fecha,
+      tipo: 'mes',         // reusamos tipo='mes' con rango de 1 día
+      fecha_desde: fecha,
+      fecha_hasta: fecha,
+      estado: 'pendiente',
+      solicitado_por: session?.email || 'cerrar_turno',
+    }).select().single();
+    if (jobErr) throw jobErr;
+    // Esperar hasta 30 seg (suele ser <5s en práctica)
+    await esperarJob(job.id, 30);
+  } catch (e) {
+    console.warn('pre-sync Dragonfish falló (sigo igual):', e);
+  }
+
+  // PRE-SYNC 2/2: traer los pagos MP de los últimos 30 min para evitar
+  // discrepancia por lag del scraper horario.
+  toast('💳 Sincronizando últimos pagos MP...');
   try {
     const { data: syncRes, error: syncErr } = await sb.functions.invoke('sync-mp-on-demand', {
       body: { minutes_back: 30 },
@@ -1539,8 +1562,26 @@ async function cerrarDiaAhora(fecha, localId) {
     ? `admin:${session?.email || '?'}`
     : `local:${localId}`;
 
+  // PRE-SYNC Dragonfish del día actual
+  toast('🐉 Sincronizando ventas del día...');
+  try {
+    const { data: job, error: jobErr } = await sb.from('dragonfish_jobs').insert({
+      local: localId,
+      fecha: fecha,
+      tipo: 'mes',
+      fecha_desde: fecha,
+      fecha_hasta: fecha,
+      estado: 'pendiente',
+      solicitado_por: session?.email || 'cerrar_dia',
+    }).select().single();
+    if (jobErr) throw jobErr;
+    await esperarJob(job.id, 30);
+  } catch (e) {
+    console.warn('pre-sync Dragonfish falló (sigo igual):', e);
+  }
+
   // PRE-SYNC MP (mismo patrón que cerrarTurnoAhora)
-  toast('🔄 Sincronizando últimos pagos MP...');
+  toast('💳 Sincronizando últimos pagos MP...');
   try {
     await sb.functions.invoke('sync-mp-on-demand', { body: { minutes_back: 30 } });
   } catch (e) {
@@ -1569,6 +1610,133 @@ async function cerrarDiaAhora(fecha, localId) {
   } catch (e) {
     alert('Error al cerrar día: ' + e.message);
   }
+}
+
+/** Vendedora solicita reabrir un día cerrado. Pide motivo y crea solicitud pendiente. */
+async function solicitarReaperturaAhora(fecha, localId) {
+  const motivo = prompt(`Solicitar reapertura del día ${fmtFecha(fecha)} en ${localId.toUpperCase()}.\n\nMotivo (mínimo 5 caracteres):`);
+  if (!motivo || motivo.trim().length < 5) {
+    if (motivo !== null) toast('El motivo debe tener al menos 5 caracteres', true);
+    return;
+  }
+  try {
+    const { data, error } = await sb.rpc('solicitar_reapertura', {
+      p_local: localId,
+      p_fecha: fecha,
+      p_motivo: motivo.trim(),
+    });
+    if (error) throw error;
+    toast('🙏 Solicitud enviada. El admin va a recibir el aviso.');
+  } catch (e) {
+    alert('Error al solicitar reapertura: ' + e.message);
+  }
+}
+
+/** Bandeja de solicitudes de reapertura.
+ *  Admin: ve pendientes con botones aprobar/rechazar.
+ *  Vendedora: ve solo sus propias (todas, con estado). */
+async function abrirBandejaReaperturas() {
+  document.getElementById('modal-reaperturas')?.remove();
+  const wrap = document.createElement('div');
+  wrap.id = 'modal-reaperturas';
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  wrap.onclick = (e) => { if (e.target === wrap) wrap.remove(); };
+  wrap.innerHTML = `
+    <div style="background:#fff;border-radius:12px;max-width:760px;width:100%;max-height:85vh;overflow:auto;padding:24px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <h3 style="margin:0;font-size:18px;">🙏 Reaperturas</h3>
+        <button onclick="document.getElementById('modal-reaperturas').remove();" style="background:none;border:none;cursor:pointer;font-size:18px;color:#64748b;">✕</button>
+      </div>
+      <div id="reaperturas-body"><div style="text-align:center;color:#64748b;padding:30px;">Cargando…</div></div>
+    </div>`;
+  document.body.appendChild(wrap);
+
+  // Cargar solicitudes (RLS ya filtra: admin ve todo, vendedora ve solo lo suyo)
+  const { data, error } = await sb.from('ventas_reaperturas')
+    .select('*')
+    .order('solicitado_at', { ascending: false })
+    .limit(50);
+  if (error) {
+    document.getElementById('reaperturas-body').innerHTML = `<div style="color:#dc2626;">Error: ${escHtml(error.message)}</div>`;
+    return;
+  }
+  if (!data || !data.length) {
+    document.getElementById('reaperturas-body').innerHTML = `<div style="text-align:center;color:#64748b;padding:30px;">No hay solicitudes.</div>`;
+    return;
+  }
+
+  const pendientes = data.filter(r => r.estado === 'pendiente');
+  const resueltas  = data.filter(r => r.estado !== 'pendiente');
+
+  const renderItem = (r) => {
+    const colorEstado = r.estado === 'pendiente' ? '#fbbf24' : (r.estado === 'aprobada' ? '#22c55e' : '#dc2626');
+    const labelEstado = r.estado === 'pendiente' ? '⏳ Pendiente' : (r.estado === 'aprobada' ? '✓ Aprobada' : '✗ Rechazada');
+    const fechaHora = new Date(r.solicitado_at).toLocaleString('es-AR', { dateStyle:'short', timeStyle:'short' });
+    const acciones = (session?.isAdmin && r.estado === 'pendiente')
+      ? `<div style="display:flex;gap:6px;margin-top:10px;">
+           <button onclick="resolverReaperturaAhora(${r.id}, true)" style="flex:1;background:#16a34a;color:#fff;border:none;border-radius:6px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer;">✓ Aprobar y reabrir</button>
+           <button onclick="resolverReaperturaAhora(${r.id}, false)" style="flex:1;background:#dc2626;color:#fff;border:none;border-radius:6px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer;">✗ Rechazar</button>
+         </div>`
+      : '';
+    const comentario = r.comentario_admin
+      ? `<div style="margin-top:6px;padding:6px 10px;background:#f1f5f9;border-radius:4px;font-size:12px;color:#475569;"><b>Admin:</b> ${escHtml(r.comentario_admin)}</div>`
+      : '';
+    return `
+      <div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;">
+          <div>
+            <div style="font-weight:700;font-size:14px;">${r.local.toUpperCase()} · ${fmtFecha(r.fecha)}</div>
+            <div style="font-size:11px;color:#64748b;">${fechaHora} · ${escHtml(r.solicitado_por)}</div>
+          </div>
+          <span style="background:${colorEstado};color:#fff;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;">${labelEstado}</span>
+        </div>
+        <div style="font-size:13px;color:#1e293b;background:#f8fafc;padding:8px 10px;border-radius:4px;border-left:3px solid #c4b5fd;">${escHtml(r.motivo)}</div>
+        ${comentario}
+        ${acciones}
+      </div>`;
+  };
+
+  document.getElementById('reaperturas-body').innerHTML = `
+    ${pendientes.length ? `<div style="font-weight:600;color:#92400e;margin-bottom:8px;">⏳ Pendientes (${pendientes.length})</div>${pendientes.map(renderItem).join('')}` : '<div style="color:#64748b;font-size:13px;margin-bottom:10px;">No hay pendientes.</div>'}
+    ${resueltas.length ? `<div style="font-weight:600;color:#475569;margin:14px 0 8px;">Historial</div>${resueltas.map(renderItem).join('')}` : ''}`;
+}
+
+/** Admin aprueba o rechaza una solicitud. */
+async function resolverReaperturaAhora(id, aprobar) {
+  const accion = aprobar ? 'aprobar' : 'rechazar';
+  const comentario = prompt(`Comentario para la vendedora (opcional):`);
+  if (comentario === null) return;  // canceló
+  if (!confirm(`¿Confirmás ${accion} la solicitud?${aprobar ? '\n\nEl día se va a reabrir y la próxima sincronización va a actualizar los valores.' : ''}`)) return;
+  try {
+    const { data, error } = await sb.rpc('resolver_reapertura', {
+      p_id: id,
+      p_aprobar: aprobar,
+      p_comentario: comentario.trim() || null,
+    });
+    if (error) throw error;
+    toast(aprobar ? '✓ Aprobada · día reabierto' : '✗ Rechazada');
+    abrirBandejaReaperturas();  // refrescar
+    if (typeof verPlanilla === 'function') verPlanilla();
+  } catch (e) {
+    alert('Error al resolver: ' + e.message);
+  }
+}
+
+/** Actualiza el badge del botón Reaperturas con contador de pendientes (solo admin). */
+async function refrescarBadgeReaperturas() {
+  if (!session?.isAdmin) {
+    document.getElementById('btn-reaperturas').textContent = '🙏 Reaperturas';
+    return;
+  }
+  try {
+    const { count } = await sb.from('ventas_reaperturas')
+      .select('id', { count: 'exact', head: true })
+      .eq('estado', 'pendiente');
+    const btn = document.getElementById('btn-reaperturas');
+    if (btn) {
+      btn.innerHTML = `🙏 Reaperturas${count > 0 ? ` <span style="background:#dc2626;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;">${count}</span>` : ''}`;
+    }
+  } catch (e) { /* silent */ }
 }
 
 /** Reabre un día previamente cerrado. Solo admin. */

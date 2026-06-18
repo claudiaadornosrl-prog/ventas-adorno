@@ -551,14 +551,50 @@ def supa_upsert_venta_diaria(data):
                       json=body, timeout=15)
     r.raise_for_status()
 
+def supa_dias_controlados(local: str, fechas: list[str]) -> set[str]:
+    """Consulta a Supabase qué fechas en la lista están con controlado=true.
+    Devuelve set de fechas (string 'YYYY-MM-DD'). Esos días NO deben pisarse."""
+    if not fechas:
+        return set()
+    in_filter = ','.join(f'"{f}"' for f in fechas)
+    url = f"{SUPABASE_URL}/rest/v1/ventas_diarias"
+    params = {
+        'select': 'fecha',
+        'local': f'eq.{local}',
+        'controlado': 'eq.true',
+        'fecha': f'in.({in_filter})',
+    }
+    try:
+        r = requests.get(url, headers=HDRS, params=params, timeout=15)
+        r.raise_for_status()
+        return {row['fecha'][:10] for row in r.json()}
+    except Exception as e:
+        log.warning(f'[upsert] no pude consultar días controlados: {e}. No filtro.')
+        return set()
+
+
 def supa_bulk_upsert_ventas(rows):
-    """Inserta/actualiza N filas en ventas_diarias con un solo POST."""
+    """Inserta/actualiza N filas en ventas_diarias con un solo POST.
+    Excluye automáticamente los días que están con controlado=true (cerrados):
+    el sync NO debe pisar manuales de un día ya cerrado por la encargada.
+    Si una vendedora necesita corregir un día cerrado, debe pedir reapertura."""
     if not rows:
+        return
+    # Filtrar días controlados (locked)
+    fechas_a_upsertear = [r['fecha'] for r in rows if r.get('fecha')]
+    locked = supa_dias_controlados(rows[0]['local'], fechas_a_upsertear) if rows else set()
+    if locked:
+        rows_filtradas = [r for r in rows if r.get('fecha') not in locked]
+        log.info(f"[upsert] {len(locked)} día(s) controlados/cerrados — se saltean: {sorted(locked)}")
+    else:
+        rows_filtradas = rows
+    if not rows_filtradas:
+        log.info('[upsert] todos los días estaban cerrados — nada para upsertear')
         return
     meta = {'origen': 'dragonfish_auto',
             'cargado_por': f'sync_local@{socket.gethostname()}',
             'cargado_at': datetime.utcnow().isoformat() + 'Z'}
-    body = [{**r, **meta} for r in rows]
+    body = [{**r, **meta} for r in rows_filtradas]
     url = f"{SUPABASE_URL}/rest/v1/ventas_diarias?on_conflict=local,fecha"
     r = requests.post(url, headers={**HDRS,
                                      'Prefer': 'resolution=merge-duplicates,return=minimal'},
