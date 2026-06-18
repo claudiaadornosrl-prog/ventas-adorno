@@ -1510,7 +1510,7 @@ async function cerrarTurnoAhora(fecha, localId) {
   toast('💳 Sincronizando últimos pagos MP...');
   try {
     const { data: syncRes, error: syncErr } = await sb.functions.invoke('sync-mp-on-demand', {
-      body: { minutes_back: 30 },
+      body: { minutes_back: 120 },
     });
     if (syncErr) {
       console.warn('sync-mp-on-demand falló (sigo igual):', syncErr);
@@ -1583,7 +1583,7 @@ async function cerrarDiaAhora(fecha, localId) {
   // PRE-SYNC MP (mismo patrón que cerrarTurnoAhora)
   toast('💳 Sincronizando últimos pagos MP...');
   try {
-    await sb.functions.invoke('sync-mp-on-demand', { body: { minutes_back: 30 } });
+    await sb.functions.invoke('sync-mp-on-demand', { body: { minutes_back: 120 } });
   } catch (e) {
     console.warn('sync-mp-on-demand falló (sigo igual):', e);
   }
