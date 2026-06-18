@@ -676,10 +676,6 @@ def _armar_transaccion_mp(jjfecha, jjco, monto, base, letra=None, ptv=None, num=
         aprobado_at = s + '-03:00' if 'T' in s and '+' not in s and '-03' not in s else s
         fecha_only = s[:10]
 
-    # Hash externo: local + jjfecha + jjco + monto. Único razonable.
-    raw = f"{LOCAL}|{aprobado_at}|{jjco}|{monto}|{base}"
-    h = hashlib.md5(raw.encode('utf-8')).hexdigest()
-
     # Armar número de comprobante en formato "B 0020-00055483"
     nro_comp = None
     if letra and ptv is not None and num is not None:
@@ -687,6 +683,14 @@ def _armar_transaccion_mp(jjfecha, jjco, monto, base, letra=None, ptv=None, num=
             nro_comp = f"{letra.strip()} {int(ptv):04d}-{int(num):08d}"
         except (ValueError, TypeError):
             nro_comp = None
+
+    # Hash externo: local + jjfecha + jjco + monto + base + numero_comprobante.
+    # ÚLTIMO ES CLAVE: si NO incluimos el número, 2 facturas del mismo día con
+    # mismo importe y mismo método de pago (caso común: 2 ventas de $35.000 MP)
+    # generan el mismo hash y la segunda se descarta por ON CONFLICT DO NOTHING.
+    # Bug detectado el 18/06/2026 con 2 facturas de $35.000 — solo aparecía una.
+    raw = f"{LOCAL}|{aprobado_at}|{jjco}|{monto}|{base}|{nro_comp or ''}"
+    h = hashlib.md5(raw.encode('utf-8')).hexdigest()
 
     return {
         'local':              LOCAL,

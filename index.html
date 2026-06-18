@@ -1889,10 +1889,10 @@ function mostrarResultadoTurno(turno, fecha, localId) {
               : '<span style="color:#dc2626;font-weight:700;">✗</span>';
             return `
               <tr style="border-top:1px solid #f1f5f9;background:${bg};">
-                <td style="padding:3px 12px 3px 8px;font-size:10px;color:#475569;font-family:monospace;white-space:nowrap;">${p.df ? escHtml(fmtFactura(p.df.numero_comprobante)) : '—'}</td>
-                <td style="padding:3px 12px;text-align:right;font-weight:600;font-size:11px;white-space:nowrap;">${p.df ? fmt$(+p.df.importe) : '—'}</td>
-                <td style="padding:3px 12px;text-align:right;font-weight:600;font-size:11px;color:#7c3aed;white-space:nowrap;">${p.mp ? fmt$(+p.mp.importe) : '—'}</td>
-                <td style="padding:3px 8px;text-align:center;">${checkmark}</td>
+                <td style="padding:3px 8px;font-size:10px;color:#475569;font-family:monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.df ? escHtml(fmtFactura(p.df.numero_comprobante)) : '—'}</td>
+                <td style="padding:3px 8px;text-align:right;font-weight:600;font-size:11px;white-space:nowrap;">${p.df ? fmt$(+p.df.importe) : '—'}</td>
+                <td style="padding:3px 8px;text-align:right;font-weight:600;font-size:11px;color:#7c3aed;white-space:nowrap;">${p.mp ? fmt$(+p.mp.importe) : '—'}</td>
+                <td style="padding:3px 4px;text-align:center;">${checkmark}</td>
               </tr>`;
           };
 
@@ -1908,13 +1908,19 @@ function mostrarResultadoTurno(turno, fecha, localId) {
                 ▶ Comparar factura por pago (${pares.length})
               </summary>
               <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;max-height:340px;overflow:auto;margin-top:8px;">
-                <table style="width:auto;margin:0 auto;font-size:11px;border-collapse:collapse;">
+                <table style="width:100%;font-size:11px;border-collapse:collapse;table-layout:fixed;">
+                  <colgroup>
+                    <col style="width:32%;">
+                    <col style="width:28%;">
+                    <col style="width:28%;">
+                    <col style="width:12%;">
+                  </colgroup>
                   <thead style="background:#f8fafc;position:sticky;top:0;z-index:1;">
                     <tr>
-                      <th style="text-align:left;padding:5px 12px 5px 8px;border-bottom:1px solid #e2e8f0;font-size:10px;">Factura</th>
-                      <th style="text-align:right;padding:5px 12px;border-bottom:1px solid #e2e8f0;font-size:10px;">Importe</th>
-                      <th style="text-align:right;padding:5px 12px;border-bottom:1px solid #e2e8f0;font-size:10px;">Pago MP</th>
-                      <th style="text-align:center;padding:5px 8px;border-bottom:1px solid #e2e8f0;font-size:10px;">✓</th>
+                      <th style="text-align:left;padding:5px 8px;border-bottom:1px solid #e2e8f0;font-size:10px;">Factura</th>
+                      <th style="text-align:right;padding:5px 8px;border-bottom:1px solid #e2e8f0;font-size:10px;">Importe</th>
+                      <th style="text-align:right;padding:5px 8px;border-bottom:1px solid #e2e8f0;font-size:10px;">Pago MP</th>
+                      <th style="text-align:center;padding:5px 4px;border-bottom:1px solid #e2e8f0;font-size:10px;">✓</th>
                     </tr>
                   </thead>
                   <tbody>${pares.map(renderPar).join('')}</tbody>
