@@ -1777,7 +1777,7 @@ function mostrarResultadoTurno(turno, fecha, localId) {
   const horaHasta = new Date(t.hasta).toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'});
 
   wrap.innerHTML = `
-    <div style="background:#fff;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.25);max-width:560px;width:100%;max-height:85vh;overflow:auto;padding:20px;">
+    <div style="background:#fff;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.25);max-width:720px;width:100%;max-height:90vh;overflow:auto;padding:24px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <h3 style="margin:0;font-size:18px;">🔒 Turno ${t.numero} · ${localId.toUpperCase()} · ${fmtFecha(fecha)}</h3>
         <button onclick="document.getElementById('modal-turno').remove();" style="background:none;border:none;cursor:pointer;font-size:18px;color:#64748b;padding:0 6px;">✕</button>
@@ -1882,18 +1882,20 @@ function mostrarResultadoTurno(turno, fecha, localId) {
             return s.replace(/^([A-Z])\s+\d{4}-0*(\d+)$/, '$1-$2');
           };
 
+          // CSS GRID 4 columnas: Factura | Importe | Pago MP | ✓
+          // Sin tabla — Grid evita los huecos.
           const renderPar = (p) => {
             const bg = p.match ? '#fff' : '#fef2f2';
             const checkmark = p.match
               ? '<span style="color:#16a34a;font-weight:700;">✓</span>'
               : '<span style="color:#dc2626;font-weight:700;">✗</span>';
             return `
-              <tr style="border-top:1px solid #f1f5f9;background:${bg};">
-                <td style="padding:3px 8px;font-size:10px;color:#475569;font-family:monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.df ? escHtml(fmtFactura(p.df.numero_comprobante)) : '—'}</td>
-                <td style="padding:3px 8px;text-align:right;font-weight:600;font-size:11px;white-space:nowrap;">${p.df ? fmt$(+p.df.importe) : '—'}</td>
-                <td style="padding:3px 8px;text-align:right;font-weight:600;font-size:11px;color:#7c3aed;white-space:nowrap;">${p.mp ? fmt$(+p.mp.importe) : '—'}</td>
-                <td style="padding:3px 4px;text-align:center;">${checkmark}</td>
-              </tr>`;
+              <div style="display:grid;grid-template-columns:1fr 110px 110px 40px;align-items:center;border-top:1px solid #f1f5f9;background:${bg};font-size:11px;">
+                <div style="padding:4px 8px;font-size:10px;color:#475569;font-family:monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.df ? escHtml(fmtFactura(p.df.numero_comprobante)) : '—'}</div>
+                <div style="padding:4px 8px;text-align:right;font-weight:600;white-space:nowrap;">${p.df ? fmt$(+p.df.importe) : '—'}</div>
+                <div style="padding:4px 8px;text-align:right;font-weight:600;color:#7c3aed;white-space:nowrap;">${p.mp ? fmt$(+p.mp.importe) : '—'}</div>
+                <div style="padding:4px 4px;text-align:center;">${checkmark}</div>
+              </div>`;
           };
 
           return `
@@ -1907,24 +1909,14 @@ function mostrarResultadoTurno(turno, fecha, localId) {
               <summary style="cursor:pointer;font-weight:600;color:#475569;padding:8px 0;">
                 ▶ Comparar factura por pago (${pares.length})
               </summary>
-              <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;max-height:340px;overflow:auto;margin-top:8px;">
-                <table style="width:100%;font-size:11px;border-collapse:collapse;table-layout:fixed;">
-                  <colgroup>
-                    <col style="width:32%;">
-                    <col style="width:28%;">
-                    <col style="width:28%;">
-                    <col style="width:12%;">
-                  </colgroup>
-                  <thead style="background:#f8fafc;position:sticky;top:0;z-index:1;">
-                    <tr>
-                      <th style="text-align:left;padding:5px 8px;border-bottom:1px solid #e2e8f0;font-size:10px;">Factura</th>
-                      <th style="text-align:right;padding:5px 8px;border-bottom:1px solid #e2e8f0;font-size:10px;">Importe</th>
-                      <th style="text-align:right;padding:5px 8px;border-bottom:1px solid #e2e8f0;font-size:10px;">Pago MP</th>
-                      <th style="text-align:center;padding:5px 4px;border-bottom:1px solid #e2e8f0;font-size:10px;">✓</th>
-                    </tr>
-                  </thead>
-                  <tbody>${pares.map(renderPar).join('')}</tbody>
-                </table>
+              <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;max-height:340px;overflow-y:auto;overflow-x:hidden;margin-top:8px;">
+                <div style="display:grid;grid-template-columns:1fr 110px 110px 40px;background:#f8fafc;font-size:10px;font-weight:600;color:#475569;position:sticky;top:0;border-bottom:1px solid #e2e8f0;">
+                  <div style="padding:6px 8px;">Factura</div>
+                  <div style="padding:6px 8px;text-align:right;">Importe</div>
+                  <div style="padding:6px 8px;text-align:right;">Pago MP</div>
+                  <div style="padding:6px 4px;text-align:center;">✓</div>
+                </div>
+                ${pares.map(renderPar).join('')}
               </div>
               <div style="margin-top:8px;font-size:11px;color:#64748b;line-height:1.4;">
                 <strong>✗ Factura sin pago MP</strong> = venta cargada pero el pago no entró a Mercado Pago.<br>
