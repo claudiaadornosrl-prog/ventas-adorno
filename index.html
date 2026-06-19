@@ -833,7 +833,11 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
     ).length;
 
     let celdaTurno = '<td class="cell-derived">—</td>';
-    if (nTurnos > 0 || v) {
+    // Entramos al bloque si hay turnos previos, hay venta cargada, o ES HOY
+    // (para HOY siempre queremos ofrecer el botón "🔒 Cerrar" — al apretar
+    // se hace pre-sync de Dragonfish+MP que trae las ventas que aún no
+    // se hayan sincronizado por el scheduled task horario).
+    if (nTurnos > 0 || v || esHoy) {
       const diaCerrado = !!v?.controlado;
       const badgeColor = conDiscrep > 0 ? '#fee2e2' : (diaCerrado ? '#e0e7ff' : '#dcfce7');
       const badgeTxt   = conDiscrep > 0 ? '#991b1b' : (diaCerrado ? '#3730a3' : '#166534');
@@ -841,12 +845,11 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
       const badge = nTurnos > 0
         ? `<span style="background:${badgeColor};color:${badgeTxt};padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">${badgeIcon}${nTurnos} turno${nTurnos>1?'s':''}${conDiscrep>0?' ⚠':''}</span>`
         : (diaCerrado ? `<span style="background:#e0e7ff;color:#3730a3;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">🏁 cerrado</span>` : '');
-      // El botón aparece si hay ventas del día por cualquier medio
-      // (shopping incluye solo físico; para Oficina las ventas vienen por
-      // transferencia/CC/MP-Web, así que usamos total).
-      // NO aparece si el día está cerrado (controlado=true).
-      const hayVenta = v && ((+v.shopping||0) > 0 || (+v.total||0) > 0);
-      const puedeCerrar = esHoy && hayVenta && !diaCerrado;
+      // Botón "Cerrar turno" disponible si es HOY y el día NO está cerrado.
+      // Antes requeríamos venta cargada, pero eso bloqueaba a Oficina cuando
+      // todavía no había corrido el sync horario. El pre-sync forzado dentro
+      // de cerrarTurnoAhora() trae las ventas que aún no estén en la planilla.
+      const puedeCerrar = esHoy && !diaCerrado;
       const botonCerrar = puedeCerrar
         ? `<button onclick="event.stopPropagation();cerrarTurnoAhora('${fecha}','${localId}')" title="Cerrar el turno actual" style="background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;margin-left:6px;">🔒 Cerrar</button>`
         : '';
@@ -2045,3 +2048,4 @@ if ('serviceWorker' in navigator) {
 </script>
 </body>
 </html>
+                                                                                                                                                                                                                                                                         
