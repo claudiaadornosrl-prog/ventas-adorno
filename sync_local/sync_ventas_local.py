@@ -540,7 +540,17 @@ def supa_marcar_job(job_id, estado, error=None, payload=None):
     r.raise_for_status()
 
 def supa_upsert_venta_diaria(data):
-    """Inserta/actualiza la fila en ventas_diarias."""
+    """Inserta/actualiza la fila en ventas_diarias.
+    Respeta controlado=true: si el día ya está cerrado por la encargada,
+    NO lo pisa (la encargada cerró su número final, no queremos sobrescribir).
+    """
+    if not data or not data.get('fecha') or not data.get('local'):
+        log.warning('[upsert] data inválida (falta fecha o local), no se hace nada')
+        return
+    locked = supa_dias_controlados(data['local'], [data['fecha']])
+    if data['fecha'] in locked or (data['fecha'][:10] in locked):
+        log.info(f"[upsert] día {data['fecha']} de {data['local']} está controlado/cerrado — se saltea")
+        return
     body = {**data,
             'origen': 'dragonfish_auto',
             'cargado_por': f'sync_local@{socket.gethostname()}',
@@ -829,16 +839,33 @@ def loop():
 # ══════════════════════════════════════════════════════════════════
 
 if __name__ == '__main__':
-    # Modo CLI: si se pasa una fecha como argumento, hace solo esa
-    # python sync_ventas_local.py 2026-06-05
+    # ─────────────────────────────────────────────────────────────
+    # Modo CLI: 3 variantes
+    #   python sync_ventas_local.py 2026-06-05         # fecha exacta
+    #   python sync_ventas_local.py --hoy              # fecha = hoy
+    #   python sync_ventas_local.py --ayer             # fecha = ayer
+    # Agregando --push se hace el upsert a Supabase (sino solo loguea).
+    # Si el día está controlado=true, NO se pisa (skip).
+    # Si se llama sin argumentos → modo servicio (loop infinito).
+    # ─────────────────────────────────────────────────────────────
     if len(sys.argv) > 1:
-        fecha_arg = sys.argv[1]
+        # Resolver fecha
+        if '--hoy' in sys.argv:
+            fecha_arg = date.today().strftime('%Y-%m-%d')
+        elif '--ayer' in sys.argv:
+            fecha_arg = (date.today() - timedelta(days=1)).strftime('%Y-%m-%d')
+        else:
+            # Primera posicional que no empiece con -- es la fecha
+            fecha_arg = next((a for a in sys.argv[1:] if not a.startswith('--')), None)
+            if not fecha_arg:
+                log.error("Falta fecha. Uso: python sync_ventas_local.py YYYY-MM-DD [--push]  o  --hoy [--push]  o  --ayer [--push]")
+                sys.exit(1)
         log.info(f"Modo manual: consultando {LOCAL} {fecha_arg}")
         data = consultar_dragonfish(fecha_arg)
         log.info(f"Resultado: {json.dumps(data, indent=2, default=str)}")
         if '--push' in sys.argv:
             supa_upsert_venta_diaria(data)
-            log.info("✓ Subido a Supabase")
+            log.info(f"OK subido a Supabase (o skip si el día estaba cerrado)")
         sys.exit(0)
     # Modo servicio (loop)
     loop()

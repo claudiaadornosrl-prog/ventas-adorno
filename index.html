@@ -96,6 +96,10 @@ td input { width: 100%; padding: 4px; border: 1px solid var(--primary); border-r
 .row-today { background: #ecfeff; }
 .row-controlado { background: #f0fdf4; }
 .row-controlado td:first-child::before { content: '✓ '; color: var(--green); }
+/* Día con datos cargados (manual o sync) pero TODAVÍA NO cerrado formalmente.
+   Pintamos en gris suave para que se note que falta el cierre. */
+.row-precargado td { color: #64748b; }
+.row-precargado td:first-child { font-style: italic; }
 .cell-derived { background: #f9fafb; color: var(--muted); }
 .cell-derived.big { background: #eef2ff; color: #4338ca; font-weight: 700; }
 
@@ -788,6 +792,9 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
       !v ? 'row-empty' : '',
       esHoy ? 'row-today' : '',
       v?.controlado ? 'row-controlado' : '',
+      // Precargado = tiene datos pero NO está controlado (aún no se cerró formalmente).
+      // El texto va en gris suave para que se note visualmente vs los cerrados.
+      (v && !v.controlado) ? 'row-precargado' : '',
     ].filter(Boolean).join(' ');
     // Helper: render de una celda numérica con resaltado por corrección
     const celda = (campo, valor) => {
