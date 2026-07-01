@@ -156,15 +156,24 @@ def get_conn_online():
         _DRIVER = _elegir_driver()
         log.info(f"Driver ODBC elegido: {_DRIVER}")
     if SQL_SERVER_ONLINE:
-        return pyodbc.connect(
-            f"DRIVER={{{_DRIVER}}};"
-            f"SERVER={SQL_SERVER_ONLINE};"
-            f"DATABASE={DB_ONLINE};"
-            f"UID={SQL_USER_ONLINE};"
-            f"PWD={SQL_PASS_ONLINE};"
-            f"TrustServerCertificate=yes;",
-            timeout=15
-        )
+        try:
+            return pyodbc.connect(
+                f"DRIVER={{{_DRIVER}}};"
+                f"SERVER={SQL_SERVER_ONLINE};"
+                f"DATABASE={DB_ONLINE};"
+                f"UID={SQL_USER_ONLINE};"
+                f"PWD={SQL_PASS_ONLINE};"
+                f"TrustServerCertificate=yes;",
+                timeout=15
+            )
+        except pyodbc.Error as e:
+            # DB ONLINE apagada / red caída / firewall — no rompemos el sync entero.
+            # El caller debe chequear si retornamos None y saltear el bloque online.
+            log.warning(
+                f"[online] no pude conectar a {SQL_SERVER_ONLINE} → {DB_ONLINE}: "
+                f"{str(e)[:200]}. Se continúa solo con DB física."
+            )
+            return None
     return get_conn()
 
 def consultar_dragonfish_rango(desde, hasta):
@@ -244,44 +253,44 @@ def consultar_dragonfish_rango(desde, hasta):
                 out[f]['cant_transacciones'] += int(row[1] or 0)
 
         # ── DB_ONLINE: queries en conn SEPARADA (puede ser otra PC) ──
+        # Si la DB online está apagada / red caída, get_conn_online devuelve None:
+        # continuamos con los valores en cero (mejor devolver algo que fallar entero).
         if DB_ONLINE:
             conn_o = get_conn_online()
-            try:
-                cur_o = conn_o.cursor()
-                # ── COMPROBANTEV online: total online por fecha ──
-                # FLETRA <> 'R' excluye remitos (los remitos no son ventas).
-                # Bug histórico: un remito de $17.100 en UNI2 12-jun aparecía como
-                # online cuando no debía contarse.
-                cur_o.execute(f"""
-                    SELECT CONVERT(varchar(10), CAST(FFCH AS date), 23) AS f, COALESCE(SUM(FTOTAL), 0)
-                    FROM [{DB_ONLINE}].ZooLogic.COMPROBANTEV
-                    WHERE CAST(FFCH AS date) BETWEEN ? AND ? AND ANULADO = 0
-                      AND FLETRA <> 'R'
-                    GROUP BY CAST(FFCH AS date)
-                """, desde_str, hasta_str)
-                for row in cur_o.fetchall():
-                    f = str(row[0])[:10]
-                    if f in out:
-                        out[f]['online'] += float(row[1] or 0)
+            if conn_o is None:
+                log.warning('[rango] DB online no disponible — online/efectivo_negro quedan en 0')
+            else:
+                try:
+                    cur_o = conn_o.cursor()
+                    # ── COMPROBANTEV online: total online por fecha ──
+                    cur_o.execute(f"""
+                        SELECT CONVERT(varchar(10), CAST(FFCH AS date), 23) AS f, COALESCE(SUM(FTOTAL), 0)
+                        FROM [{DB_ONLINE}].ZooLogic.COMPROBANTEV
+                        WHERE CAST(FFCH AS date) BETWEEN ? AND ? AND ANULADO = 0
+                          AND FLETRA <> 'R'
+                        GROUP BY CAST(FFCH AS date)
+                    """, desde_str, hasta_str)
+                    for row in cur_o.fetchall():
+                        f = str(row[0])[:10]
+                        if f in out:
+                            out[f]['online'] += float(row[1] or 0)
 
-                # ── Efectivo de bases 2 (NEGRO): VAL con JJCO LIKE '0%' ──
-                # JP confirmó que UNI2/ALCO2 también usan código 0 para efectivo.
-                # JOIN con COMPROBANTEV para netear contra notas de crédito.
-                cur_o.execute(f"""
-                    SELECT CONVERT(varchar(10), CAST(v.JJFECHA AS date), 23) AS f,
-                      SUM(CASE WHEN v.JJCO LIKE '0%' THEN v.MONTOSISTE * COALESCE(c.SIGNOMOV, 1) ELSE 0 END) AS efectivo_negro
-                    FROM [{DB_ONLINE}].ZooLogic.VAL v
-                    LEFT JOIN [{DB_ONLINE}].ZooLogic.COMPROBANTEV c ON c.CODIGO = v.JJNUM
-                    WHERE CAST(v.JJFECHA AS date) BETWEEN ? AND ?
-                      AND (v.ESVUELTO = 0 OR v.ESVUELTO IS NULL)
-                    GROUP BY CAST(v.JJFECHA AS date)
-                """, desde_str, hasta_str)
-                for row in cur_o.fetchall():
-                    f = str(row[0])[:10]
-                    if f in out:
-                        out[f]['efectivo_negro'] += float(row[1] or 0)
-            finally:
-                conn_o.close()
+                    # ── Efectivo de bases 2 (NEGRO): VAL con JJCO LIKE '0%' ──
+                    cur_o.execute(f"""
+                        SELECT CONVERT(varchar(10), CAST(v.JJFECHA AS date), 23) AS f,
+                          SUM(CASE WHEN v.JJCO LIKE '0%' THEN v.MONTOSISTE * COALESCE(c.SIGNOMOV, 1) ELSE 0 END) AS efectivo_negro
+                        FROM [{DB_ONLINE}].ZooLogic.VAL v
+                        LEFT JOIN [{DB_ONLINE}].ZooLogic.COMPROBANTEV c ON c.CODIGO = v.JJNUM
+                        WHERE CAST(v.JJFECHA AS date) BETWEEN ? AND ?
+                          AND (v.ESVUELTO = 0 OR v.ESVUELTO IS NULL)
+                        GROUP BY CAST(v.JJFECHA AS date)
+                    """, desde_str, hasta_str)
+                    for row in cur_o.fetchall():
+                        f = str(row[0])[:10]
+                        if f in out:
+                            out[f]['efectivo_negro'] += float(row[1] or 0)
+                finally:
+                    conn_o.close()
 
         # OJO: para Oficina NO usamos esta función. La lógica de Oficina
         # vive en consultar_oficina_facturas_rango() porque necesita filtrar
@@ -482,19 +491,23 @@ def consultar_dragonfish(fecha):
         out['cant_transacciones'] = int(row[0] or 0) if row else 0
 
         # ── DB online (suma FTOTAL → 'online') ──────────────────────
-        # Conn separada (puede ser otra PC vía SQL Auth).
+        # Conn separada (puede ser otra PC vía SQL Auth). Si la PC está
+        # apagada, get_conn_online devuelve None y dejamos 'online' en 0.
         if DB_ONLINE:
             conn_o = get_conn_online()
-            try:
-                cur_o = conn_o.cursor()
-                cur_o.execute(f"""
-                    SELECT COALESCE(SUM(FTOTAL), 0) FROM [{DB_ONLINE}].ZooLogic.COMPROBANTEV
-                    WHERE FFCH = ? AND ANULADO = 0 AND FLETRA <> 'R'
-                """, fecha_str)
-                row = cur_o.fetchone()
-                out['online'] = float(row[0] or 0) if row else 0
-            finally:
-                conn_o.close()
+            if conn_o is None:
+                log.warning('[dia] DB online no disponible — online queda en 0')
+            else:
+                try:
+                    cur_o = conn_o.cursor()
+                    cur_o.execute(f"""
+                        SELECT COALESCE(SUM(FTOTAL), 0) FROM [{DB_ONLINE}].ZooLogic.COMPROBANTEV
+                        WHERE FFCH = ? AND ANULADO = 0 AND FLETRA <> 'R'
+                    """, fecha_str)
+                    row = cur_o.fetchone()
+                    out['online'] = float(row[0] or 0) if row else 0
+                finally:
+                    conn_o.close()
 
         # ── Caso especial OFICINA: aún no separamos por medio de pago ─
         if LOCAL == 'oficina':
@@ -645,25 +658,30 @@ def consultar_transacciones_mp_rango(desde, hasta):
                                               letra=letra, ptv=ptv, num=num))
 
         # ── Base ONLINE (negro): MP "negro" ── (conn SEPARADA: puede ser otra PC)
+        # Si la PC de la caja está apagada, get_conn_online devuelve None y
+        # nos quedamos solo con las transacciones de la base física.
         if DB_ONLINE:
             conn_o = get_conn_online()
-            try:
-                cur_o = conn_o.cursor()
-                cur_o.execute(f"""
-                    SELECT v.JJFECHA, v.JJCO, v.MONTOSISTE * COALESCE(c.SIGNOMOV, 1) AS monto_neto,
-                           RTRIM(c.FLETRA) AS letra, c.FPTOVEN AS ptv, c.FNUMCOMP AS num
-                    FROM [{DB_ONLINE}].ZooLogic.VAL v
-                    LEFT JOIN [{DB_ONLINE}].ZooLogic.COMPROBANTEV c ON c.CODIGO = v.JJNUM
-                    WHERE CAST(v.JJFECHA AS date) BETWEEN ? AND ?
-                      AND (v.ESVUELTO = 0 OR v.ESVUELTO IS NULL)
-                      AND (v.JJCO LIKE 'QR%' OR v.JJCO LIKE 'MP%')
-                      AND v.MONTOSISTE * COALESCE(c.SIGNOMOV, 1) > 0
-                """, desde_str, hasta_str)
-                for jjfecha, jjco, monto, letra, ptv, num in cur_o.fetchall():
-                    out.append(_armar_transaccion_mp(jjfecha, jjco, monto, base='online',
-                                                      letra=letra, ptv=ptv, num=num))
-            finally:
-                conn_o.close()
+            if conn_o is None:
+                log.warning('[tx-mp] DB online no disponible — solo transacciones de base física')
+            else:
+                try:
+                    cur_o = conn_o.cursor()
+                    cur_o.execute(f"""
+                        SELECT v.JJFECHA, v.JJCO, v.MONTOSISTE * COALESCE(c.SIGNOMOV, 1) AS monto_neto,
+                               RTRIM(c.FLETRA) AS letra, c.FPTOVEN AS ptv, c.FNUMCOMP AS num
+                        FROM [{DB_ONLINE}].ZooLogic.VAL v
+                        LEFT JOIN [{DB_ONLINE}].ZooLogic.COMPROBANTEV c ON c.CODIGO = v.JJNUM
+                        WHERE CAST(v.JJFECHA AS date) BETWEEN ? AND ?
+                          AND (v.ESVUELTO = 0 OR v.ESVUELTO IS NULL)
+                          AND (v.JJCO LIKE 'QR%' OR v.JJCO LIKE 'MP%')
+                          AND v.MONTOSISTE * COALESCE(c.SIGNOMOV, 1) > 0
+                    """, desde_str, hasta_str)
+                    for jjfecha, jjco, monto, letra, ptv, num in cur_o.fetchall():
+                        out.append(_armar_transaccion_mp(jjfecha, jjco, monto, base='online',
+                                                          letra=letra, ptv=ptv, num=num))
+                finally:
+                    conn_o.close()
     finally:
         conn.close()
     return out
