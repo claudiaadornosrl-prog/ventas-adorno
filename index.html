@@ -934,10 +934,10 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
         ? `<button onclick="event.stopPropagation();abrirTurnos('${fecha}','${localId}')" title="Ver detalle de turnos" style="background:none;border:1px solid #cbd5e1;color:#475569;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;margin-left:4px;">Ver</button>`
         : '';
       const linkReabrir = (diaCerrado && session?.isAdmin)
-        ? `<button onclick="event.stopPropagation();reabrirDiaAhora('${fecha}','${localId}')" title="Reabrir el día (solo admin)" style="background:none;border:1px solid #f59e0b;color:#92400e;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;margin-left:4px;">🔓 Reabrir</button>`
+        ? `<button onclick="event.stopPropagation();reabrirDiaAhora('${fecha}','${localId}')" title="Reabrir día" style="background:none;border:1px solid #f59e0b;border-radius:6px;padding:3px 9px;font-size:14px;line-height:1.2;cursor:pointer;margin-left:4px;">🔓</button>`
         : '';
       const botonSolicitar = (diaCerrado && !session?.isAdmin)
-        ? `<button onclick="event.stopPropagation();solicitarReaperturaAhora('${fecha}','${localId}')" title="Pedirle al admin que reabra este día" style="background:none;border:1px solid #c4b5fd;color:#5b21b6;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;margin-left:4px;">🙏 Pedir reapertura</button>`
+        ? `<button onclick="event.stopPropagation();solicitarReaperturaAhora('${fecha}','${localId}')" title="Pedir reapertura — le llega la solicitud al admin" style="background:none;border:1px solid #c4b5fd;border-radius:6px;padding:3px 9px;font-size:14px;line-height:1.2;cursor:pointer;margin-left:4px;">🙏</button>`
         : '';
       celdaTurno = `<td style="text-align:center;white-space:nowrap;">${badge}${verLink}${botonCerrar}${botonCerrarDia}${linkReabrir}${botonSolicitar}</td>`;
     }
