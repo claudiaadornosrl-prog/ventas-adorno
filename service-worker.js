@@ -1,5 +1,5 @@
 // Service Worker — Ventas Adorno
-const CACHE_VERSION = 'ventas-adorno-v35-sync-mp-dia-completo';
+const CACHE_VERSION = 'ventas-adorno-v36-push-diferencia-arqueo';
 const CACHE_ASSETS = ['./', './index.html', './manifest.webmanifest',
   './manifest-alcorta.webmanifest', './manifest-unicenter.webmanifest', './manifest-oficina.webmanifest',
   './favicon.svg'];

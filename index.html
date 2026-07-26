@@ -1572,6 +1572,8 @@ async function cerrarTurnoAhora(fecha, localId) {
     });
     if (error) throw error;
     toast(`✓ Turno ${data.numero} cerrado`);
+    // 🔔 Si hay diferencia en el arqueo MP → push a la encargada del local (NO al admin)
+    notificarDiferenciaArqueo(data, fecha, localId, 'turno ' + data.numero);
     // Mostrar resultado inmediato + detalle de discrepancia
     mostrarResultadoTurno(data, fecha, localId);
     // Refrescar grilla
@@ -1582,6 +1584,29 @@ async function cerrarTurnoAhora(fecha, localId) {
     }
   } catch (e) {
     alert('Error al cerrar turno: ' + e.message);
+  }
+}
+
+/** Push a la encargada del local cuando el arqueo MP del cierre da diferencia.
+ *  Va SOLO a las encargadas (rol gerente del local) — el admin no recibe.
+ *  Usa la Edge Function enviar-push en modo `local` (v9). Fire-and-forget. */
+function notificarDiferenciaArqueo(dataTurno, fecha, localId, etiqueta) {
+  try {
+    const dif = Number(dataTurno?.discrepancia_mp || 0);
+    if (!dif || Math.abs(dif) < 1) return;  // sin diferencia → sin notificación
+    const difFmt = (dif < 0 ? '-' : '+') + '$' + Math.abs(dif).toLocaleString('es-AR');
+    sb.functions.invoke('enviar-push', {
+      body: {
+        local: localId,
+        title: `⚠ Diferencia en arqueo MP · ${localId.toUpperCase()}`,
+        body: `El cierre de ${etiqueta} del ${fmtFecha(fecha)} dio una diferencia de ${difFmt} entre Dragonfish y la cuenta MP. Revisá el detalle en la app de Ventas.`,
+        tag: `arqueo-${localId}-${fecha}`,
+      },
+    }).then(r => {
+      if (r?.data?.sent) console.log(`Push diferencia arqueo → ${r.data.sent} notificación(es) a encargada(s)`);
+    }).catch(e => console.warn('push diferencia arqueo falló:', e));
+  } catch (e) {
+    console.warn('notificarDiferenciaArqueo:', e);
   }
 }
 
@@ -1645,6 +1670,8 @@ async function cerrarDiaAhora(fecha, localId) {
     toast(`🏁 Día cerrado`);
     // Si se creó un turno final, mostrar su detalle
     if (data?.turno_creado) {
+      // 🔔 Push a la encargada si el turno final dio diferencia en el arqueo
+      notificarDiferenciaArqueo(data.turno_creado, fecha, localId, 'cierre del día');
       mostrarResultadoTurno(data.turno_creado, fecha, localId);
     }
     // Refrescar grilla
