@@ -1516,20 +1516,29 @@ async function cerrarTurnoAhora(fecha, localId) {
     console.warn('pre-sync Dragonfish falló (sigo igual):', e);
   }
 
-  // PRE-SYNC 2/2: traer los pagos MP de los últimos 30 min para evitar
-  // discrepancia por lag del scraper horario.
-  toast('💳 Sincronizando últimos pagos MP...');
+  // PRE-SYNC 2/2: traer TODOS los pagos MP del día para el arqueo.
+  // Antes pedíamos solo los últimos 120 min, pero si el scraper horario
+  // estuvo caído/atrasado, los pagos más viejos del día no entraban y el
+  // arqueo daba diferencias "fantasma" (caso 24-jul-2026: -$1.212.000).
+  // Ahora: ventana = minutos desde las 00:00 del día del turno + 60 de colchón.
+  toast('💳 Sincronizando pagos MP del día...');
   try {
+    // Minutos transcurridos desde las 00:00 (hora argentina) del día del turno
+    const ahora = new Date();
+    const inicioDia = new Date(fecha + 'T00:00:00-03:00');
+    const minutosDesdeInicio = Math.max(120, Math.ceil((ahora - inicioDia) / 60000) + 60);
     const { data: syncRes, error: syncErr } = await sb.functions.invoke('sync-mp-on-demand', {
-      body: { minutes_back: 120 },
+      body: { minutes_back: minutosDesdeInicio },
     });
     if (syncErr) {
       console.warn('sync-mp-on-demand falló (sigo igual):', syncErr);
+      toast('⚠ No pude actualizar pagos MP — el arqueo puede tener diferencias', 'warning');
     } else if (syncRes?.sincronizados !== undefined) {
-      console.log(`Sync MP: ${syncRes.sincronizados} movs actualizados`);
+      console.log(`Sync MP día completo: ${syncRes.sincronizados} movs (ventana ${minutosDesdeInicio}min)`);
     }
   } catch (e) {
     console.warn('sync-mp-on-demand exception (sigo igual):', e);
+    toast('⚠ No pude actualizar pagos MP — el arqueo puede tener diferencias', 'warning');
   }
 
   try {
@@ -1591,12 +1600,16 @@ async function cerrarDiaAhora(fecha, localId) {
     console.warn('pre-sync Dragonfish falló (sigo igual):', e);
   }
 
-  // PRE-SYNC MP (mismo patrón que cerrarTurnoAhora)
-  toast('💳 Sincronizando últimos pagos MP...');
+  // PRE-SYNC MP: traer TODOS los pagos del día (mismo patrón que cerrarTurnoAhora)
+  toast('💳 Sincronizando pagos MP del día...');
   try {
-    await sb.functions.invoke('sync-mp-on-demand', { body: { minutes_back: 120 } });
+    const ahora = new Date();
+    const inicioDia = new Date(fecha + 'T00:00:00-03:00');
+    const minutosDesdeInicio = Math.max(120, Math.ceil((ahora - inicioDia) / 60000) + 60);
+    await sb.functions.invoke('sync-mp-on-demand', { body: { minutes_back: minutosDesdeInicio } });
   } catch (e) {
     console.warn('sync-mp-on-demand falló (sigo igual):', e);
+    toast('⚠ No pude actualizar pagos MP — el arqueo puede tener diferencias', 'warning');
   }
 
   try {

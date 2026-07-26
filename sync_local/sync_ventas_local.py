@@ -552,10 +552,53 @@ def supa_marcar_job(job_id, estado, error=None, payload=None):
                        json=body, timeout=15)
     r.raise_for_status()
 
+def _filtrar_columnas_por_scope(row: dict) -> dict:
+    """Filtra qué columnas se mandan al upsert para evitar que un sync pise al otro.
+
+    Regla:
+      - Si row.local == LOCAL (el local donde CORRE este sync): manda las
+        columnas "propias" del local, EXCLUYENDO fc_oficina (que la llena
+        el sync de Oficina).
+      - Si row.local != LOCAL (esto solo pasa cuando el sync corre en Oficina
+        y llena fc_oficina de Alcorta/Unicenter): manda SOLO fc_oficina.
+
+    De esta forma:
+      * Sync Alcorta escribe efectivo/tarjeta/qr/vales/online de Alcorta,
+        NO toca fc_oficina de Alcorta (lo cuidó el sync Oficina).
+      * Sync Oficina escribe fc_oficina de Alcorta/Unicenter, NO toca sus
+        columnas propias (efectivo/tarjeta/qr/vales/online los llenó
+        el sync del local).
+      * Cada uno cuida sus columnas → nunca se pisan.
+
+    Los identificadores (local, fecha) siempre van.
+    """
+    if not row or not row.get('local') or not row.get('fecha'):
+        return row  # inválido — que falle en el server con mensaje claro
+    result = {'local': row['local'], 'fecha': row['fecha']}
+    if row['local'] == LOCAL:
+        # Local propio del sync → columnas propias (SIN fc_oficina)
+        if LOCAL in ('alcorta', 'unicenter'):
+            keys_propias = ('efectivo', 'tarjeta', 'qr', 'vales', 'online',
+                            'cant_transacciones')
+        else:  # oficina
+            keys_propias = ('efectivo', 'tarjeta', 'qr', 'vales', 'online',
+                            'transferencia', 'cc', 'cant_transacciones')
+        for k in keys_propias:
+            if k in row:
+                result[k] = row[k]
+    else:
+        # Fila de otro local (solo pasa desde Oficina) → SOLO fc_oficina
+        if 'fc_oficina' in row:
+            result['fc_oficina'] = row['fc_oficina']
+    return result
+
+
 def supa_upsert_venta_diaria(data):
     """Inserta/actualiza la fila en ventas_diarias.
     Respeta controlado=true: si el día ya está cerrado por la encargada,
     NO lo pisa (la encargada cerró su número final, no queremos sobrescribir).
+    Filtra las columnas según el scope (ver _filtrar_columnas_por_scope) para
+    que Alcorta/Unicenter/Oficina NO se pisen entre sí.
     """
     if not data or not data.get('fecha') or not data.get('local'):
         log.warning('[upsert] data inválida (falta fecha o local), no se hace nada')
@@ -564,7 +607,8 @@ def supa_upsert_venta_diaria(data):
     if data['fecha'] in locked or (data['fecha'][:10] in locked):
         log.info(f"[upsert] día {data['fecha']} de {data['local']} está controlado/cerrado — se saltea")
         return
-    body = {**data,
+    scoped = _filtrar_columnas_por_scope(data)
+    body = {**scoped,
             'origen': 'dragonfish_auto',
             'cargado_por': f'sync_local@{socket.gethostname()}',
             'cargado_at': datetime.utcnow().isoformat() + 'Z'}
@@ -617,7 +661,9 @@ def supa_bulk_upsert_ventas(rows):
     meta = {'origen': 'dragonfish_auto',
             'cargado_por': f'sync_local@{socket.gethostname()}',
             'cargado_at': datetime.utcnow().isoformat() + 'Z'}
-    body = [{**r, **meta} for r in rows_filtradas]
+    # Filtrar columnas por scope: cada sync solo escribe SUS columnas,
+    # nunca pisa las columnas que le tocan al otro sync.
+    body = [{**_filtrar_columnas_por_scope(r), **meta} for r in rows_filtradas]
     url = f"{SUPABASE_URL}/rest/v1/ventas_diarias?on_conflict=local,fecha"
     r = requests.post(url, headers={**HDRS,
                                      'Prefer': 'resolution=merge-duplicates,return=minimal'},

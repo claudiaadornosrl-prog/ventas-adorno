@@ -1,0 +1,5 @@
+﻿2026-07-13 17:53:09 === update.ps1 iniciado ===
+2026-07-13 17:53:10 ERROR bajando del VPS: Se ha terminado la conexión: Error inesperado de envío.. Se mantiene la version local.
+2026-07-13 17:54:11 === update.ps1 iniciado ===
+2026-07-13 17:54:12 Descargado OK (44864 bytes) desde https://142.93.248.133/sync-deploy/sync_ventas_local.py
+2026-07-13 17:54:12 Sin cambios (mismo SHA256). Nada que hacer.
