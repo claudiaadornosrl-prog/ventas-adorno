@@ -68,11 +68,23 @@ body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Ro
 .admin-link a { color: var(--muted); text-decoration: underline; cursor: pointer; }
 
 /* ═══ APP ═══ */
-.header { background: var(--card); border-bottom: 1px solid var(--border); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; }
-.header-left { display: flex; align-items: center; gap: 12px; }
-.header-title { font-size: 17px; font-weight: 700; color: var(--primary); }
-.header-local { font-size: 12px; color: var(--muted); }
-.header-right { display: flex; gap: 8px; align-items: center; }
+.header { background: var(--card); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; position: sticky; top: 0; z-index: 100; }
+.header-title { font-size: 17px; font-weight: 700; color: var(--primary); white-space: nowrap; }
+.header-local { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.header select { padding: 6px 9px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: white; cursor: pointer; }
+.header .spacer { flex: 1; }
+.hdr-kpi { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.hdr-kpi b { font-size: 15px; font-weight: 700; color: var(--text); }
+#hdr-kpi-total b { font-size: 17px; color: var(--primary); }
+.kebab-wrap { position: relative; }
+#kebab-btn { position: relative; font-size: 19px; line-height: 1; padding: 6px 11px; }
+.kebab-dot { position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: 50%; background: #dc2626; display: none; }
+.kebab-menu { display: none; position: absolute; right: 0; top: calc(100% + 6px); background: white; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.14); min-width: 215px; z-index: 300; padding: 6px; }
+.kebab-menu.open { display: block; }
+.kebab-menu button { display: block; width: 100%; text-align: left; background: white; border: none; border-radius: 6px; padding: 9px 10px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.kebab-menu button:hover { background: #f3f4f6; }
+.kebab-sep { height: 1px; background: var(--border); margin: 6px 4px; }
+@media (max-width: 640px) { .hdr-kpi { display: none !important; } }
 .btn-secondary { background: white; color: var(--text); border: 1px solid var(--border); padding: 8px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; }
 .btn-secondary:hover { background: #f3f4f6; }
 .btn-icon { background: white; border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 14px; }
@@ -90,6 +102,22 @@ body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Ro
 .kpi-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .kpi-value { font-size: 22px; font-weight: 700; margin-top: 4px; }
 .kpi-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+/* KPI strip compacto — una sola fila delgada (v36) */
+.kpi-strip { display: flex; align-items: center; gap: 16px; background: white; border-radius: 10px;
+  padding: 10px 18px; margin: 10px 16px; box-shadow: var(--shadow); flex-wrap: wrap; }
+.kpi-strip-item { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+.kpi-strip-item.main .kpi-strip-value { font-size: 24px; color: var(--primary); }
+.kpi-strip-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.kpi-strip-value { font-size: 18px; font-weight: 700; }
+.kpi-strip-sub { font-size: 11px; color: var(--muted); }
+.kpi-strip-sep { width: 1px; height: 26px; background: var(--border); }
+@media (max-width: 640px) {
+  .kpi-strip { gap: 10px; padding: 8px 12px; }
+  .kpi-strip-sep { display: none; }
+  .kpi-strip-item.main .kpi-strip-value { font-size: 20px; }
+  .kpi-strip-value { font-size: 15px; }
+}
 
 /* Tabla */
 .table-wrap { background: white; margin: 0 16px 16px; border-radius: 10px; box-shadow: var(--shadow); overflow: auto; max-height: calc(100vh - 200px); }
@@ -170,14 +198,28 @@ td input { width: 100%; padding: 4px; border: 1px solid var(--primary); border-r
 <!-- APP -->
 <div id="app-screen" class="screen">
   <div class="header">
-    <div class="header-left">
-      <span class="header-title">📊 Ventas</span>
-      <span class="header-local" id="hdr-local"></span>
-    </div>
-    <div class="header-right">
-      <button class="btn-icon" id="btn-notifs" onclick="toggleNotificaciones()" title="Activar notificaciones">🔕</button>
-      <button class="btn-icon" id="refresh-btn" onclick="cargar()" title="Actualizar">↻</button>
-      <button class="btn-secondary" onclick="logout()">Salir</button>
+    <span class="header-title">📊 Ventas</span>
+    <span class="header-local" id="hdr-local"></span>
+    <select id="sel-año" onchange="cargar()"></select>
+    <select id="sel-mes" onchange="cargar()"></select>
+    <select id="sel-local" onchange="cargar()" style="display:none;"></select>
+    <span id="hdr-estado" style="display:none;"></span>
+    <span class="hdr-kpi" id="hdr-kpi-total" style="display:none;"></span>
+    <span class="hdr-kpi" id="hdr-kpi-prom" style="display:none;"></span>
+    <span id="hdr-sync" style="display:none;"><span class="spinner" style="width:14px;height:14px;border-width:2px;"></span></span>
+    <div class="spacer"></div>
+    <div class="kebab-wrap">
+      <button class="btn-icon" id="kebab-btn" onclick="toggleKebab(event)" title="Menú"><span class="kebab-dot" id="kebab-dot"></span>⋮</button>
+      <div class="kebab-menu" id="kebab-menu">
+        <button id="btn-notifs" onclick="cerrarKebab();toggleNotificaciones()" title="Activar notificaciones">🔕 Notificaciones</button>
+        <button id="btn-dragonfish-mes" onclick="cerrarKebab();abrirCargaDragonfish('mes')" title="Re-sincroniza desde Dragonfish los días NO cerrados del mes seleccionado. Los días cerrados no se tocan.">🐉 Resincronizar mes</button>
+        <button id="btn-solicitudes" onclick="cerrarKebab();abrirGestionSolicitudes()" style="display:none;" title="Solicitudes de corrección pendientes de las vendedoras">📩 Solicitudes</button>
+        <button id="btn-reaperturas" onclick="cerrarKebab();abrirBandejaReaperturas()" title="Solicitudes de reapertura de día">🙏 Reaperturas</button>
+        <button id="btn-cerrar-mes" onclick="cerrarKebab();cerrarMesActual()" style="display:none;">🔒 Cerrar mes</button>
+        <button id="btn-reabrir-mes" onclick="cerrarKebab();reabrirMesActual()" style="display:none;">🔓 Reabrir mes</button>
+        <div class="kebab-sep"></div>
+        <button onclick="logout()">👋 Salir</button>
+      </div>
     </div>
   </div>
 
@@ -194,19 +236,6 @@ td input { width: 100%; padding: 4px; border: 1px solid var(--primary); border-r
     <button onclick="document.getElementById('alerta-cerrar-mes').style.display='none';" style="padding:4px 8px;background:transparent;border:none;color:#78350f;font-size:18px;cursor:pointer;" title="Cerrar aviso">×</button>
   </div>
 
-  <div class="toolbar">
-    <select id="sel-año" onchange="cargar()"></select>
-    <select id="sel-mes" onchange="cargar()"></select>
-    <select id="sel-local" onchange="cargar()" style="display:none;"></select>
-    <div class="spacer"></div>
-    <button id="btn-solicitudes" onclick="abrirGestionSolicitudes()" style="display:none;background:#fef3c7;color:#92400e;border-color:#fcd34d;font-weight:600;" title="Solicitudes de corrección pendientes de las vendedoras"></button>
-    <button id="btn-reaperturas" onclick="abrirBandejaReaperturas()" style="background:#ede9fe;color:#5b21b6;border-color:#c4b5fd;font-weight:600;" title="Solicitudes de reapertura de día">🙏 Reaperturas</button>
-    <button id="btn-dragonfish-mes" onclick="abrirCargaDragonfish('mes')" title="Re-sincroniza desde Dragonfish los días NO cerrados del mes seleccionado. Los días con 🏁 (cerrados) no se tocan.">🐉 Resincronizar mes</button>
-    <button class="primary" id="btn-cargar-dia" onclick="abrirCarga()">+ Cargar venta del día</button>
-    <button id="btn-cerrar-mes" onclick="cerrarMesActual()" style="display:none;background:#fef3c7;color:#92400e;border-color:#fcd34d;">🔒 Cerrar mes</button>
-    <button id="btn-reabrir-mes" onclick="reabrirMesActual()" style="display:none;background:#fee2e2;color:#991b1b;border-color:#fca5a5;">🔓 Reabrir mes</button>
-  </div>
-  <div id="status-mes" style="background:white;padding:6px 16px;border-bottom:1px solid var(--border);font-size:12px;display:none;"></div>
 
   <div id="contenido"><div class="empty"><div class="spinner"></div></div></div>
 </div>
@@ -296,6 +325,22 @@ const pushManager = (() => {
   return { soportado, estado, activar, desactivar };
 })();
 
+function toggleKebab(ev) {
+  ev.stopPropagation();
+  document.getElementById('kebab-menu').classList.toggle('open');
+}
+function cerrarKebab() {
+  document.getElementById('kebab-menu').classList.remove('open');
+}
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('kebab-menu');
+  if (menu && menu.classList.contains('open') && !e.target.closest('.kebab-wrap')) menu.classList.remove('open');
+});
+function actualizarKebabDot() {
+  const dot = document.getElementById('kebab-dot');
+  if (dot) dot.style.display = ((window._pendSolic || 0) + (window._pendReap || 0)) > 0 ? 'block' : 'none';
+}
+
 async function toggleNotificaciones() {
   const btn = document.getElementById('btn-notifs');
   try {
@@ -319,7 +364,7 @@ async function actualizarBtnNotifs() {
   const btn = document.getElementById('btn-notifs');
   if (!btn) return;
   const est = await pushManager.estado();
-  btn.textContent = est === 'activo' ? '🔔' : '🔕';
+  btn.textContent = est === 'activo' ? '🔔 Notificaciones ON' : '🔕 Notificaciones';
   btn.title = est === 'activo' ? 'Notificaciones activadas (click para desactivar)' : 'Activar notificaciones';
 }
 
@@ -679,7 +724,7 @@ async function cargar() {
   const año = parseInt(document.getElementById('sel-año').value);
   const mes = parseInt(document.getElementById('sel-mes').value);
   const localSel = session.isAdmin ? document.getElementById('sel-local').value : session.local_id;
-  document.getElementById('refresh-btn').innerHTML = '<span class="spinner"></span>';
+  const _sy = document.getElementById('hdr-sync'); if (_sy) _sy.style.display = '';
 
   // Chequear si el mes está cerrado para este local (sólo si hay local específico)
   const localUnico = localSel && localSel !== 'todos' ? localSel : null;
@@ -741,7 +786,7 @@ async function cargar() {
   } catch (e) {
     document.getElementById('contenido').innerHTML = `<div class="empty"><div class="icon">⚠️</div>Error: ${escHtml(e.message)}</div>`;
   } finally {
-    document.getElementById('refresh-btn').innerHTML = '↻';
+    if (_sy) _sy.style.display = 'none';
   }
 }
 
@@ -872,7 +917,7 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
       const badgeTxt   = conDiscrep > 0 ? '#991b1b' : (diaCerrado ? '#3730a3' : '#166534');
       const badgeIcon  = diaCerrado ? '🏁 ' : '';
       const badge = nTurnos > 0
-        ? `<span style="background:${badgeColor};color:${badgeTxt};padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">${badgeIcon}${nTurnos} turno${nTurnos>1?'s':''}${conDiscrep>0?' ⚠':''}</span>`
+        ? `<span title="${nTurnos} turno${nTurnos>1?'s':''}${conDiscrep>0?' — con diferencia en el arqueo':''}" style="background:${badgeColor};color:${badgeTxt};padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">${badgeIcon}${nTurnos}${conDiscrep>0?' ⚠':''}</span>`
         : (diaCerrado ? `<span style="background:#e0e7ff;color:#3730a3;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">🏁 cerrado</span>` : '');
       // Botón "Cerrar turno" disponible si es HOY y el día NO está cerrado.
       // Antes requeríamos venta cargada, pero eso bloqueaba a Oficina cuando
@@ -880,10 +925,10 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
       // de cerrarTurnoAhora() trae las ventas que aún no estén en la planilla.
       const puedeCerrar = esHoy && !diaCerrado;
       const botonCerrar = puedeCerrar
-        ? `<button onclick="event.stopPropagation();cerrarTurnoAhora('${fecha}','${localId}')" title="Cerrar el turno actual" style="background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;margin-left:6px;">🔒 Cerrar</button>`
+        ? `<button onclick="event.stopPropagation();cerrarTurnoAhora('${fecha}','${localId}')" title="Cerrar turno" style="background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:14px;line-height:1.2;cursor:pointer;margin-left:6px;">🕐</button>`
         : '';
       const botonCerrarDia = puedeCerrar
-        ? `<button onclick="event.stopPropagation();cerrarDiaAhora('${fecha}','${localId}')" title="Cerrar el día — no se podrán abrir más turnos" style="background:#dc2626;color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;margin-left:4px;">🏁 Cerrar Día</button>`
+        ? `<button onclick="event.stopPropagation();cerrarDiaAhora('${fecha}','${localId}')" title="Cerrar día — no se podrán abrir más turnos" style="background:#dc2626;color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:14px;line-height:1.2;cursor:pointer;margin-left:4px;">🔒</button>`
         : '';
       const verLink = nTurnos > 0
         ? `<button onclick="event.stopPropagation();abrirTurnos('${fecha}','${localId}')" title="Ver detalle de turnos" style="background:none;border:1px solid #cbd5e1;color:#475569;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;margin-left:4px;">Ver</button>`
@@ -917,21 +962,19 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
     `);
   }
 
-  cont.innerHTML = `
-    <div class="kpi-row">
-      <div class="kpi"><div class="kpi-label">Total mes</div><div class="kpi-value">${fmt$(totTotal)}</div><div class="kpi-sub">${diasConVenta} días con venta</div></div>
-      <div class="kpi"><div class="kpi-label">Shopping</div><div class="kpi-value">${fmt$(totShopping)}</div><div class="kpi-sub">Físico (Ef+Tj+QR+Vl)</div></div>
-      <div class="kpi"><div class="kpi-label">Ticket promedio</div><div class="kpi-value">$${fmt$(ticketProm)}</div><div class="kpi-sub">${totCant} transacciones</div></div>
-      <div class="kpi"><div class="kpi-label">Promedio diario</div><div class="kpi-value">$${fmt$(promDiario)}</div></div>
-    </div>
+  const _kt = document.getElementById('hdr-kpi-total');
+  const _kp = document.getElementById('hdr-kpi-prom');
+  if (_kt) { _kt.style.display = ''; _kt.innerHTML = `Total <b>$${fmt$(totTotal)}</b>`; _kt.title = `${diasConVenta} días con venta · ${totCant} transacciones · ticket promedio $${fmt$(ticketProm)}`; }
+  if (_kp) { _kp.style.display = ''; _kp.innerHTML = `Prom/día <b>$${fmt$(promDiario)}</b>`; }
 
+  cont.innerHTML = `
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
             <th>Fecha</th><th>Efectivo</th>${mostrarTarjeta ? '<th>Tarjeta</th>' : ''}<th>MP</th><th>Transferencia</th><th>CC</th><th>Vales</th>
             <th>Shopping</th><th>Cant</th><th>Online</th><th>Fc Oficina</th><th>Total</th><th>Acumulado</th>
-            <th style="white-space:nowrap;">🔒 Turnos</th>
+            <th style="white-space:nowrap;">Turnos</th>
           </tr>
         </thead>
         <tbody>${filas.join('')}</tbody>
@@ -960,6 +1003,8 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
 
 // ─── Vista admin consolidada (todos los locales) ─────────────────────
 function renderAdminConsolidado(ventas, año, mes) {
+  const _kt = document.getElementById('hdr-kpi-total'); if (_kt) _kt.style.display = 'none';
+  const _kp = document.getElementById('hdr-kpi-prom'); if (_kp) _kp.style.display = 'none';
   const cont = document.getElementById('contenido');
   const diasMes = new Date(año, mes, 0).getDate();
   // Estructura: porFechaLocal[fecha][local] = total
@@ -1188,9 +1233,10 @@ async function refrescarBadgeSolicitudes() {
     if (error) return;
     const btn = document.getElementById('btn-solicitudes');
     if (!btn) return;
+    window._pendSolic = count || 0; actualizarKebabDot();
     if (count > 0) {
       btn.style.display = '';
-      btn.innerHTML = `📩 Solicitudes <span style="background:white;color:var(--primary);border-radius:999px;padding:1px 7px;font-weight:700;margin-left:4px;">${count}</span>`;
+      btn.innerHTML = `📩 Solicitudes <span style="background:var(--primary);color:white;border-radius:999px;padding:1px 7px;font-weight:700;margin-left:4px;">${count}</span>`;
     } else {
       btn.style.display = 'none';
     }
@@ -1394,12 +1440,11 @@ async function pollJob(jobId, localId, label) {
 
 // ─── Estado de cierre: mostrar/ocultar botones + status bar ─────────
 function _actualizarBotonesCierre(cerradoRow, localUnico) {
-  const statusEl = document.getElementById('status-mes');
+  const statusEl = document.getElementById('hdr-estado');
   const btnCerrar = document.getElementById('btn-cerrar-mes');
   const btnReabrir = document.getElementById('btn-reabrir-mes');
   const btnDF = document.getElementById('btn-dragonfish');
   const btnDFmes = document.getElementById('btn-dragonfish-mes');
-  const btnDia = document.getElementById('btn-cargar-dia');
 
   // Reset
   btnCerrar.style.display = 'none';
@@ -1407,24 +1452,21 @@ function _actualizarBotonesCierre(cerradoRow, localUnico) {
   if (btnDFmes) btnDFmes.style.display = 'none';
   statusEl.style.display = 'none';
   if (btnDF) btnDF.disabled = false;
-  if (btnDia) btnDia.disabled = false;
 
   if (!localUnico) return;  // En vista "Todos" no aplican botones de cierre
 
   if (cerradoRow) {
-    // Mes cerrado: mostrar chip + botón Reabrir + bloquear edición
+    // Mes cerrado: chip compacto (detalle en el title) + Reabrir en el kebab + bloquear edición
     const cuando = (cerradoRow.cerrado_at || '').split('T')[0];
     const por = (cerradoRow.cerrado_por || '').split('@')[0];
     statusEl.style.display = '';
-    statusEl.innerHTML = `<span style="background:#dcfce7;color:#065f46;padding:3px 9px;border-radius:10px;font-weight:600;">🔒 Mes cerrado</span> · por ${escHtml(por)} (${cuando}) · para modificar, reabrir primero`;
+    statusEl.innerHTML = `<span style="background:#dcfce7;color:#065f46;padding:3px 10px;border-radius:999px;font-weight:600;font-size:12px;white-space:nowrap;" title="Mes cerrado por ${escHtml(por)} (${cuando}). Para modificar, reabrir primero.">🔒 Cerrado</span>`;
     if (session.isAdmin) btnReabrir.style.display = '';
     if (btnDF) btnDF.disabled = true;
-    if (btnDia) btnDia.disabled = true;
   } else {
-    // Mes abierto: botón Resincronizar mes para todos (vendedoras también, por si hay correcciones viejas).
-    // Cerrar mes solo admin.
+    // Mes abierto: Resincronizar para todos, Cerrar mes solo admin (ambos en el kebab).
     statusEl.style.display = '';
-    statusEl.innerHTML = `<span style="background:#fef3c7;color:#92400e;padding:3px 9px;border-radius:10px;font-weight:600;">🔓 Mes abierto</span> · podés editar y sincronizar`;
+    statusEl.innerHTML = `<span style="background:#fef3c7;color:#92400e;padding:3px 10px;border-radius:999px;font-weight:600;font-size:12px;white-space:nowrap;" title="Mes abierto: podés editar y sincronizar">🔓 Abierto</span>`;
     if (btnDFmes) btnDFmes.style.display = '';
     if (session.isAdmin) btnCerrar.style.display = '';
   }
@@ -1805,6 +1847,7 @@ async function refrescarBadgeReaperturas() {
     const { count } = await sb.from('ventas_reaperturas')
       .select('id', { count: 'exact', head: true })
       .eq('estado', 'pendiente');
+    window._pendReap = count || 0; actualizarKebabDot();
     const btn = document.getElementById('btn-reaperturas');
     if (btn) {
       btn.innerHTML = `🙏 Reaperturas${count > 0 ? ` <span style="background:#dc2626;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;">${count}</span>` : ''}`;
@@ -2117,4 +2160,3 @@ if ('serviceWorker' in navigator) {
 </script>
 </body>
 </html>
-                                                                                                                                                                                                                                                                         
