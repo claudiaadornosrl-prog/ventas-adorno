@@ -1,0 +1,13 @@
+{
+  "name": "Ventas Unicenter · Claudia Adorno",
+  "short_name": "Ventas UNI",
+  "start_url": "./?local=unicenter",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#dc2626",
+  "theme_color": "#dc2626",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

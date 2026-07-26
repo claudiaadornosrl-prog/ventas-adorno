@@ -1,0 +1,13 @@
+{
+  "name": "Ventas Alcorta · Claudia Adorno",
+  "short_name": "Ventas ALC",
+  "start_url": "./?local=alcorta",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#dc2626",
+  "theme_color": "#dc2626",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

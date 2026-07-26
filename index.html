@@ -4,9 +4,24 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Ventas · Claudia Adorno</title>
-<link rel="manifest" href="manifest.webmanifest">
+<link rel="manifest" href="manifest.webmanifest" id="manifest-link">
 <meta name="theme-color" content="#dc2626">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<script>
+  // ── Manifest dinámico por local ──────────────────────────────────
+  // Si la URL trae ?local=X, cambiamos el manifest ANTES de que el browser
+  // lo procese para la instalación PWA. Así la app instalada en la PC del
+  // local arranca SIEMPRE con su ?local= correcto (no puede ver otras sucursales).
+  (function () {
+    const loc = new URLSearchParams(location.search).get('local');
+    if (['alcorta', 'unicenter', 'oficina'].includes(loc)) {
+      document.getElementById('manifest-link').href = 'manifest-' + loc + '.webmanifest';
+      // Persistir para fallback: si algún día la app abre sin query param,
+      // el arranque puede recuperar el local desde acá.
+      try { localStorage.setItem('ventas_local_instalado', loc); } catch (e) {}
+    }
+  })();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
@@ -333,7 +348,14 @@ async function notificarAdminCorreccion(localId, fecha, campo, valorActual, prop
 // ═══════════════════════════════════════════════════════════════════════
 const URL_LOCAL = (() => {
   const p = new URLSearchParams(location.search).get('local');
-  return p && LOCALES[p] ? p : null;
+  if (p && LOCALES[p]) return p;
+  // Fallback: si la PWA instalada abre sin query param (edge case de algunos
+  // launchers), recuperar el local persistido en la instalación.
+  try {
+    const guardado = localStorage.getItem('ventas_local_instalado');
+    if (guardado && LOCALES[guardado]) return guardado;
+  } catch (e) {}
+  return null;
 })();
 
 const fmt$ = n => (n || 0).toLocaleString('es-AR', { maximumFractionDigits: 0 });
