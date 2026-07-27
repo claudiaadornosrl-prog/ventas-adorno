@@ -1,0 +1,8 @@
+# ═══ REPO PÚBLICO MÍNIMO ═══
+# Solo se publica lo que GitHub Pages sirve. Todo lo demás queda local.
+sql/
+supabase/
+sync_local/
+__pycache__/
+*.pyc
+.env
