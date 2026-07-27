@@ -640,35 +640,87 @@ def supa_dias_controlados(local: str, fechas: list[str]) -> set[str]:
         return set()
 
 
+def supa_meses_cerrados(local: str) -> set:
+    """Devuelve set de (año, mes) cerrados para el local. El trigger del server
+    rechaza con 400 cualquier fila de un mes cerrado, y en un bulk POST eso
+    mata TODO el batch — mejor filtrarlas antes."""
+    url = f"{SUPABASE_URL}/rest/v1/meses_cerrados_ventas"
+    try:
+        r = requests.get(url, headers=HDRS,
+                         params={'select': 'año,mes', 'local': f'eq.{local}'}, timeout=15)
+        r.raise_for_status()
+        return {(int(row['año']), int(row['mes'])) for row in r.json()}
+    except Exception as e:
+        log.warning(f'[upsert] no pude consultar meses cerrados de {local}: {e}. No filtro.')
+        return set()
+
+
 def supa_bulk_upsert_ventas(rows):
-    """Inserta/actualiza N filas en ventas_diarias con un solo POST.
-    Excluye automáticamente los días que están con controlado=true (cerrados):
-    el sync NO debe pisar manuales de un día ya cerrado por la encargada.
-    Si una vendedora necesita corregir un día cerrado, debe pedir reapertura."""
+    """Inserta/actualiza N filas en ventas_diarias.
+
+    FIX 2026-07-26 — el POST único anterior tenía 3 bugs cuando el sync de
+    Oficina mandaba filas de varios locales mezcladas:
+      1. PostgREST exige que TODAS las filas de un bulk tengan las mismas
+         columnas. Las filas propias (efectivo/cc/...) mezcladas con filas
+         fc_oficina-only daban 400 Bad Request y no se escribía NADA.
+      2. El filtro de días controlados solo miraba rows[0]['local'].
+      3. Una fila de un mes cerrado (trigger del server) tiraba 400 y mataba
+         todo el batch.
+
+    Ahora: se agrupa por local, se filtran meses cerrados, se filtran días
+    controlado=true SOLO para filas con columnas propias (las filas que traen
+    únicamente fc_oficina entran igual: no tocan las columnas que cerró la
+    encargada), y se hace un POST por grupo homogéneo de columnas."""
     if not rows:
         return
-    # Filtrar días controlados (locked)
-    fechas_a_upsertear = [r['fecha'] for r in rows if r.get('fecha')]
-    locked = supa_dias_controlados(rows[0]['local'], fechas_a_upsertear) if rows else set()
-    if locked:
-        rows_filtradas = [r for r in rows if r.get('fecha') not in locked]
-        log.info(f"[upsert] {len(locked)} día(s) controlados/cerrados — se saltean: {sorted(locked)}")
-    else:
-        rows_filtradas = rows
-    if not rows_filtradas:
-        log.info('[upsert] todos los días estaban cerrados — nada para upsertear')
-        return
+    from collections import defaultdict
+
     meta = {'origen': 'dragonfish_auto',
             'cargado_por': f'sync_local@{socket.gethostname()}',
             'cargado_at': datetime.utcnow().isoformat() + 'Z'}
-    # Filtrar columnas por scope: cada sync solo escribe SUS columnas,
-    # nunca pisa las columnas que le tocan al otro sync.
-    body = [{**_filtrar_columnas_por_scope(r), **meta} for r in rows_filtradas]
-    url = f"{SUPABASE_URL}/rest/v1/ventas_diarias?on_conflict=local,fecha"
-    r = requests.post(url, headers={**HDRS,
-                                     'Prefer': 'resolution=merge-duplicates,return=minimal'},
-                      json=body, timeout=30)
-    r.raise_for_status()
+
+    por_local = defaultdict(list)
+    for r_ in rows:
+        if r_.get('local') and r_.get('fecha'):
+            por_local[r_['local']].append(r_)
+
+    for local, lrows in por_local.items():
+        # 1) Saltear fechas de meses cerrados (el trigger del server las rechaza)
+        cerrados = supa_meses_cerrados(local)
+        if cerrados:
+            antes = len(lrows)
+            lrows = [r_ for r_ in lrows
+                     if (int(r_['fecha'][:4]), int(r_['fecha'][5:7])) not in cerrados]
+            if len(lrows) < antes:
+                log.info(f"[upsert] {local}: {antes - len(lrows)} día(s) de meses cerrados — se saltean")
+        if not lrows:
+            continue
+
+        # 2) Scope de columnas (cada sync escribe solo SUS columnas)
+        scoped = [_filtrar_columnas_por_scope(r_) for r_ in lrows]
+
+        # 3) Días controlado=true: solo bloquean a las filas con columnas propias.
+        propias = [r_ for r_ in scoped if set(r_) - {'local', 'fecha', 'fc_oficina'}]
+        solo_fc = [r_ for r_ in scoped if not (set(r_) - {'local', 'fecha', 'fc_oficina'})]
+        if propias:
+            locked = supa_dias_controlados(local, [r_['fecha'] for r_ in propias])
+            if locked:
+                log.info(f"[upsert] {local}: {len(locked)} día(s) controlados/cerrados — se saltean: {sorted(locked)}")
+                propias = [r_ for r_ in propias if r_['fecha'] not in locked]
+
+        # 4) Un POST por grupo con las mismas columnas (requisito de PostgREST)
+        grupos = defaultdict(list)
+        for r_ in propias + solo_fc:
+            grupos[frozenset(r_)].append(r_)
+        for keyset, grows in grupos.items():
+            body = [{**r_, **meta} for r_ in grows]
+            url = f"{SUPABASE_URL}/rest/v1/ventas_diarias?on_conflict=local,fecha"
+            resp = requests.post(url, headers={**HDRS,
+                                               'Prefer': 'resolution=merge-duplicates,return=minimal'},
+                                 json=body, timeout=30)
+            resp.raise_for_status()
+            cols = sorted(k for k in keyset if k not in ('local', 'fecha'))
+            log.info(f"[upsert] {local}: {len(grows)} fila(s) OK ({', '.join(cols)})")
 
 
 def consultar_transacciones_mp_rango(desde, hasta):

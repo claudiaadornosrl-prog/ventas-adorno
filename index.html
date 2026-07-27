@@ -406,7 +406,9 @@ const URL_LOCAL = (() => {
 
 const fmt$ = n => (n || 0).toLocaleString('es-AR', { maximumFractionDigits: 0 });
 const fmtFecha = d => new Date(d + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
-const hoyISO = () => new Date().toISOString().split('T')[0];
+// "Hoy" en hora ARGENTINA (no UTC): con toISOString(), después de las 21:00
+// hora local ya era "mañana" y los botones de cierre saltaban de fila.
+const hoyISO = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
 const escHtml = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 function toast(msg, err) {
