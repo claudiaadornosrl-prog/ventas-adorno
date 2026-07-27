@@ -1636,6 +1636,14 @@ async function cerrarTurnoAhora(fecha, localId) {
  *  Va SOLO a las encargadas (rol gerente del local) — el admin no recibe.
  *  Usa la Edge Function enviar-push en modo `local` (v9). Fire-and-forget. */
 function notificarDiferenciaArqueo(dataTurno, fecha, localId, etiqueta) {
+  // DESACTIVADA (jul 2026): el cruce del mismo día da falsos positivos por el
+  // lag de indexación de MP (hasta 2-3 hs con pagos Point). El control real es
+  // el cruce del DÍA ANTERIOR: cron `ventas_control_mp_diario` (10:00 ART)
+  // cruza el día completo de ayer y avisa a la encargada solo si la
+  // diferencia es real. Además `ventas_recruce_mp` (cada hora :20) limpia las
+  // diferencias provisorias de los turnos.
+  return;
+  /* eslint-disable no-unreachable */
   try {
     const dif = Number(dataTurno?.discrepancia_mp || 0);
     if (!dif || Math.abs(dif) < 1) return;  // sin diferencia → sin notificación
@@ -1653,6 +1661,7 @@ function notificarDiferenciaArqueo(dataTurno, fecha, localId, etiqueta) {
   } catch (e) {
     console.warn('notificarDiferenciaArqueo:', e);
   }
+  /* eslint-enable no-unreachable */
 }
 
 /** Cierra el DÍA completo:
