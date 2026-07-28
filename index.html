@@ -1555,8 +1555,7 @@ async function cerrarTurnoAhora(fecha, localId) {
   const yaCerrados = (window._turnosPorFecha?.[fecha] || []).length;
   const numero = yaCerrados + 1;
   const msg = `¿Cerrar turno ${numero} del ${fmtFecha(fecha)} en ${localId.toUpperCase()}?\n\n`
-            + `Esto guarda un snapshot con los valores actuales del día menos los turnos previos\n`
-            + `y cruza con la cuenta MP para detectar discrepancias.`;
+            + `Esto guarda un snapshot con los valores actuales del día menos los turnos previos.`;
   if (!confirm(msg)) return;
 
   const cerradoPor = session?.isAdmin
@@ -1583,31 +1582,9 @@ async function cerrarTurnoAhora(fecha, localId) {
     console.warn('pre-sync Dragonfish falló (sigo igual):', e);
   }
 
-  // PRE-SYNC 2/2: traer TODOS los pagos MP del día para el arqueo.
-  // Antes pedíamos solo los últimos 120 min, pero si el scraper horario
-  // estuvo caído/atrasado, los pagos más viejos del día no entraban y el
-  // arqueo daba diferencias "fantasma" (caso 24-jul-2026: -$1.212.000).
-  // Ahora: ventana = minutos desde las 00:00 del día del turno + 60 de colchón.
-  toast('💳 Sincronizando pagos MP del día...');
-  try {
-    // Minutos transcurridos desde las 00:00 (hora argentina) del día del turno
-    const ahora = new Date();
-    const inicioDia = new Date(fecha + 'T00:00:00-03:00');
-    const minutosDesdeInicio = Math.max(120, Math.ceil((ahora - inicioDia) / 60000) + 60);
-    const { data: syncRes, error: syncErr } = await sb.functions.invoke('sync-mp-on-demand', {
-      body: { minutes_back: minutosDesdeInicio },
-    });
-    if (syncErr) {
-      console.warn('sync-mp-on-demand falló (sigo igual):', syncErr);
-      toast('⚠ No pude actualizar pagos MP — el arqueo puede tener diferencias', 'warning');
-    } else if (syncRes?.sincronizados !== undefined) {
-      console.log(`Sync MP día completo: ${syncRes.sincronizados} movs (ventana ${minutosDesdeInicio}min)`);
-    }
-  } catch (e) {
-    console.warn('sync-mp-on-demand exception (sigo igual):', e);
-    toast('⚠ No pude actualizar pagos MP — el arqueo puede tener diferencias', 'warning');
-  }
-
+  // (jul 2026) El cruce MP se sacó del cierre de turno por el lag de
+  // indexación de MP. El arqueo real es contra el DÍA ANTERIOR: se hace al
+  // cerrar el día y en el cron de las 10:00.
   try {
     const { data, error } = await sb.rpc('cerrar_turno', {
       p_local: localId,
@@ -1617,9 +1594,6 @@ async function cerrarTurnoAhora(fecha, localId) {
     });
     if (error) throw error;
     toast(`✓ Turno ${data.numero} cerrado`);
-    // 🔔 Si hay diferencia en el arqueo MP → push a la encargada del local (NO al admin)
-    notificarDiferenciaArqueo(data, fecha, localId, 'turno ' + data.numero);
-    // Mostrar resultado inmediato + detalle de discrepancia
     mostrarResultadoTurno(data, fecha, localId);
     // Refrescar grilla
     if (typeof verPlanilla === 'function') {
@@ -1675,7 +1649,8 @@ async function cerrarDiaAhora(fecha, localId) {
             + (yaCerrados > 0
                 ? `Hay ${yaCerrados} turno${yaCerrados>1?'s':''} ya cerrado${yaCerrados>1?'s':''}. `
                 : '')
-            + `Si hay ventas pendientes, se cierra el turno final automáticamente con cruce MP.\n\n`
+            + `Si hay ventas pendientes, se cierra el turno final automáticamente.\n`
+            + `Además se verifica el arqueo MP del día ANTERIOR (ya definitivo).\n\n`
             + `⚠ Después de cerrar el día, NO se podrán abrir más turnos.`;
   if (!confirm(msg)) return;
 
@@ -1701,18 +1676,6 @@ async function cerrarDiaAhora(fecha, localId) {
     console.warn('pre-sync Dragonfish falló (sigo igual):', e);
   }
 
-  // PRE-SYNC MP: traer TODOS los pagos del día (mismo patrón que cerrarTurnoAhora)
-  toast('💳 Sincronizando pagos MP del día...');
-  try {
-    const ahora = new Date();
-    const inicioDia = new Date(fecha + 'T00:00:00-03:00');
-    const minutosDesdeInicio = Math.max(120, Math.ceil((ahora - inicioDia) / 60000) + 60);
-    await sb.functions.invoke('sync-mp-on-demand', { body: { minutes_back: minutosDesdeInicio } });
-  } catch (e) {
-    console.warn('sync-mp-on-demand falló (sigo igual):', e);
-    toast('⚠ No pude actualizar pagos MP — el arqueo puede tener diferencias', 'warning');
-  }
-
   try {
     const { data, error } = await sb.rpc('cerrar_dia', {
       p_local: localId,
@@ -1724,10 +1687,10 @@ async function cerrarDiaAhora(fecha, localId) {
     toast(`🏁 Día cerrado`);
     // Si se creó un turno final, mostrar su detalle
     if (data?.turno_creado) {
-      // 🔔 Push a la encargada si el turno final dio diferencia en el arqueo
-      notificarDiferenciaArqueo(data.turno_creado, fecha, localId, 'cierre del día');
       mostrarResultadoTurno(data.turno_creado, fecha, localId);
     }
+    // Arqueo MP del día ANTERIOR (los pagos de hoy pueden faltar por lag de MP)
+    verificarArqueoAyer(fecha, localId);
     // Refrescar grilla
     if (typeof verPlanilla === 'function') {
       verPlanilla();
@@ -1736,6 +1699,39 @@ async function cerrarDiaAhora(fecha, localId) {
     }
   } catch (e) {
     alert('Error al cerrar día: ' + e.message);
+  }
+}
+
+/** Verifica el arqueo MP del DÍA ANTERIOR al que se está cerrando.
+ *  A esa altura MP ya indexó todos los pagos, así que la diferencia es real. */
+async function verificarArqueoAyer(fecha, localId) {
+  try {
+    const d = new Date(fecha + 'T12:00:00-03:00');
+    d.setDate(d.getDate() - 1);
+    const fAyer = d.toISOString().split('T')[0];
+    const { data: dif, error } = await sb.rpc('ventas_cruzar_dia_mp', {
+      p_local: localId, p_fecha: fAyer });
+    if (error) throw error;
+    if (dif === null) return;  // ayer no hubo planilla (ej: domingo cerrado)
+    if (Math.abs(+dif) < 1) {
+      toast(`✅ Arqueo MP de ayer (${fmtFecha(fAyer)}): sin diferencias`);
+    } else {
+      const difFmt = (+dif < 0 ? '-' : '+') + '$' + Math.abs(+dif).toLocaleString('es-AR');
+      alert(`⚠ Arqueo MP de AYER (${fmtFecha(fAyer)}) en ${localId.toUpperCase()}\n\n`
+          + `Diferencia de ${difFmt} entre Dragonfish y la cuenta MP.\n\n`
+          + `Esta diferencia es definitiva (MP ya tiene todos los pagos de ayer).`);
+      // Push a las encargadas del local (por si cerró otra persona, queda registro)
+      sb.functions.invoke('enviar-push', {
+        body: {
+          local: localId,
+          title: `⚠ Arqueo MP de ayer · ${localId.toUpperCase()}`,
+          body: `El cruce definitivo del ${fmtFecha(fAyer)} dio diferencia de ${difFmt} entre Dragonfish y la cuenta MP. Revisá el detalle en la app de Ventas.`,
+          tag: `arqueo-dia-${localId}-${fAyer}`,
+        },
+      }).catch(e => console.warn('push arqueo ayer falló:', e));
+    }
+  } catch (e) {
+    console.warn('verificarArqueoAyer:', e);
   }
 }
 
