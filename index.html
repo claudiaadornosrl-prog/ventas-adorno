@@ -24,6 +24,15 @@
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
+/* Tipografia institucional: URW Gothic (clon libre de Avant Garde),
+   servida desde fonts/ del propio repo. */
+@font-face {
+  font-family: 'URW Gothic';
+  src: url('fonts/URWGothic-Book.ttf') format('truetype');
+  font-weight: 300 700;
+  font-display: swap;
+}
+
 :root {
   --primary: #dc2626;     /* Rojo Ventas */
   --primary-dark: #991b1b;
@@ -40,7 +49,7 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+body { margin: 0; font-family: 'URW Gothic', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
 
 .screen { display: none; }
 .screen.active { display: block; }
