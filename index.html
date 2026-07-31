@@ -528,7 +528,10 @@ function enterApp() {
   const selMes = document.getElementById('sel-mes');
   const selLocal = document.getElementById('sel-local');
   const añoActual = new Date().getFullYear();
-  selAño.innerHTML = [añoActual-1, añoActual, añoActual+1].map(a => `<option value="${a}"${a===añoActual?' selected':''}>${a}</option>`).join('');
+  // Admin: serie histórica completa (2014+, para el tab Análisis). Locales: 3 años.
+  const _añoDesde = session.isAdmin ? 2014 : añoActual - 1;
+  const _años = []; for (let a = añoActual + 1; a >= _añoDesde; a--) _años.push(a);
+  selAño.innerHTML = _años.map(a => `<option value="${a}"${a===añoActual?' selected':''}>${a}</option>`).join('');
   const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   selMes.innerHTML = meses.map((m, i) => `<option value="${i+1}"${(i+1)===(new Date().getMonth()+1)?' selected':''}>${m}</option>`).join('');
   // Selector de local solo para admin
