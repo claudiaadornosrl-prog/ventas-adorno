@@ -1634,6 +1634,7 @@ function notificarDiferenciaArqueo(dataTurno, fecha, localId, etiqueta) {
     sb.functions.invoke('enviar-push', {
       body: {
         local: localId,
+        app: 'ventas',
         title: `⚠ Diferencia en arqueo MP · ${localId.toUpperCase()}`,
         body: `El cierre de ${etiqueta} del ${fmtFecha(fecha)} dio una diferencia de ${difFmt} entre Dragonfish y la cuenta MP. Revisá el detalle en la app de Ventas.`,
         tag: `arqueo-${localId}-${fecha}`,
@@ -1728,6 +1729,7 @@ async function notificarCierreDia(fecha, localId) {
       sb.functions.invoke('enviar-push', {
         body: {
           empleado_id: empId,
+          app: 'ventas',
           title: `🏁 Cierre del día · ${localId.toUpperCase()}`,
           body: `${fmtFecha(fecha)} — Total del día: ${totalFmt}` + (trans ? ` · ${trans} ventas` : ''),
           tag: `cierre-dia-${localId}-${fecha}`,
@@ -1759,6 +1761,7 @@ async function verificarArqueoAyer(fecha, localId) {
       sb.functions.invoke('enviar-push', {
         body: {
           local: localId,
+          app: 'ventas',
           title: `⚠ Arqueo MP de ayer · ${localId.toUpperCase()}`,
           body: `El cruce definitivo del ${fmtFecha(fAyer)} dio diferencia de ${difFmt} entre Dragonfish y la cuenta MP. Revisá el detalle en la app de Ventas.`,
           tag: `arqueo-dia-${localId}-${fAyer}`,
