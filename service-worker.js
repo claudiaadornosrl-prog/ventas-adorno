@@ -1,5 +1,5 @@
 // Service Worker — Ventas Adorno
-const CACHE_VERSION = 'ventas-adorno-v47-historia-2014';
+const CACHE_VERSION = 'ventas-adorno-v48-estacionalidad-dow';
 const CACHE_ASSETS = ['./', './index.html', './manifest.webmanifest',
   './manifest-alcorta.webmanifest', './manifest-unicenter.webmanifest', './manifest-oficina.webmanifest',
   './favicon.svg'];

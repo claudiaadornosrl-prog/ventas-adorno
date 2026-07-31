@@ -1043,7 +1043,82 @@ async function renderAnalisis(año, mes, localSel) {
         }).join('')}</tr>
     </table>
     <div style="font-size:11px;color:var(--muted);margin-top:8px;">💡 El histórico ${año-1} cargado desde planillas solo tiene totales mensuales: el mix de medios y el ticket aplican al detalle diario (${año} en adelante).</div>
-  </div></div>`;
+  </div>`;
+
+  // ── ESTACIONALIDAD: % del año que aporta cada mes ──
+  const añosCompletos = [];
+  for (let a = año - 1; a >= año - 4 && añosCompletos.length < 3; a--) {
+    const meses12 = tot[a] && Object.keys(tot[a]).length >= 12;
+    if (meses12) añosCompletos.push(a);
+  }
+  if (añosCompletos.length) {
+    const pctHist = [];
+    for (let m = 1; m <= 12; m++) {
+      let suma = 0;
+      for (const a of añosCompletos) {
+        const totalAño = [...Array(12)].reduce((s2,_,i2) => s2 + t(a, i2+1), 0);
+        if (totalAño) suma += t(a, m) / totalAño * 100;
+      }
+      pctHist.push(suma / añosCompletos.length);
+    }
+    const maxPct = Math.max(...pctHist, 1);
+    const añoSelCompleto = tot[año] && Object.keys(tot[año]).length >= 12;
+    const totalAñoSel = añoSelCompleto ? [...Array(12)].reduce((s2,_,i2) => s2 + t(año, i2+1), 0) : 0;
+    html += `<div style="background:white;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:18px;">
+      <div style="font-weight:700;margin-bottom:2px;">Estacionalidad — % del año que aporta cada mes</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Promedio ${añosCompletos.slice().reverse().join(' + ')}${añoSelCompleto ? ` · punto verde = ${año}` : ''} · Diciembre aporta <b>${pctHist[11].toFixed(1)}%</b> del año</div>
+      <div style="display:flex;align-items:flex-end;gap:6px;height:130px;">
+        ${pctHist.map((p, i) => {
+          const h = Math.round(p / maxPct * 100);
+          const pSel = añoSelCompleto && totalAñoSel ? (t(año, i+1) / totalAñoSel * 100) : null;
+          const dotBottom = pSel != null ? Math.round(pSel / maxPct * 100) : null;
+          return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
+            <div style="position:relative;width:100%;display:flex;justify-content:center;align-items:flex-end;height:100px;">
+              <div style="width:60%;height:${h}px;background:#a5b4fc;border-radius:3px 3px 0 0;" title="${MESES_CORTOS[i]}: ${p.toFixed(1)}% promedio histórico"></div>
+              ${dotBottom != null ? `<div style="position:absolute;bottom:${dotBottom-2}px;width:8px;height:8px;border-radius:50%;background:#16a34a;border:1.5px solid white;" title="${MESES_CORTOS[i]} ${año}: ${pSel.toFixed(1)}%"></div>` : ''}
+            </div>
+            <div style="font-size:10px;color:var(--muted);">${MESES_CORTOS[i]}</div>
+            <div style="font-size:9.5px;color:#6366f1;font-weight:600;">${p.toFixed(1)}%</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+
+  // ── DÍA DE LA SEMANA (solo años con detalle diario) ──
+  try {
+    let qd = sb.from('ventas_analisis_dia_semana').select('*').eq('anio', año);
+    if (localSel !== 'todos') qd = qd.eq('local', localSel);
+    const { data: dowRows } = await qd;
+    if (dowRows && dowRows.length) {
+      const DIAS = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+      const agg = {};
+      for (const r of dowRows) {
+        agg[r.dow] = agg[r.dow] || { total: 0, dias: 0 };
+        agg[r.dow].total += Number(r.total || 0);
+        agg[r.dow].dias = Math.max(agg[r.dow].dias, Number(r.dias || 0));
+      }
+      const proms = [1,2,3,4,5,6,7].map(d => agg[d] ? agg[d].total / Math.max(1, agg[d].dias) : 0);
+      const maxProm = Math.max(...proms, 1);
+      const iMax = proms.indexOf(Math.max(...proms));
+      const iMin = proms.indexOf(Math.min(...proms.filter(p => p > 0)));
+      html += `<div style="background:white;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:24px;">
+        <div style="font-weight:700;margin-bottom:2px;">Venta promedio por día de la semana — ${año}</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Mejor día: <b style="color:#16a34a;">${DIAS[iMax]}</b> (${fmtM(proms[iMax])}) · más flojo: <b style="color:#dc2626;">${DIAS[iMin]}</b> (${fmtM(proms[iMin])}) — dato útil para francos y refuerzos</div>
+        <div style="display:flex;align-items:flex-end;gap:10px;height:130px;">
+          ${proms.map((p, i) => `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
+            <div style="font-size:10px;color:var(--muted);">${fmtM(p)}</div>
+            <div style="width:70%;height:${Math.round(p/maxProm*95)}px;background:${i===iMax?'#16a34a':(i===iMin?'#fca5a5':'#86efac')};border-radius:4px 4px 0 0;"></div>
+            <div style="font-size:11px;color:var(--muted);font-weight:600;">${DIAS[i]}</div>
+          </div>`).join('')}
+        </div>
+      </div>`;
+    } else {
+      html += `<div style="font-size:12px;color:var(--muted);margin-bottom:24px;">📅 El desglose por día de la semana está disponible para años con detalle diario (2026 en adelante).</div>`;
+    }
+  } catch (_) {}
+
+  html += `</div>`;
 
   cont.innerHTML = html;
 }
