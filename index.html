@@ -213,6 +213,7 @@ td input { width: 100%; padding: 4px; border: 1px solid var(--primary); border-r
     <select id="sel-año" onchange="cargar()"></select>
     <select id="sel-mes" onchange="cargar()"></select>
     <select id="sel-local" onchange="cargar()" style="display:none;"></select>
+    <button id="btn-analisis" onclick="toggleAnalisis()" style="display:none;padding:6px 12px;border:1px solid #16a34a;background:white;color:#16a34a;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">📊 Análisis</button>
     <span id="hdr-estado" style="display:none;"></span>
     <span class="hdr-kpi" id="hdr-kpi-total" style="display:none;"></span>
     <span class="hdr-kpi" id="hdr-kpi-prom" style="display:none;"></span>
@@ -533,6 +534,7 @@ function enterApp() {
   // Selector de local solo para admin
   if (session.isAdmin) {
     selLocal.style.display = '';
+    const _ba = document.getElementById('btn-analisis'); if (_ba) _ba.style.display = '';
     selLocal.innerHTML = '<option value="todos">Todos (consolidado)</option>' +
       Object.entries(LOCALES).map(([id, l]) => `<option value="${id}">${l.icon} ${l.nombre}</option>`).join('');
   } else {
@@ -787,7 +789,9 @@ async function cargar() {
       turnos = resTu.data || [];
     }
 
-    if (session.isAdmin && localSel === 'todos') {
+    if (session.isAdmin && window._modoAnalisis) {
+      await renderAnalisis(año, mes, localSel);
+    } else if (session.isAdmin && localSel === 'todos') {
       renderAdminConsolidado(data || [], año, mes);
     } else {
       renderGrillaLocal(data || [], año, mes, localSel, aplicadas, pendientes, turnos);
@@ -800,6 +804,245 @@ async function cargar() {
   } finally {
     if (_sy) _sy.style.display = 'none';
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 📊 ANÁLISIS (solo admin, jul 2026) — MoM · YoY · YTD · mix · IPC real
+// Fuente: vista ventas_analisis_mensual (diarias agregadas + histórico) e IPC
+// de rrhh_ipc_argentina. El histórico 2025 se carga en ventas_mensual_historico.
+// ═══════════════════════════════════════════════════════════════════════
+function toggleAnalisis() {
+  window._modoAnalisis = !window._modoAnalisis;
+  const b = document.getElementById('btn-analisis');
+  if (b) { b.style.background = window._modoAnalisis ? '#16a34a' : 'white'; b.style.color = window._modoAnalisis ? 'white' : '#16a34a'; }
+  cargar();
+}
+
+const MESES_CORTOS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const fmtM = (n) => {
+  const v = Number(n) || 0;
+  if (Math.abs(v) >= 1e6) return '$' + (v/1e6).toLocaleString('es-AR', {maximumFractionDigits:1}) + 'M';
+  return '$' + Math.round(v).toLocaleString('es-AR');
+};
+const fmtPctDelta = (act, prev) => {
+  if (!prev) return '<span style="color:var(--muted)">—</span>';
+  const d = (act / prev - 1) * 100;
+  const col = d >= 0 ? '#16a34a' : '#dc2626';
+  const flecha = d >= 0 ? '▲' : '▼';
+  return `<span style="color:${col};font-weight:600;">${flecha} ${Math.abs(d).toFixed(1)}%</span>`;
+};
+
+async function renderAnalisis(año, mes, localSel) {
+  const cont = document.getElementById('contenido');
+  cont.innerHTML = '<div class="empty"><div class="spinner"></div></div>';
+
+  const [rMes, rIpc] = await Promise.all([
+    sb.from('ventas_analisis_mensual').select('*'),
+    sb.from('rrhh_ipc_argentina').select('mes, variacion_pct').order('mes'),
+  ]);
+  const filas = rMes.data || [];
+  const ipc = rIpc.data || [];
+
+  // ── Índice IPC acumulado por mes (base = primer mes cargado) ──
+  // indice['2026-06'] = producto de (1+v/100) hasta ese mes inclusive.
+  const indice = {};
+  let acum = 1;
+  for (const r of ipc) {
+    acum *= 1 + Number(r.variacion_pct || 0) / 100;
+    indice[r.mes.substring(0, 7)] = acum;
+  }
+  const claveMes = (a, m) => `${a}-${String(m).padStart(2,'0')}`;
+  const mesesIpc = Object.keys(indice).sort();
+  const refIpc = mesesIpc[mesesIpc.length - 1];  // último IPC publicado
+  // Ajustar un valor de (a,m) a pesos del mes de referencia. Si falta IPC → null.
+  const aPesosDeHoy = (valor, a, m) => {
+    const k = claveMes(a, m);
+    if (!indice[k] || !refIpc) return null;
+    return valor * (indice[refIpc] / indice[k]);
+  };
+
+  // ── Agregación (local seleccionado o consolidado) ──
+  const enLocal = (f) => (localSel === 'todos') || (f.local === localSel);
+  const tot = {};       // tot[año][mes] = total
+  const trans = {};     // transacciones
+  const canal = {};     // canal[mes] = {efectivo, tarjeta, qr, online, otros} — solo año elegido
+  const diasV = {};     // días con venta (año elegido)
+  for (const f of filas) {
+    if (!enLocal(f)) continue;
+    tot[f.anio] = tot[f.anio] || {};
+    tot[f.anio][f.mes] = (tot[f.anio][f.mes] || 0) + Number(f.total || 0);
+    trans[f.anio] = trans[f.anio] || {};
+    trans[f.anio][f.mes] = (trans[f.anio][f.mes] || 0) + Number(f.transacciones || 0);
+    if (f.anio === año && !f.es_historico) {
+      canal[f.mes] = canal[f.mes] || { efectivo:0, tarjeta:0, qr:0, online:0, otros:0 };
+      canal[f.mes].efectivo += Number(f.efectivo||0);
+      canal[f.mes].tarjeta  += Number(f.tarjeta||0);
+      canal[f.mes].qr       += Number(f.qr||0);
+      canal[f.mes].online   += Number(f.online||0);
+      canal[f.mes].otros    += Number(f.vales||0)+Number(f.fc_oficina||0)+Number(f.transferencia||0)+Number(f.cc||0);
+      diasV[f.mes] = Math.max(diasV[f.mes]||0, Number(f.dias_con_venta||0));
+    }
+  }
+  const t = (a, m) => (tot[a] && tot[a][m]) || 0;
+
+  // ── KPIs del mes elegido ──
+  const hoy = new Date();
+  const esMesActual = (año === hoy.getFullYear() && mes === (hoy.getMonth()+1));
+  const totalMes = t(año, mes);
+  const mesAntA = mes === 1 ? año - 1 : año;
+  const mesAntM = mes === 1 ? 12 : mes - 1;
+  const totalMesAnt = t(mesAntA, mesAntM);
+  const totalMismoMesAA = t(año - 1, mes);
+  // Proyección de cierre (solo mes en curso): ritmo diario × días del mes
+  const diasMes = new Date(año, mes, 0).getDate();
+  const proyeccion = (esMesActual && hoy.getDate() > 1)
+    ? totalMes / Math.max(1, hoy.getDate() - 1) * diasMes : null;
+  // YoY real (ajustado por IPC)
+  const mismoMesAjustado = totalMismoMesAA ? aPesosDeHoy(totalMismoMesAA, año-1, mes) : null;
+  const mesActualAjustado = totalMes ? aPesosDeHoy(totalMes, año, mes) : null;
+  // YTD
+  let ytd = 0, ytdAA = 0, ytdReal = 0, ytdAAReal = 0, ytdRealOk = true;
+  for (let m = 1; m <= mes; m++) {
+    ytd += t(año, m); ytdAA += t(año-1, m);
+    const r1 = aPesosDeHoy(t(año, m), año, m), r2 = aPesosDeHoy(t(año-1, m), año-1, m);
+    if (r1 == null || (t(año-1,m) > 0 && r2 == null)) ytdRealOk = false;
+    ytdReal += r1 || 0; ytdAAReal += r2 || 0;
+  }
+
+  const tituloLocal = localSel === 'todos' ? 'Consolidado (3 locales)' : (LOCALES[localSel]?.nombre || localSel);
+  const kpi = (lbl, valor, sub) => `
+    <div style="background:white;border:1px solid var(--border);border-radius:12px;padding:14px 16px;min-width:170px;flex:1;">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;">${lbl}</div>
+      <div style="font-size:22px;font-weight:700;margin:4px 0 2px;">${valor}</div>
+      <div style="font-size:12px;">${sub || ''}</div>
+    </div>`;
+
+  let html = `<div style="max-width:1180px;margin:0 auto;padding:14px;">
+    <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+      <h2 style="margin:0;font-size:20px;">📊 Análisis · ${tituloLocal}</h2>
+      <span style="color:var(--muted);font-size:13px;">${MESES_CORTOS[mes-1]} ${año} · comparativas nominales y ajustadas por IPC (ref. ${refIpc || 's/d'})</span>
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
+      ${kpi(`Ventas ${MESES_CORTOS[mes-1]} ${año}`, fmtM(totalMes),
+            proyeccion ? `Proyección cierre: <b>${fmtM(proyeccion)}</b>` : (esMesActual ? '' : 'Mes completo'))}
+      ${kpi('vs mes anterior', fmtPctDelta(totalMes, totalMesAnt),
+            `${MESES_CORTOS[mesAntM-1]} ${mesAntA}: ${fmtM(totalMesAnt)}`)}
+      ${kpi(`vs ${MESES_CORTOS[mes-1]} ${año-1} (nominal)`, fmtPctDelta(totalMes, totalMismoMesAA),
+            totalMismoMesAA ? `${año-1}: ${fmtM(totalMismoMesAA)}` : 'Sin datos ' + (año-1))}
+      ${kpi(`vs ${MESES_CORTOS[mes-1]} ${año-1} (REAL · IPC)`,
+            (mesActualAjustado != null && mismoMesAjustado != null) ? fmtPctDelta(mesActualAjustado, mismoMesAjustado) : '<span style="color:var(--muted)">—</span>',
+            mismoMesAjustado != null ? `${año-1} en $ de hoy: ${fmtM(mismoMesAjustado)}` : 'Falta IPC o dato ' + (año-1))}
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;">
+      ${kpi(`Acumulado ${año} (a ${MESES_CORTOS[mes-1]})`, fmtM(ytd), '')}
+      ${kpi(`Acumulado ${año-1} mismo período`, ytdAA ? fmtM(ytdAA) : '—',
+            ytdAA ? `Δ nominal: ${fmtPctDelta(ytd, ytdAA)}` : 'Sin datos ' + (año-1))}
+      ${kpi('Acumulado REAL (IPC)',
+            (ytdRealOk && ytdAAReal) ? fmtPctDelta(ytdReal, ytdAAReal) : '<span style="color:var(--muted)">—</span>',
+            (ytdRealOk && ytdAAReal) ? `Ambos años en $ de hoy` : 'Falta IPC o histórico')}
+    </div>`;
+
+  // ── Barras mensuales año vs año anterior ──
+  const maxVal = Math.max(1, ...[...Array(12)].map((_,i) => Math.max(t(año,i+1), t(año-1,i+1))));
+  html += `<div style="background:white;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:18px;">
+    <div style="font-weight:700;margin-bottom:10px;">Ventas por mes — ${año} <span style="color:#94a3b8;font-weight:500;">vs ${año-1} (gris)</span></div>
+    <div style="display:flex;align-items:flex-end;gap:6px;height:160px;">`;
+  for (let m = 1; m <= 12; m++) {
+    const v = t(año, m), vAA = t(año-1, m);
+    const h1 = Math.round(v / maxVal * 140), h2 = Math.round(vAA / maxVal * 140);
+    html += `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;" title="${MESES_CORTOS[m-1]}: ${fmtM(v)}${vAA ? ' · '+(año-1)+': '+fmtM(vAA) : ''}">
+      <div style="display:flex;align-items:flex-end;gap:2px;height:140px;">
+        <div style="width:14px;height:${h2}px;background:#cbd5e1;border-radius:3px 3px 0 0;"></div>
+        <div style="width:14px;height:${h1}px;background:${m===mes?'#16a34a':'#86efac'};border-radius:3px 3px 0 0;"></div>
+      </div>
+      <div style="font-size:10px;color:var(--muted);">${MESES_CORTOS[m-1]}</div>
+    </div>`;
+  }
+  html += `</div></div>`;
+
+  // ── Tabla comparativa por local (siempre los 3 + consolidado) ──
+  const filaLocal = (loc, label) => {
+    const tt = (a, m2) => filas.filter(f => f.local === loc && f.anio === a && f.mes === m2)
+                               .reduce((s, f) => s + Number(f.total || 0), 0);
+    const vMes = tt(año, mes), vAnt = tt(mesAntA, mesAntM), vAA = tt(año-1, mes);
+    let vYtd = 0, vYtdAA = 0;
+    for (let m2 = 1; m2 <= mes; m2++) { vYtd += tt(año, m2); vYtdAA += tt(año-1, m2); }
+    return { label, vMes, vAnt, vAA, vYtd, vYtdAA };
+  };
+  const filasLoc = [
+    filaLocal('alcorta', '🛍️ Alcorta'),
+    filaLocal('unicenter', '🏬 Unicenter'),
+    filaLocal('oficina', '💻 Oficina'),
+  ];
+  const consTotal = filasLoc.reduce((s, f) => s + f.vMes, 0);
+  html += `<div style="background:white;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:18px;overflow-x:auto;">
+    <div style="font-weight:700;margin-bottom:10px;">Comparativa por local — ${MESES_CORTOS[mes-1]} ${año}</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <tr style="color:var(--muted);text-align:right;">
+        <th style="text-align:left;padding:6px;">Local</th><th style="padding:6px;">${MESES_CORTOS[mes-1]} ${año}</th>
+        <th style="padding:6px;">Partic.</th><th style="padding:6px;">vs mes ant.</th>
+        <th style="padding:6px;">vs ${año-1}</th><th style="padding:6px;">Acum. ${año}</th><th style="padding:6px;">Acum. vs ${año-1}</th>
+      </tr>
+      ${filasLoc.map(f => `<tr style="border-top:1px solid var(--border);text-align:right;">
+        <td style="text-align:left;padding:7px 6px;font-weight:600;">${f.label}</td>
+        <td style="padding:7px 6px;font-family:monospace;">${fmtM(f.vMes)}</td>
+        <td style="padding:7px 6px;">${consTotal ? Math.round(f.vMes/consTotal*100)+'%' : '—'}</td>
+        <td style="padding:7px 6px;">${fmtPctDelta(f.vMes, f.vAnt)}</td>
+        <td style="padding:7px 6px;">${fmtPctDelta(f.vMes, f.vAA)}</td>
+        <td style="padding:7px 6px;font-family:monospace;">${fmtM(f.vYtd)}</td>
+        <td style="padding:7px 6px;">${fmtPctDelta(f.vYtd, f.vYtdAA)}</td>
+      </tr>`).join('')}
+    </table>
+  </div>`;
+
+  // ── Mix de medios de pago (apilado por mes, año elegido) ──
+  const CANALES = [
+    ['efectivo', 'Efectivo', '#16a34a'], ['tarjeta', 'Tarjeta', '#3b82f6'],
+    ['qr', 'MP (QR/Point)', '#0ea5e9'], ['online', 'Online', '#8b5cf6'], ['otros', 'Otros', '#94a3b8'],
+  ];
+  html += `<div style="background:white;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:18px;">
+    <div style="font-weight:700;margin-bottom:4px;">Mix de medios de pago — ${año}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">${CANALES.map(c => `<span style="display:inline-block;width:9px;height:9px;background:${c[2]};border-radius:2px;margin:0 4px 0 10px;"></span>${c[1]}`).join('')}</div>
+    <div style="display:flex;align-items:flex-end;gap:6px;height:150px;">`;
+  const maxCanal = Math.max(1, ...Object.values(canal).map(c => c.efectivo+c.tarjeta+c.qr+c.online+c.otros));
+  for (let m = 1; m <= 12; m++) {
+    const c = canal[m];
+    let inner = '';
+    if (c) {
+      const totalC = c.efectivo+c.tarjeta+c.qr+c.online+c.otros;
+      const hTot = Math.max(2, Math.round(totalC / maxCanal * 130));
+      inner = CANALES.map(([k,,col]) => {
+        const hh = totalC ? Math.round(c[k] / totalC * hTot) : 0;
+        const pct = totalC ? Math.round(c[k]/totalC*100) : 0;
+        return hh > 0 ? `<div style="width:22px;height:${hh}px;background:${col};" title="${MESES_CORTOS[m-1]}: ${pct}% ${k} (${fmtM(c[k])})"></div>` : '';
+      }).reverse().join('');
+    }
+    html += `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
+      <div style="display:flex;flex-direction:column-reverse;height:130px;justify-content:flex-start;border-radius:3px;overflow:hidden;">${inner}</div>
+      <div style="font-size:10px;color:var(--muted);">${MESES_CORTOS[m-1]}</div>
+    </div>`;
+  }
+  html += `</div></div>`;
+
+  // ── Ticket promedio y transacciones ──
+  html += `<div style="background:white;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:24px;overflow-x:auto;">
+    <div style="font-weight:700;margin-bottom:10px;">Ticket promedio y ventas por mes — ${año}</div>
+    <table style="width:100%;border-collapse:collapse;font-size:12.5px;text-align:right;">
+      <tr style="color:var(--muted);"><th style="text-align:left;padding:5px;"></th>${MESES_CORTOS.map(m => `<th style="padding:5px;">${m}</th>`).join('')}</tr>
+      <tr style="border-top:1px solid var(--border);"><td style="text-align:left;padding:6px 5px;font-weight:600;">Transacciones</td>
+        ${[...Array(12)].map((_,i) => `<td style="padding:6px 5px;font-family:monospace;">${(trans[año]?.[i+1] || 0) ? (trans[año][i+1]).toLocaleString('es-AR') : '—'}</td>`).join('')}</tr>
+      <tr style="border-top:1px solid var(--border);"><td style="text-align:left;padding:6px 5px;font-weight:600;">Ticket promedio</td>
+        ${[...Array(12)].map((_,i) => {
+          const tr2 = trans[año]?.[i+1] || 0, vv = t(año, i+1);
+          return `<td style="padding:6px 5px;font-family:monospace;">${tr2 ? fmtM(vv/tr2) : '—'}</td>`;
+        }).join('')}</tr>
+    </table>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px;">💡 El histórico ${año-1} cargado desde planillas solo tiene totales mensuales: el mix de medios y el ticket aplican al detalle diario (${año} en adelante).</div>
+  </div></div>`;
+
+  cont.innerHTML = html;
 }
 
 // ─── Grilla mensual de un local ──────────────────────────────────────
