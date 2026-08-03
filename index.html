@@ -415,7 +415,12 @@ const URL_LOCAL = (() => {
 })();
 
 const fmt$ = n => (n || 0).toLocaleString('es-AR', { maximumFractionDigits: 0 });
-const fmtFecha = d => new Date(d + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
+// (3-ago) Formato "01 - Lun": día del mes + día de semana (pedido JP).
+const _DIAS_SEM = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+const fmtFecha = d => {
+  const dt = new Date(d + 'T12:00:00');
+  return `${String(dt.getDate()).padStart(2,'0')} - ${_DIAS_SEM[dt.getDay()]}`;
+};
 // "Hoy" en hora ARGENTINA (no UTC): con toISOString(), después de las 21:00
 // hora local ya era "mañana" y los botones de cierre saltaban de fila.
 const hoyISO = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
