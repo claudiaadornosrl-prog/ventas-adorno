@@ -2037,8 +2037,8 @@ async function cerrarDiaAhora(fecha, localId) {
     });
     if (error) throw error;
     toast(`🏁 Día cerrado`);
-    // (31-jul) Push a JP (emp 3) y Claudia (emp 2) con el total del día.
-    notificarCierreDia(fecha, localId);
+    // (3-ago) El push de cierre a JP/Claudia ahora lo dispara un TRIGGER en la
+    // base (trg_ventas_cierre_dia): funciona aunque el local tenga la app vieja.
     // Si se creó un turno final, mostrar su detalle
     if (data?.turno_creado) {
       mostrarResultadoTurno(data.turno_creado, fecha, localId);
@@ -2054,31 +2054,6 @@ async function cerrarDiaAhora(fecha, localId) {
   } catch (e) {
     alert('Error al cerrar día: ' + e.message);
   }
-}
-
-/** (31-jul) Push a dirección (JP + Claudia) cuando un local cierra el día,
- *  con el total vendido. Fire-and-forget: si falla, no molesta el cierre. */
-async function notificarCierreDia(fecha, localId) {
-  try {
-    const { data: fila } = await sb.from('ventas_diarias_view')
-      .select('total, shopping, online, fc_oficina, cant_transacciones')
-      .eq('local', localId).eq('fecha', fecha).maybeSingle();
-    const total = Number(fila?.total || 0);
-    const totalFmt = '$' + Math.round(total).toLocaleString('es-AR');
-    const trans = Number(fila?.cant_transacciones || 0);
-    const DIRECCION_EMP_IDS = [3, 2];  // JP · Claudia
-    for (const empId of DIRECCION_EMP_IDS) {
-      sb.functions.invoke('enviar-push', {
-        body: {
-          empleado_id: empId,
-          app: 'ventas',
-          title: `🏁 Cierre del día · ${localId.toUpperCase()}`,
-          body: `${fmtFecha(fecha)} — Total del día: ${totalFmt}` + (trans ? ` · ${trans} ventas` : ''),
-          tag: `cierre-dia-${localId}-${fecha}`,
-        },
-      }).catch(e => console.warn('push cierre día falló:', e));
-    }
-  } catch (e) { console.warn('notificarCierreDia:', e); }
 }
 
 /** Verifica el arqueo MP del DÍA ANTERIOR al que se está cerrando.
