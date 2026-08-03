@@ -1839,6 +1839,7 @@ async function cerrarMesActual() {
     if (error) throw error;
     toast(`🔒 ${label} cerrado`);
     cargar();
+    chequearMesesListosParaCerrar();  // refrescar el banner amarillo
   } catch (e) { toast('Error: ' + e.message, true); }
 }
 
@@ -1866,6 +1867,7 @@ async function reabrirMesActual() {
     if (error) throw error;
     toast(`🔓 ${meses[mes-1]} ${año} reabierto`);
     cargar();
+    chequearMesesListosParaCerrar();  // refrescar el banner amarillo
   } catch (e) { toast('Error: ' + e.message, true); }
 }
 
