@@ -1178,6 +1178,20 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
   const diasConVenta = ventas.filter(v => (v.shopping||0) > 0).length;
   const promDiario = diasConVenta > 0 ? Math.round(totTotal / diasConVenta) : 0;
 
+  // ── Auto-ocultar columnas sin movimiento (31-jul, pedido JP) ──
+  // Con más de 3 días de ventas cargados en el mes, las columnas que siguen
+  // en cero se esconden; reaparecen solas apenas algún día toma un valor
+  // (positivo o negativo). Al arrancar el mes (≤3 días) se muestran todas.
+  const _diasCargados = ventas.length;
+  const _colVisible = (suma) => _diasCargados <= 3 || Math.abs(suma) > 0.009;
+  const showEfectivo = _colVisible(totEfectivo);
+  const showQR       = _colVisible(totQR);
+  const showTransf   = _colVisible(totTransferencia);
+  const showCC       = _colVisible(totCC);
+  const showVales    = _colVisible(totVales);
+  const showOnline   = _colVisible(totOnline);
+  const showFcOf     = _colVisible(totFcOf);
+
   // Render
   let acum = 0;
   const filas = [];
@@ -1278,16 +1292,16 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
     filas.push(`
       <tr class="${klass}">
         <td>${fmtFecha(fecha)}</td>
-        ${celda('efectivo', v?.efectivo)}
+        ${showEfectivo ? celda('efectivo', v?.efectivo) : ''}
         ${mostrarTarjeta ? celda('tarjeta', v?.tarjeta) : ''}
-        ${celda('qr', v?.qr)}
-        ${celda('transferencia', v?.transferencia)}
-        ${celda('cc', v?.cc)}
-        ${celda('vales', v?.vales)}
+        ${showQR ? celda('qr', v?.qr) : ''}
+        ${showTransf ? celda('transferencia', v?.transferencia) : ''}
+        ${showCC ? celda('cc', v?.cc) : ''}
+        ${showVales ? celda('vales', v?.vales) : ''}
         <td class="cell-derived">${v ? fmt$(shopping) : '—'}</td>
         ${celda('cant_transacciones', v?.cant_transacciones)}
-        ${celda('online', v?.online)}
-        ${celda('fc_oficina', v?.fc_oficina)}
+        ${showOnline ? celda('online', v?.online) : ''}
+        ${showFcOf ? celda('fc_oficina', v?.fc_oficina) : ''}
         <td class="cell-derived big">${v ? fmt$(total) : '—'}</td>
         <td class="cell-derived">${fmt$(acum)}</td>
         ${celdaTurno}
@@ -1305,8 +1319,8 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
       <table>
         <thead>
           <tr>
-            <th>Fecha</th><th>Efectivo</th>${mostrarTarjeta ? '<th>Tarjeta</th>' : ''}<th>MP</th><th>Transferencia</th><th>CC</th><th>Vales</th>
-            <th>Shopping</th><th>Cant</th><th>Online</th><th>Fc Oficina</th><th>Total</th><th>Acumulado</th>
+            <th>Fecha</th>${showEfectivo ? '<th>Efectivo</th>' : ''}${mostrarTarjeta ? '<th>Tarjeta</th>' : ''}${showQR ? '<th>MP</th>' : ''}${showTransf ? '<th>Transferencia</th>' : ''}${showCC ? '<th>CC</th>' : ''}${showVales ? '<th>Vales</th>' : ''}
+            <th>Shopping</th><th>Cant</th>${showOnline ? '<th>Online</th>' : ''}${showFcOf ? '<th>Fc Oficina</th>' : ''}<th>Total</th><th>Acumulado</th>
             <th style="white-space:nowrap;">Turnos</th>
           </tr>
         </thead>
@@ -1314,16 +1328,16 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
         <tfoot>
           <tr class="row-total">
             <td>TOTAL</td>
-            <td>${fmt$(totEfectivo)}</td>
+            ${showEfectivo ? `<td>${fmt$(totEfectivo)}</td>` : ''}
             ${mostrarTarjeta ? `<td>${fmt$(totTarjeta)}</td>` : ''}
-            <td>${fmt$(totQR)}</td>
-            <td>${fmt$(totTransferencia)}</td>
-            <td>${fmt$(totCC)}</td>
-            <td>${fmt$(totVales)}</td>
+            ${showQR ? `<td>${fmt$(totQR)}</td>` : ''}
+            ${showTransf ? `<td>${fmt$(totTransferencia)}</td>` : ''}
+            ${showCC ? `<td>${fmt$(totCC)}</td>` : ''}
+            ${showVales ? `<td>${fmt$(totVales)}</td>` : ''}
             <td>${fmt$(totShopping)}</td>
             <td>${totCant}</td>
-            <td>${fmt$(totOnline)}</td>
-            <td>${fmt$(totFcOf)}</td>
+            ${showOnline ? `<td>${fmt$(totOnline)}</td>` : ''}
+            ${showFcOf ? `<td>${fmt$(totFcOf)}</td>` : ''}
             <td>${fmt$(totTotal)}</td>
             <td>—</td>
             <td>—</td>
