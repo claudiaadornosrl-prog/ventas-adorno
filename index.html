@@ -1246,6 +1246,19 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
         onclick = `event.stopPropagation(); abrirSolicitudCorreccion('${fecha}','${localId}','${campo}',${valActual})`;
       }
       const display = v ? (campo === 'cant_transacciones' ? (valor || '—') : fmt$(valor)) : '—';
+      // Tilde de arqueo MP: cuando el día ya se cruzó contra la cuenta MP
+      // (se hace con 1 día de demora, al cerrar el día siguiente), mostramos
+      // ✓ verde si no hubo diferencia o ⚠ naranja si la hubo.
+      if (campo === 'qr' && v?.mp_cruzado_at) {
+        const difMp = +(v.mp_diferencia_dia || 0);
+        const cuandoMp = new Date(v.mp_cruzado_at).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+        if (Math.abs(difMp) < 1) {
+          badge += ` <span style="color:#16a34a;font-weight:700;" title="Cruzado con la cuenta MP (${cuandoMp}): sin diferencias">✓</span>`;
+        } else {
+          const difFmtMp = (difMp < 0 ? '-' : '+') + '$' + Math.abs(difMp).toLocaleString('es-AR');
+          badge += ` <span style="color:#d97706;font-weight:700;" title="Cruzado con la cuenta MP (${cuandoMp}): diferencia ${difFmtMp}">⚠</span>`;
+        }
+      }
       return `<td class="editable" style="${style}cursor:pointer;" title="${escHtml(title)}" onclick="${onclick}">${display}${badge}</td>`;
     };
 
@@ -1275,11 +1288,15 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
       // Antes requeríamos venta cargada, pero eso bloqueaba a Oficina cuando
       // todavía no había corrido el sync horario. El pre-sync forzado dentro
       // de cerrarTurnoAhora() trae las ventas que aún no estén en la planilla.
+      const esPasado = fecha < hoy;
+      // Cerrar turno: solo HOY. Cerrar día: HOY o días pasados que quedaron
+      // sin cerrar (olvido o problema de sync) — pedido JP 4-ago.
       const puedeCerrar = esHoy && !diaCerrado;
+      const puedeCerrarDia = (esHoy || (esPasado && v)) && !diaCerrado;
       const botonCerrar = puedeCerrar
         ? `<button onclick="event.stopPropagation();cerrarTurnoAhora('${fecha}','${localId}')" title="Cerrar turno" style="background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:14px;line-height:1.2;cursor:pointer;margin-left:6px;">🕐</button>`
         : '';
-      const botonCerrarDia = puedeCerrar
+      const botonCerrarDia = puedeCerrarDia
         ? `<button onclick="event.stopPropagation();cerrarDiaAhora('${fecha}','${localId}')" title="Cerrar día — no se podrán abrir más turnos" style="background:#dc2626;color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:14px;line-height:1.2;cursor:pointer;margin-left:4px;">🔒</button>`
         : '';
       const verLink = nTurnos > 0
@@ -2045,6 +2062,11 @@ async function cerrarDiaAhora(fecha, localId) {
     }
     // Arqueo MP del día ANTERIOR (los pagos de hoy pueden faltar por lag de MP)
     verificarArqueoAyer(fecha, localId);
+    // Si estamos cerrando un día PASADO (cierre tardío), MP ya indexó todos
+    // sus pagos → cruzamos también el día mismo para que quede el tilde.
+    if (fecha < hoyISO()) {
+      try { await sb.rpc('ventas_cruzar_dia_mp', { p_local: localId, p_fecha: fecha }); } catch (_) {}
+    }
     // Refrescar grilla
     if (typeof verPlanilla === 'function') {
       verPlanilla();
