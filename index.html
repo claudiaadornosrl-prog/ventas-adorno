@@ -313,22 +313,38 @@ const pushManager = (() => {
       });
     }
     const raw = sub.toJSON();
-    const { error } = await sb.from('ventas_push_subscriptions').upsert({
-      user_email: session.email,
+    // (4-ago) Guardamos en la tabla UNIFICADA rrhh_push_subscriptions con
+    // app='ventas' — es la única que lee la Edge Function enviar-push.
+    // La tabla vieja ventas_push_subscriptions queda deprecada.
+    const cu = await _identidadPush();
+    const payload = {
       endpoint: raw.endpoint,
       p256dh: raw.keys.p256dh,
       auth: raw.keys.auth,
+      app: 'ventas',
+      activa: true,
       user_agent: (navigator.userAgent || '').slice(0, 200),
-      last_used_at: new Date().toISOString(),
-    }, { onConflict: 'endpoint' });
+      last_seen_at: new Date().toISOString(),
+    };
+    if (cu.empleado_id) payload.empleado_id = cu.empleado_id;
+    else if (cu.local_gerencia) payload.local_generico = cu.local_gerencia;
+    else throw new Error('No pude identificar tu usuario para las notificaciones.');
+    const { error } = await sb.from('rrhh_push_subscriptions').upsert(payload, { onConflict: 'endpoint' });
     if (error) throw error;
     return 'activo';
+  }
+  async function _identidadPush() {
+    try {
+      const { data } = await sb.rpc('rrhh_current_user');
+      const u = Array.isArray(data) ? data[0] : data;
+      return { empleado_id: u?.empleado_id || null, local_gerencia: u?.local_gerencia || null };
+    } catch (_) { return { empleado_id: null, local_gerencia: session?.local_id || null }; }
   }
   async function desactivar() {
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
     if (sub) {
-      try { await sb.from('ventas_push_subscriptions').delete().eq('endpoint', sub.endpoint); } catch(_) {}
+      try { await sb.from('rrhh_push_subscriptions').delete().eq('endpoint', sub.endpoint); } catch(_) {}
       await sub.unsubscribe();
     }
     return 'inactivo';
