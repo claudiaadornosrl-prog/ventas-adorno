@@ -1319,6 +1319,9 @@ async function abrirDetalleMp(fecha, localId) {
         <div style="background:var(--bg);border-radius:8px;padding:10px;"><div style="color:var(--muted);font-size:11px;">Cuenta MP</div><div style="font-weight:700;">$${(+v.mp_cuenta_dia||0).toLocaleString('es-AR')} · ${sum.cuenta_n||0} pagos</div></div>
       </div>
       <div style="margin-bottom:12px;font-size:13px;">${difTxt}</div>`;
+    if (+(sum.link_sum||0) > 0) {
+      html += `<div style="font-size:12px;color:var(--muted);margin:-6px 0 12px;">🔗 Cobrado por link de pago: <strong>$${(+sum.link_sum).toLocaleString('es-AR')}</strong> — va a la cuenta general de MP, excluido del cruce.</div>`;
+    }
     if (sinPago.length) {
       html += `<div style="font-weight:700;font-size:12px;margin:8px 0 4px;">🧾 Ventas en Dragonfish SIN pago igual en MP (${sinPago.length})</div>
         <table style="width:100%;font-size:12px;border-collapse:collapse;">` +
