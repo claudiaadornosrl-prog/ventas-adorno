@@ -2372,6 +2372,13 @@ function mostrarResultadoTurno(turno, fecha, localId) {
           <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;">Efectivo</div>
           <div style="font-size:18px;font-weight:700;">${fmt$(+t.efectivo||0)}</div>
         </div>
+        ${(+t.efectivo_negro > 0) ? `
+        <div style="background:#f8fafc;padding:12px;border-radius:8px;">
+          <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;">Efectivo B2</div>
+          <div style="font-size:18px;font-weight:700;">${fmt$(+t.efectivo_negro||0)}</div>
+          <div style="font-size:10px;color:#94a3b8;">misma caja física · incluido en Online</div>
+        </div>
+        ` : ''}
         <div style="background:#f8fafc;padding:12px;border-radius:8px;">
           <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;">MP Dragonfish</div>
           <div style="font-size:18px;font-weight:700;">${fmt$(+t.qr||0)}</div>
@@ -2517,56 +2524,6 @@ function mostrarResultadoTurno(turno, fecha, localId) {
 }
 
 /** Lista los turnos cerrados de un día con sus discrepancias. */
-function abrirTurnos(fecha, localId) {
-  const turnosDia = window._turnosPorFecha?.[fecha] || [];
-  if (!turnosDia.length) { toast('Este día no tiene turnos cerrados'); return; }
-
-  document.getElementById('modal-turno')?.remove();
-  const wrap = document.createElement('div');
-  wrap.id = 'modal-turno';
-  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
-  wrap.onclick = (e) => { if (e.target === wrap) wrap.remove(); };
-
-  wrap.innerHTML = `
-    <div style="background:#fff;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.25);max-width:780px;width:100%;max-height:85vh;overflow:auto;padding:24px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <h3 style="margin:0;font-size:18px;">🕐 Turnos · ${localId.toUpperCase()} · ${fmtFecha(fecha)}</h3>
-        <button onclick="document.getElementById('modal-turno').remove();" style="background:none;border:none;cursor:pointer;font-size:18px;color:#64748b;padding:0 6px;">✕</button>
-      </div>
-      ${turnosDia.map(t => {
-        const tieneDisc = t.discrepancia_mp !== null && Math.abs(t.discrepancia_mp) >= 1;
-        const colorDisc = tieneDisc ? '#dc2626' : '#16a34a';
-        const horaDesde = new Date(t.desde).toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'});
-        const horaHasta = new Date(t.hasta).toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'});
-        return `
-          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin-bottom:10px;">
-            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
-              <div style="font-weight:700;font-size:15px;">Turno ${t.numero} <span style="font-weight:400;color:#64748b;font-size:12px;">· ${horaDesde} → ${horaHasta}</span></div>
-              <div style="font-size:11px;color:#64748b;">por ${escHtml(t.cerrado_por || '?')}</div>
-            </div>
-            <div style="display:grid;grid-template-columns:repeat(${(fecha <= FECHA_FIN_TARJETA || +t.tarjeta > 0) ? 4 : 3},1fr);gap:8px;font-size:12px;">
-              <div><div style="color:#64748b;text-transform:uppercase;font-size:10px;">Efectivo</div><div style="font-weight:600;">${fmt$(+t.efectivo||0)}</div></div>
-              ${(fecha <= FECHA_FIN_TARJETA || +t.tarjeta > 0) ? `<div><div style="color:#64748b;text-transform:uppercase;font-size:10px;">Tarjeta</div><div style="font-weight:600;">${fmt$(+t.tarjeta||0)}</div></div>` : ''}
-              <div><div style="color:#64748b;text-transform:uppercase;font-size:10px;">MP</div><div style="font-weight:600;">${fmt$(+t.qr||0)}</div></div>
-              <div><div style="color:#64748b;text-transform:uppercase;font-size:10px;">Total</div><div style="font-weight:700;">${fmt$(+t.total_turno||0)}</div></div>
-            </div>
-            ${t.mp_cuenta !== null ? `
-              <div style="margin-top:10px;padding:8px 12px;background:${tieneDisc?'#fef2f2':'#f0fdf4'};border-left:3px solid ${colorDisc};border-radius:4px;font-size:12px;">
-                Cuenta MP: ${fmt$(+t.mp_cuenta)} · Diferencia: <strong style="color:${colorDisc};">${tieneDisc?'⚠ ':''}${fmt$(+t.discrepancia_mp)}</strong>
-                ${tieneDisc ? `<button onclick="event.stopPropagation();mostrarResultadoTurno(${JSON.stringify(t).replace(/"/g,'&quot;')}, '${fecha}', '${localId}')" style="margin-left:8px;background:#dc2626;color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;">Ver detalle</button>` : ''}
-              </div>
-            ` : ''}
-          </div>
-        `;
-      }).join('')}
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
-        <button onclick="document.getElementById('modal-turno').remove();" style="background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:10px 20px;cursor:pointer;font-size:13px;font-weight:600;">OK, listo</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(wrap);
-}
-
 /** Lista los turnos cerrados de un día con sus discrepancias. */
 function abrirTurnos(fecha, localId) {
   const turnosDia = window._turnosPorFecha?.[fecha] || [];
@@ -2595,12 +2552,20 @@ function abrirTurnos(fecha, localId) {
               <div style="font-weight:700;font-size:15px;">Turno ${t.numero} <span style="font-weight:400;color:#64748b;font-size:12px;">· ${horaDesde} → ${horaHasta}</span></div>
               <div style="font-size:11px;color:#64748b;">por ${escHtml(t.cerrado_por || '?')}</div>
             </div>
-            <div style="display:grid;grid-template-columns:repeat(${(fecha <= FECHA_FIN_TARJETA || +t.tarjeta > 0) ? 4 : 3},1fr);gap:8px;font-size:12px;">
-              <div><div style="color:#64748b;text-transform:uppercase;font-size:10px;">Efectivo</div><div style="font-weight:600;">${fmt$(+t.efectivo||0)}</div></div>
-              ${(fecha <= FECHA_FIN_TARJETA || +t.tarjeta > 0) ? `<div><div style="color:#64748b;text-transform:uppercase;font-size:10px;">Tarjeta</div><div style="font-weight:600;">${fmt$(+t.tarjeta||0)}</div></div>` : ''}
-              <div><div style="color:#64748b;text-transform:uppercase;font-size:10px;">MP</div><div style="font-weight:600;">${fmt$(+t.qr||0)}</div></div>
-              <div><div style="color:#64748b;text-transform:uppercase;font-size:10px;">Total</div><div style="font-weight:700;">${fmt$(+t.total_turno||0)}</div></div>
-            </div>
+            ${(() => {
+              const celdas = [];
+              const c = (lbl, val, bold, extra) => celdas.push(`<div><div style="color:#64748b;text-transform:uppercase;font-size:10px;">${lbl}</div><div style="font-weight:${bold?700:600};">${fmt$(val)}</div>${extra||''}</div>`);
+              c('Efectivo', +t.efectivo||0);
+              // Efectivo de la base 2: va en la MISMA caja física (no suma al
+              // total porque ya está incluido dentro de Online)
+              if (+t.efectivo_negro > 0) c('Efectivo B2', +t.efectivo_negro, false, `<div style="font-size:9px;color:#94a3b8;">misma caja física</div>`);
+              if (fecha <= FECHA_FIN_TARJETA || +t.tarjeta > 0) c('Tarjeta', +t.tarjeta||0);
+              c('MP', +t.qr||0);
+              if (+t.transferencia > 0) c('Transf.', +t.transferencia);
+              if (+t.cc > 0) c('Cta. Cte.', +t.cc);
+              c('Total', +t.total_turno||0, true);
+              return `<div style="display:grid;grid-template-columns:repeat(${Math.min(celdas.length,4)},1fr);gap:8px;font-size:12px;">${celdas.join('')}</div>`;
+            })()}
             ${t.mp_cuenta !== null ? `
               <div style="margin-top:10px;padding:8px 12px;background:${tieneDisc?'#fef2f2':'#f0fdf4'};border-left:3px solid ${colorDisc};border-radius:4px;font-size:12px;">
                 Cuenta MP: ${fmt$(+t.mp_cuenta)} · Diferencia: <strong style="color:${colorDisc};">${tieneDisc?'⚠ ':''}${fmt$(+t.discrepancia_mp)}</strong>
