@@ -1181,7 +1181,7 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
   // KPIs del mes
   let totShopping = 0, totTotal = 0, totEfectivo = 0, totTarjeta = 0, totQR = 0,
       totTransferencia = 0, totCC = 0,
-      totVales = 0, totOnline = 0, totFcOf = 0, totCant = 0;
+      totVales = 0, totOnline = 0, totFcOf = 0, totCant = 0, totCantFis = 0;
   ventas.forEach(v => {
     totShopping      += +v.shopping || 0;
     totTotal         += +v.total    || 0;
@@ -1193,9 +1193,10 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
     totVales         += +v.vales    || 0;
     totOnline        += +v.online   || 0;
     totFcOf          += +v.fc_oficina || 0;
-    totCant          += +v.cant_transacciones || 0;
+    totCant          += (+v.cant_transacciones||0) + (+v.cant_online||0) + (+v.cant_fc_oficina||0);
+    totCantFis       += +v.cant_transacciones || 0;
   });
-  const ticketProm = totCant > 0 ? Math.round(totShopping / totCant) : 0;
+  const ticketProm = totCantFis > 0 ? Math.round(totShopping / totCantFis) : 0;
   const diasConVenta = ventas.filter(v => (v.shopping||0) > 0).length;
   const promDiario = diasConVenta > 0 ? Math.round(totTotal / diasConVenta) : 0;
 
@@ -1337,7 +1338,7 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
         ${showCC ? celda('cc', v?.cc) : ''}
         ${showVales ? celda('vales', v?.vales) : ''}
         <td class="cell-derived">${v ? fmt$(shopping) : '—'}</td>
-        ${celda('cant_transacciones', v?.cant_transacciones)}
+        ${celda('cant_transacciones', v ? ((+v.cant_transacciones||0)+(+v.cant_online||0)+(+v.cant_fc_oficina||0)) : undefined)}
         ${showOnline ? celda('online', v?.online) : ''}
         ${showFcOf ? celda('fc_oficina', v?.fc_oficina) : ''}
         <td class="cell-derived big">${v ? fmt$(total) : '—'}</td>

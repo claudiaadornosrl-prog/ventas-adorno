@@ -1,5 +1,5 @@
 // Service Worker — Ventas Adorno
-const CACHE_VERSION = 'ventas-adorno-v54-push-unificado';
+const CACHE_VERSION = 'ventas-adorno-v55-cant-tickets';
 const CACHE_ASSETS = ['./', './index.html', './manifest.webmanifest',
   './manifest-alcorta.webmanifest', './manifest-unicenter.webmanifest', './manifest-oficina.webmanifest',
   './favicon.svg'];
