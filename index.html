@@ -90,8 +90,12 @@ body { margin: 0; font-family: 'URW Gothic', -apple-system, BlinkMacSystemFont, 
 /* Celular: el ⋮ se ancla arriba a la derecha del header para no generar
    una fila extra cuando los selectores hacen wrap */
 @media (max-width: 640px) {
-  .header { padding-right: 52px; }
+  .header { padding: 8px 52px 8px 10px; gap: 6px; }
   .kebab-wrap { position: absolute; top: 7px; right: 8px; }
+  .header-title { font-size: 15px; }
+  .header-local { font-size: 11px; }
+  .header select { padding: 5px 6px; font-size: 12px; }
+  #btn-analisis { padding: 5px 9px !important; font-size: 12px !important; }
 }
 #kebab-btn { position: relative; font-size: 19px; line-height: 1; padding: 6px 11px; }
 .kebab-dot { position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: 50%; background: #dc2626; display: none; }
@@ -574,7 +578,7 @@ function enterApp() {
   if (session.isAdmin) {
     selLocal.style.display = '';
     const _ba = document.getElementById('btn-analisis'); if (_ba) _ba.style.display = '';
-    selLocal.innerHTML = '<option value="todos">Todos (consolidado)</option>' +
+    selLocal.innerHTML = '<option value="todos">Todos</option>' +
       Object.entries(LOCALES).map(([id, l]) => `<option value="${id}">${l.icon} ${l.nombre}</option>`).join('');
   } else {
     // Vendedoras: esconder "+ Cargar venta del día" (solo admin carga manual completo)
