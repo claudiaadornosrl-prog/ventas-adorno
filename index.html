@@ -2030,6 +2030,34 @@ async function reabrirMesActual() {
 
 /** Cierra el turno actual del local en la fecha dada.
  *  Llama a la función SQL cerrar_turno() vía RPC y muestra el resultado. */
+// ── Traba de cierre sin sync ────────────────────────────────────────
+// (7-ago) Si el pre-sync de Dragonfish no confirma (daemon caído / compu
+// apagada), NO se puede cerrar: los números estarían congelados a mitad
+// del día (pasó el 3-ago en Unicenter y el 5-ago en Alcorta). Solo el
+// admin puede forzar el cierre, con confirmación explícita.
+async function _confirmarCierreSinSync(err) {
+  const detalle = (err && err.message) ? `\n\nDetalle técnico: ${err.message}` : '';
+  if (session?.isAdmin) {
+    return confirm('⚠ NO se pudo sincronizar con Dragonfish.\n\n'
+      + 'Los números de la planilla pueden estar INCOMPLETOS (si el sistema '
+      + 'del local está caído, falta todo lo vendido desde que se colgó).\n\n'
+      + '¿Cerrar IGUAL con los datos actuales? (solo admin)' + detalle);
+  }
+  alert('⚠ No se pudo sincronizar con Dragonfish.\n\n'
+    + 'El cierre se CANCELA para no guardar números incompletos.\n'
+    + 'Puede ser que la compu del sistema esté apagada o el sync caído.\n\n'
+    + 'Probá de nuevo en unos minutos y si sigue igual avisale a JP.' + detalle);
+  try {
+    sb.functions.invoke('enviar-push', { body: {
+      empleado_id: 3, app: 'ventas',
+      title: '🛑 Cierre bloqueado sin sync',
+      body: `${(session?.local_id || '?').toUpperCase()}: se intentó cerrar y el pre-sync de Dragonfish no respondió. Revisar el daemon del local.`,
+      tag: 'cierre-sin-sync-' + (session?.local_id || 'x'),
+    }});
+  } catch (_) {}
+  return false;
+}
+
 async function cerrarTurnoAhora(fecha, localId) {
   const yaCerrados = (window._turnosPorFecha?.[fecha] || []).length;
   const numero = yaCerrados + 1;
@@ -2056,9 +2084,11 @@ async function cerrarTurnoAhora(fecha, localId) {
     }).select().single();
     if (jobErr) throw jobErr;
     // Esperar hasta 30 seg (suele ser <5s en práctica)
-    await esperarJob(job.id, 30);
+    const okSync = await esperarJob(job.id, 30);
+    if (!okSync) throw new Error('el sync del local no respondió (daemon caído o compu apagada)');
   } catch (e) {
-    console.warn('pre-sync Dragonfish falló (sigo igual):', e);
+    console.warn('pre-sync Dragonfish falló:', e);
+    if (!(await _confirmarCierreSinSync(e))) return;
   }
 
   // (jul 2026) El cruce MP se sacó del cierre de turno por el lag de
@@ -2151,9 +2181,11 @@ async function cerrarDiaAhora(fecha, localId) {
       solicitado_por: session?.email || 'cerrar_dia',
     }).select().single();
     if (jobErr) throw jobErr;
-    await esperarJob(job.id, 30);
+    const okSync = await esperarJob(job.id, 30);
+    if (!okSync) throw new Error('el sync del local no respondió (daemon caído o compu apagada)');
   } catch (e) {
-    console.warn('pre-sync Dragonfish falló (sigo igual):', e);
+    console.warn('pre-sync Dragonfish falló:', e);
+    if (!(await _confirmarCierreSinSync(e))) return;
   }
 
   try {
