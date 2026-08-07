@@ -331,7 +331,7 @@ const pushManager = (() => {
     if (cu.empleado_id) payload.empleado_id = cu.empleado_id;
     else if (cu.local_gerencia) payload.local_generico = cu.local_gerencia;
     else throw new Error('No pude identificar tu usuario para las notificaciones.');
-    const { error } = await sb.from('rrhh_push_subscriptions').upsert(payload, { onConflict: 'endpoint' });
+    const { error } = await sb.from('rrhh_push_subscriptions').upsert(payload, { onConflict: 'endpoint,app' });
     if (error) throw error;
     return 'activo';
   }
