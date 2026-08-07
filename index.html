@@ -537,28 +537,6 @@ async function loginAdmin() {
   }
 }
 
-// ── Auto-ingreso con la sesión guardada ─────────────────────────
-// La sesión de Supabase persiste en el dispositivo (storageKey propio).
-// Al abrir: si hay sesión de un admin (JP/Clau) y la URL no es de un local,
-// entra directo como admin. Si la URL es de un local y la sesión es de la
-// cuenta de ese local, entra directo a la planilla. Sino, login normal.
-(async function autoIngreso() {
-  try {
-    const { data: { session: s } } = await sb.auth.getSession();
-    if (!s?.user?.email) return;
-    const email = s.user.email.toLowerCase();
-    if (!URL_LOCAL && ADMIN_EMAILS.includes(email)) {
-      session = { email, local_id: null, isAdmin: true };
-      enterApp();
-      return;
-    }
-    const localDeEmail = Object.keys(LOCAL_EMAILS).find(l => LOCAL_EMAILS[l].toLowerCase() === email);
-    if (localDeEmail && (!URL_LOCAL || URL_LOCAL === localDeEmail)) {
-      session = { email, local_id: localDeEmail, isAdmin: false };
-      enterApp();
-    }
-  } catch (e) { console.warn('[auto-ingreso]', e); }
-})();
 
 async function logout() {
   await sb.auth.signOut();
@@ -576,7 +554,7 @@ function enterApp() {
 
   // Header
   if (session.isAdmin) {
-    document.getElementById('hdr-local').textContent = '· Admin (JP)';
+    document.getElementById('hdr-local').textContent = session?.email?.startsWith('clau@') ? '· Admin (Clau)' : '· Admin (JP)';
   } else {
     document.getElementById('hdr-local').textContent = '· ' + (LOCALES[session.local_id]?.nombre || session.local_id);
   }
@@ -2019,13 +1997,17 @@ async function reabrirMesActual() {
 (async function init() {
   const { data: { session: authSession } } = await sb.auth.getSession();
   if (authSession?.user) {
-    const email = authSession.user.email;
-    const isAdmin = email === ADMIN_EMAIL;
+    const email = (authSession.user.email || '').toLowerCase();
+    // (7-ago) ADMIN_EMAILS: JP y Clau — antes solo reconocía a JP y la sesión
+    // de Clau quedaba rota (sin local, header "null", grilla mezclada).
+    const isAdmin = ADMIN_EMAILS.includes(email);
     let local_id = null;
     if (!isAdmin) {
       for (const [id, em] of Object.entries(LOCAL_EMAILS)) {
-        if (em === email) { local_id = id; break; }
+        if (em.toLowerCase() === email) { local_id = id; break; }
       }
+      // Sesión que no es ni admin ni de un local conocido → login normal
+      if (!local_id) { await sb.auth.signOut(); return; }
     }
     // Si la URL fija un local y la sesión persistida es de otro (o de admin),
     // cerrar sesión y forzar login del local correcto.
