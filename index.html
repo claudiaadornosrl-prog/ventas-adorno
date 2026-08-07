@@ -1302,7 +1302,7 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
 
 // ── Detalle del cruce MP de un día: recruza en vivo (por si el scraper trajo
 //    pagos después del último cruce) y muestra qué no matcheó de cada lado.
-function _mpModal(titulo, cuerpo) {
+window._mpModal = function _mpModal(titulo, cuerpo) {
   document.getElementById('modal')?.remove();
   document.body.insertAdjacentHTML('beforeend', `
     <div id="modal" style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;">
@@ -1312,8 +1312,8 @@ function _mpModal(titulo, cuerpo) {
         <div style="text-align:right;margin-top:14px;"><button onclick="cerrarModal()" style="padding:8px 18px;border:1px solid var(--border);background:white;border-radius:8px;cursor:pointer;">Cerrar</button></div>
       </div>
     </div>`);
-}
-async function abrirDetalleMp(fecha, localId) {
+};
+window.abrirDetalleMp = async function abrirDetalleMp(fecha, localId) {
   const esc = x => String(x ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const fFmt = new Date(fecha + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
   _mpModal(`💳 Cruce MP · ${fFmt}`, `<div style="padding:4px 0;color:var(--muted);">Recalculando cruce…</div>`);
@@ -1359,7 +1359,7 @@ async function abrirDetalleMp(fecha, localId) {
   } catch (e) {
     _mpModal('💳 Cruce MP', `<div style="color:#dc2626;">Error: ${esc(e.message || String(e))}</div>`);
   }
-}
+};
 
     // ── Columna de turnos ──
     // Si hay turnos cerrados, mostramos badge con cantidad y si hay discrepancia
