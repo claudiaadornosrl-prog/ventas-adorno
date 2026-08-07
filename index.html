@@ -271,6 +271,9 @@ const LOCAL_EMAILS = {
   oficina:   'claudiaadorno@claudiaadorno.com',
 };
 const ADMIN_EMAIL = 'juanpsimonelli@gmail.com';
+// Admins del módulo (coincide con ventas_is_admin() en la base).
+// claudiaadorno@ NO va acá: es de Rivera y es la cuenta genérica de Oficina.
+const ADMIN_EMAILS = ['juanpsimonelli@gmail.com', 'clau@claudiaadorno.com'];
 const LOCALES = {
   alcorta:   { nombre: 'Alcorta',   icon: '🛍️' },
   unicenter: { nombre: 'Unicenter', icon: '🏬' },
@@ -513,17 +516,43 @@ async function doLogin() {
 
 async function loginAdmin() {
   if (URL_LOCAL) { alert('Esta URL es del local ' + LOCALES[URL_LOCAL].nombre + '. Para entrar como admin, abrí la URL sin parámetro.'); return; }
-  const pass = prompt('Contraseña de administrador:');
+  const email = (prompt('Email de administrador:', ADMIN_EMAIL) || '').trim().toLowerCase();
+  if (!email) return;
+  if (!ADMIN_EMAILS.includes(email)) { alert('Ese email no es administrador de Ventas.'); return; }
+  const pass = prompt('Contraseña:');
   if (!pass) return;
   try {
-    const { error } = await sb.auth.signInWithPassword({ email: ADMIN_EMAIL, password: pass.trim() });
+    const { error } = await sb.auth.signInWithPassword({ email, password: pass.trim() });
     if (error) throw error;
-    session = { email: ADMIN_EMAIL, local_id: null, isAdmin: true };
+    session = { email, local_id: null, isAdmin: true };
     enterApp();
   } catch (e) {
     alert('No se pudo entrar como admin: ' + (e.message || 'error'));
   }
 }
+
+// ── Auto-ingreso con la sesión guardada ─────────────────────────
+// La sesión de Supabase persiste en el dispositivo (storageKey propio).
+// Al abrir: si hay sesión de un admin (JP/Clau) y la URL no es de un local,
+// entra directo como admin. Si la URL es de un local y la sesión es de la
+// cuenta de ese local, entra directo a la planilla. Sino, login normal.
+(async function autoIngreso() {
+  try {
+    const { data: { session: s } } = await sb.auth.getSession();
+    if (!s?.user?.email) return;
+    const email = s.user.email.toLowerCase();
+    if (!URL_LOCAL && ADMIN_EMAILS.includes(email)) {
+      session = { email, local_id: null, isAdmin: true };
+      enterApp();
+      return;
+    }
+    const localDeEmail = Object.keys(LOCAL_EMAILS).find(l => LOCAL_EMAILS[l].toLowerCase() === email);
+    if (localDeEmail && (!URL_LOCAL || URL_LOCAL === localDeEmail)) {
+      session = { email, local_id: localDeEmail, isAdmin: false };
+      enterApp();
+    }
+  } catch (e) { console.warn('[auto-ingreso]', e); }
+})();
 
 async function logout() {
   await sb.auth.signOut();
