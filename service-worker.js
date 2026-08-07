@@ -1,5 +1,5 @@
 // Service Worker — Ventas Adorno
-const CACHE_VERSION = 'ventas-adorno-v61-hub-mono';
+const CACHE_VERSION = 'ventas-adorno-v62-kebab-cards';
 const CACHE_ASSETS = ['./', './index.html', './manifest.webmanifest',
   './manifest-alcorta.webmanifest', './manifest-unicenter.webmanifest', './manifest-oficina.webmanifest',
   './favicon.svg'];

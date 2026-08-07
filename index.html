@@ -87,6 +87,12 @@ body { margin: 0; font-family: 'URW Gothic', -apple-system, BlinkMacSystemFont, 
 .hdr-kpi b { font-size: 15px; font-weight: 700; color: var(--text); }
 #hdr-kpi-total b { font-size: 17px; color: var(--primary); }
 .kebab-wrap { position: relative; }
+/* Celular: el ⋮ se ancla arriba a la derecha del header para no generar
+   una fila extra cuando los selectores hacen wrap */
+@media (max-width: 640px) {
+  .header { padding-right: 52px; }
+  .kebab-wrap { position: absolute; top: 7px; right: 8px; }
+}
 #kebab-btn { position: relative; font-size: 19px; line-height: 1; padding: 6px 11px; }
 .kebab-dot { position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: 50%; background: #dc2626; display: none; }
 .kebab-menu { display: none; position: absolute; right: 0; top: calc(100% + 6px); background: white; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.14); min-width: 215px; z-index: 300; padding: 6px; }
@@ -1481,6 +1487,14 @@ async function abrirDetalleMp(fecha, localId) {
   `;
 }
 
+// Tocar la card de un local en el consolidado = elegirlo en el selector
+function irALocal(local) {
+  const sel = document.getElementById('sel-local');
+  if (!sel) return;
+  sel.value = local;
+  cargar();
+}
+
 // ─── Vista admin consolidada (todos los locales) ─────────────────────
 function renderAdminConsolidado(ventas, año, mes) {
   const _kt = document.getElementById('hdr-kpi-total'); if (_kt) _kt.style.display = 'none';
@@ -1515,9 +1529,9 @@ function renderAdminConsolidado(ventas, año, mes) {
   cont.innerHTML = `
     <div class="kpi-row">
       <div class="kpi"><div class="kpi-label">Total general</div><div class="kpi-value">${fmt$(granTotal)}</div></div>
-      <div class="kpi"><div class="kpi-label">🛍️ Alcorta</div><div class="kpi-value">${fmt$(totLocales.alcorta)}</div></div>
-      <div class="kpi"><div class="kpi-label">🏬 Unicenter</div><div class="kpi-value">${fmt$(totLocales.unicenter)}</div></div>
-      <div class="kpi"><div class="kpi-label">💻 Oficina</div><div class="kpi-value">${fmt$(totLocales.oficina)}</div></div>
+      <div class="kpi" style="cursor:pointer;" title="Ver el detalle de Alcorta" onclick="irALocal('alcorta')"><div class="kpi-label">🛍️ Alcorta</div><div class="kpi-value">${fmt$(totLocales.alcorta)}</div></div>
+      <div class="kpi" style="cursor:pointer;" title="Ver el detalle de Unicenter" onclick="irALocal('unicenter')"><div class="kpi-label">🏬 Unicenter</div><div class="kpi-value">${fmt$(totLocales.unicenter)}</div></div>
+      <div class="kpi" style="cursor:pointer;" title="Ver el detalle de Oficina" onclick="irALocal('oficina')"><div class="kpi-label">💻 Oficina</div><div class="kpi-value">${fmt$(totLocales.oficina)}</div></div>
     </div>
 
     <div class="table-wrap">
