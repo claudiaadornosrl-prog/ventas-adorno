@@ -1,5 +1,5 @@
 // Service Worker — Ventas Adorno
-const CACHE_VERSION = 'ventas-adorno-v67-espera-sync-120s';
+const CACHE_VERSION = 'ventas-adorno-v68-analisis-mismos-dias';
 const CACHE_ASSETS = ['./', './index.html', './manifest.webmanifest',
   './manifest-alcorta.webmanifest', './manifest-unicenter.webmanifest', './manifest-oficina.webmanifest',
   './favicon.svg'];

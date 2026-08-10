@@ -934,8 +934,35 @@ async function renderAnalisis(año, mes, localSel) {
   const totalMes = t(año, mes);
   const mesAntA = mes === 1 ? año - 1 : año;
   const mesAntM = mes === 1 ? 12 : mes - 1;
-  const totalMesAnt = t(mesAntA, mesAntM);
-  const totalMismoMesAA = t(año - 1, mes);
+  let totalMesAnt = t(mesAntA, mesAntM);
+  let totalMismoMesAA = t(año - 1, mes);
+
+  // ── (ago 2026) Comparación de MISMOS DÍAS para el mes en curso ──
+  // Un mes a medias contra un mes entero no dice nada: si estamos a día N,
+  // comparamos contra los primeros N días del mes anterior / año pasado.
+  // Si no hay detalle diario para ese período (históricos cargados solo por
+  // mes), se cae al mes completo y se avisa en la tarjeta.
+  const diaN = esMesActual ? hoy.getDate() : null;
+  let mesAntEsParcial = false, mismoMesAAEsParcial = false;
+  if (diaN) {
+    const _pad = (x) => String(x).padStart(2, '0');
+    const _sumaPeriodo = async (a, m) => {
+      const ultDia = Math.min(diaN, new Date(a, m, 0).getDate());
+      let q = sb.from('ventas_diarias_view').select('local, total')
+        .gte('fecha', `${a}-${_pad(m)}-01`)
+        .lte('fecha', `${a}-${_pad(m)}-${_pad(ultDia)}`);
+      const { data } = await q;
+      const filtradas = (data || []).filter(f => localSel === 'todos' || f.local === localSel);
+      if (!filtradas.length) return null;  // sin detalle diario → fallback mes completo
+      return filtradas.reduce((acc, f) => acc + Number(f.total || 0), 0);
+    };
+    const [antN, aaN] = await Promise.all([
+      _sumaPeriodo(mesAntA, mesAntM),
+      _sumaPeriodo(año - 1, mes),
+    ]);
+    if (antN != null) { totalMesAnt = antN; mesAntEsParcial = true; }
+    if (aaN != null) { totalMismoMesAA = aaN; mismoMesAAEsParcial = true; }
+  }
   // Proyección de cierre (solo mes en curso): ritmo diario × días del mes
   const diasMes = new Date(año, mes, 0).getDate();
   const proyeccion = (esMesActual && hoy.getDate() > 1)
@@ -969,10 +996,13 @@ async function renderAnalisis(año, mes, localSel) {
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
       ${kpi(`Ventas ${MESES_CORTOS[mes-1]} ${año}`, fmtM(totalMes),
             proyeccion ? `Proyección cierre: <b>${fmtM(proyeccion)}</b>` : (esMesActual ? '' : 'Mes completo'))}
-      ${kpi('vs mes anterior', fmtPctDelta(totalMes, totalMesAnt),
-            `${MESES_CORTOS[mesAntM-1]} ${mesAntA}: ${fmtM(totalMesAnt)}`)}
-      ${kpi(`vs ${MESES_CORTOS[mes-1]} ${año-1} (nominal)`, fmtPctDelta(totalMes, totalMismoMesAA),
-            totalMismoMesAA ? `${año-1}: ${fmtM(totalMismoMesAA)}` : 'Sin datos ' + (año-1))}
+      ${kpi(mesAntEsParcial ? `vs mes anterior (1-${diaN})` : 'vs mes anterior',
+            fmtPctDelta(totalMes, totalMesAnt),
+            `${MESES_CORTOS[mesAntM-1]} ${mesAntA}${mesAntEsParcial ? ` (1 al ${diaN})` : (diaN ? ' (mes completo)' : '')}: ${fmtM(totalMesAnt)}`)}
+      ${kpi(mismoMesAAEsParcial ? `vs ${MESES_CORTOS[mes-1]} ${año-1} (1-${diaN})` : `vs ${MESES_CORTOS[mes-1]} ${año-1} (nominal)`,
+            fmtPctDelta(totalMes, totalMismoMesAA),
+            totalMismoMesAA ? `${año-1}${mismoMesAAEsParcial ? ` (1 al ${diaN})` : (diaN ? ' (mes completo)' : '')}: ${fmtM(totalMismoMesAA)}`
+                            : 'Sin datos ' + (año-1))}
       ${kpi(`vs ${MESES_CORTOS[mes-1]} ${año-1} (REAL · IPC)`,
             (mesActualAjustado != null && mismoMesAjustado != null) ? fmtPctDelta(mesActualAjustado, mismoMesAjustado) : '<span style="color:var(--muted)">—</span>',
             mismoMesAjustado != null ? `${año-1} en $ de hoy: ${fmtM(mismoMesAjustado)}` : 'Falta IPC o dato ' + (año-1))}
