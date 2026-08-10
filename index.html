@@ -2083,8 +2083,9 @@ async function cerrarTurnoAhora(fecha, localId) {
       solicitado_por: session?.email || 'cerrar_turno',
     }).select().single();
     if (jobErr) throw jobErr;
-    // Esperar hasta 30 seg (suele ser <5s en práctica)
-    const okSync = await esperarJob(job.id, 30);
+    // Esperar hasta 2 min: si la caja 2 está apagada, el sync gasta sus
+    // timeouts (30s por consulta) y el job tarda ~1 min legítimamente
+    const okSync = await esperarJob(job.id, 120);
     if (!okSync) throw new Error('el sync del local no respondió (daemon caído o compu apagada)');
   } catch (e) {
     console.warn('pre-sync Dragonfish falló:', e);
@@ -2181,7 +2182,7 @@ async function cerrarDiaAhora(fecha, localId) {
       solicitado_por: session?.email || 'cerrar_dia',
     }).select().single();
     if (jobErr) throw jobErr;
-    const okSync = await esperarJob(job.id, 30);
+    const okSync = await esperarJob(job.id, 120);
     if (!okSync) throw new Error('el sync del local no respondió (daemon caído o compu apagada)');
   } catch (e) {
     console.warn('pre-sync Dragonfish falló:', e);
