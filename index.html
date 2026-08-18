@@ -1198,6 +1198,123 @@ async function renderAnalisis(año, mes, localSel) {
 // A partir de julio 2026 la columna no se muestra en la planilla.
 const FECHA_FIN_TARJETA = '2026-06-30';
 
+// ── Detalle del cruce MP de un día: recruza en vivo (por si el scraper trajo
+//    pagos después del último cruce) y muestra qué no matcheó de cada lado.
+window._mpModal = function _mpModal(titulo, cuerpo) {
+  document.getElementById('modal')?.remove();
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="modal" style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;">
+      <div style="background:white;border-radius:12px;padding:22px;max-width:560px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+        <h3 style="margin:0 0 12px;color:var(--primary);">${titulo}</h3>
+        ${cuerpo}
+        <div style="text-align:right;margin-top:14px;"><button onclick="cerrarModal()" style="padding:8px 18px;border:1px solid var(--border);background:white;border-radius:8px;cursor:pointer;">Cerrar</button></div>
+      </div>
+    </div>`);
+};
+window.abrirDetalleMp = async function abrirDetalleMp(fecha, localId) {
+  const esc = x => String(x ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const fFmt = new Date(fecha + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
+  _mpModal(`💳 Cruce MP · ${fFmt}`, `<div style="padding:4px 0;color:var(--muted);">Recalculando cruce…</div>`);
+  try {
+    // Recruzar primero: los pagos MP pueden indexarse horas/días tarde
+    await sb.rpc('ventas_cruzar_dia_mp', { p_local: localId, p_fecha: fecha });
+    const { data: v, error } = await sb.from('ventas_diarias_view')
+      .select('qr, mp_cuenta_dia, mp_diferencia_dia, mp_cruzado_at, mp_cruce_detalle, mp_dif_estado, mp_dif_motivo, mp_dif_por, mp_dif_at')
+      .eq('local', localId).eq('fecha', fecha).single();
+    if (error) throw error;
+    const det = v.mp_cruce_detalle || {};
+    const sum = det.summary || {};
+    const dif = +(v.mp_diferencia_dia || 0);
+    const sinPago  = (det.txs_dragonfish || []).filter(t => !t.tiene_match);
+    const sinVenta = (det.movs_cuenta || []).filter(m => !m.tiene_match);
+    const fmtHora = h => h ? new Date(h).toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' }) : '';
+    const difTxt = Math.abs(dif) < 1 ? '<span style="color:#16a34a;font-weight:700;">Sin diferencia ✓</span>'
+      : `<span style="color:${dif < 0 ? '#d97706' : '#0369a1'};font-weight:700;">${dif < 0 ? '-' : '+'}$${Math.abs(dif).toLocaleString('es-AR')}</span> <span style="font-size:12px;color:var(--muted);">${dif < 0 ? '(la cuenta MP cobró MENOS que lo cargado en Dragonfish)' : '(la cuenta MP cobró MÁS que lo cargado)'}</span>`;
+    let html = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;font-size:13px;">
+        <div style="background:var(--bg);border-radius:8px;padding:10px;"><div style="color:var(--muted);font-size:11px;">Dragonfish (MP/QR)</div><div style="font-weight:700;">$${(+v.qr||0).toLocaleString('es-AR')} · ${sum.df_n||0} ventas</div></div>
+        <div style="background:var(--bg);border-radius:8px;padding:10px;"><div style="color:var(--muted);font-size:11px;">Cuenta MP</div><div style="font-weight:700;">$${(+v.mp_cuenta_dia||0).toLocaleString('es-AR')} · ${sum.cuenta_n||0} pagos</div></div>
+      </div>
+      <div style="margin-bottom:12px;font-size:13px;">${difTxt}</div>`;
+    if (+(sum.link_sum||0) > 0) {
+      html += `<div style="font-size:12px;color:var(--muted);margin:-6px 0 12px;">🔗 Cobrado por link de pago: <strong>$${(+sum.link_sum).toLocaleString('es-AR')}</strong> — va a la cuenta general de MP, excluido del cruce.</div>`;
+    }
+    if (sinPago.length) {
+      html += `<div style="font-weight:700;font-size:12px;margin:8px 0 4px;">🧾 Ventas en Dragonfish SIN pago igual en MP (${sinPago.length})</div>
+        <table style="width:100%;font-size:12px;border-collapse:collapse;">` +
+        sinPago.map(t => `<tr style="border-bottom:1px solid var(--border);"><td style="padding:3px 4px;">${esc(t.numero_comprobante||'—')}</td><td style="padding:3px 4px;color:var(--muted);">${esc((t.codigo_jjco||'').trim())}</td><td style="padding:3px 4px;text-align:right;font-weight:600;">$${(+t.importe||0).toLocaleString('es-AR')}</td></tr>`).join('') + `</table>`;
+    }
+    if (sinVenta.length) {
+      html += `<div style="font-weight:700;font-size:12px;margin:10px 0 4px;">💳 Pagos en la cuenta MP SIN venta igual en Dragonfish (${sinVenta.length})</div>
+        <table style="width:100%;font-size:12px;border-collapse:collapse;">` +
+        sinVenta.map(m => `<tr style="border-bottom:1px solid var(--border);"><td style="padding:3px 4px;">${fmtHora(m.hora)}</td><td style="padding:3px 4px;color:var(--muted);">${esc(m.pos_name||m.canal||'—')}</td><td style="padding:3px 4px;text-align:right;font-weight:600;">$${(+m.importe||0).toLocaleString('es-AR')}</td></tr>`).join('') + `</table>`;
+      html += `<div style="font-size:11px;color:var(--muted);margin-top:6px;">💡 Un pago sin venta igual suele ser varias ventas cobradas JUNTAS en un solo cobro Point (comparar con la lista de arriba).</div>`;
+    }
+    if (!sinPago.length && !sinVenta.length) html += `<div style="font-size:13px;color:var(--muted);">Todos los importes matchean 1 a 1.</div>`;
+    html += `<div style="font-size:11px;color:var(--muted);margin-top:10px;">El match es por importe exacto: con dos ventas del mismo monto y un solo pago, ambas figuran con match — la diferencia total de arriba es el número confiable. El cruce se recalculó recién ahora.</div>`;
+
+    // ── (18-ago) Resolución de la diferencia: justificar o marcar error ──
+    if (Math.abs(dif) >= 1) {
+      if (v.mp_dif_estado) {
+        const esJust = v.mp_dif_estado === 'justificada';
+        const cuandoR = v.mp_dif_at ? new Date(v.mp_dif_at).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '';
+        html += `<div style="margin-top:12px;padding:10px 12px;border-radius:8px;background:${esJust ? '#f5f3ff' : '#fef2f2'};border-left:4px solid ${esJust ? '#7c3aed' : '#dc2626'};">
+          <div style="font-weight:700;font-size:13px;color:${esJust ? '#5b21b6' : '#991b1b'};">${esJust ? '✔ Diferencia JUSTIFICADA' : '✖ Marcada como ERROR'}</div>
+          <div style="font-size:12px;margin-top:3px;">${esc(v.mp_dif_motivo || 'Sin motivo')}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px;">Por ${esc(v.mp_dif_por || '¿?')} · ${cuandoR}</div>
+          <button onclick="salvarDifMpForm('${fecha}','${localId}')" style="margin-top:6px;font-size:11px;padding:4px 10px;border:1px solid var(--border);background:white;border-radius:6px;cursor:pointer;">↩ Cambiar</button>
+        </div>`;
+      } else {
+        html += `<div id="mp-salvar-wrap" style="margin-top:12px;padding:10px 12px;border-radius:8px;background:#fffbeb;border-left:4px solid #d97706;">
+          <div style="font-weight:700;font-size:13px;color:#92400e;">Esta diferencia está SIN REVISAR</div>
+          <div style="font-size:12px;color:#92400e;margin:3px 0 8px;">Si tiene una explicación (cobro de otro local, devolución, venta cargada distinta a propósito), justificala. Si no, marcala como error.</div>
+          <button onclick="salvarDifMpForm('${fecha}','${localId}')" style="font-size:13px;font-weight:700;padding:8px 14px;border:none;background:#d97706;color:white;border-radius:8px;cursor:pointer;">📝 Revisar y salvar</button>
+        </div>`;
+      }
+    }
+    _mpModal(`💳 Cruce MP · ${fFmt}`, html);
+    cargar(); // refrescar el tilde con el cruce nuevo
+  } catch (e) {
+    _mpModal('💳 Cruce MP', `<div style="color:#dc2626;">Error: ${esc(e.message || String(e))}</div>`);
+  }
+};
+
+// ── (18-ago) Salvar diferencia MP: justificada (a conciencia) o error ──
+window.salvarDifMpForm = function salvarDifMpForm(fecha, localId) {
+  const wrap = document.getElementById('mp-salvar-wrap') || document.querySelector('#modal h3').parentElement;
+  const nombreGuardado = localStorage.getItem('ventas_revisor_nombre') || '';
+  const formHtml = `<div id="mp-salvar-form" style="margin-top:12px;padding:12px;border-radius:8px;background:var(--bg);border:1px solid var(--border);">
+    <div style="font-weight:700;font-size:13px;margin-bottom:8px;">📝 Salvar la diferencia</div>
+    <input id="mp-rev-nombre" type="text" placeholder="Tu nombre *" value="${nombreGuardado.replace(/"/g,'&quot;')}"
+           style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-bottom:6px;">
+    <textarea id="mp-rev-motivo" rows="2" placeholder="Motivo (obligatorio para justificar): ej. cobraron con el Point de Alcorta / devolución del día anterior / se cargó a propósito así…"
+              style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;"></textarea>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button onclick="salvarDifMp('${fecha}','${localId}','justificada')" style="flex:1;font-size:13px;font-weight:700;padding:9px;border:none;background:#7c3aed;color:white;border-radius:8px;cursor:pointer;">✔ Justificar (a conciencia)</button>
+      <button onclick="salvarDifMp('${fecha}','${localId}','error')" style="flex:1;font-size:13px;font-weight:700;padding:9px;border:none;background:#dc2626;color:white;border-radius:8px;cursor:pointer;">✖ Es un error</button>
+    </div>
+  </div>`;
+  const viejo = document.getElementById('mp-salvar-form');
+  if (viejo) { viejo.remove(); }
+  (document.getElementById('mp-salvar-wrap') || document.querySelector('#modal > div'))
+    .insertAdjacentHTML('beforeend', formHtml);
+  document.getElementById('mp-rev-motivo').focus();
+};
+
+window.salvarDifMp = async function salvarDifMp(fecha, localId, estado) {
+  const nombre = (document.getElementById('mp-rev-nombre')?.value || '').trim();
+  const motivo = (document.getElementById('mp-rev-motivo')?.value || '').trim();
+  if (!nombre) { alert('Poné tu nombre para que quede registrado quién revisó.'); return; }
+  if (estado === 'justificada' && !motivo) { alert('Para justificar la diferencia el motivo es obligatorio.'); return; }
+  localStorage.setItem('ventas_revisor_nombre', nombre);
+  try {
+    const { error } = await sb.rpc('ventas_salvar_dif_mp', {
+      p_local: localId, p_fecha: fecha, p_estado: estado, p_motivo: motivo, p_quien: nombre });
+    if (error) throw error;
+    abrirDetalleMp(fecha, localId);  // reabrir con el estado nuevo
+  } catch (e) { alert('No se pudo guardar: ' + (e.message || e)); }
+};
+
 function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, turnos) {
   aplicadas = aplicadas || [];
   pendientes = pendientes || [];
@@ -1323,73 +1440,18 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
           badge += ` <span style="color:#16a34a;font-weight:700;cursor:pointer;" title="Cruzado con la cuenta MP (${cuandoMp}): sin diferencias. Click para ver el detalle." onclick="${clickMp}">✓</span>`;
         } else {
           const difFmtMp = (difMp < 0 ? '-' : '+') + '$' + Math.abs(difMp).toLocaleString('es-AR');
-          badge += ` <span style="color:#d97706;font-weight:700;cursor:pointer;" title="Cruzado con la cuenta MP (${cuandoMp}): diferencia ${difFmtMp}. Click para ver el detalle." onclick="${clickMp}">⚠</span>`;
+          if (v.mp_dif_estado === 'justificada') {
+            badge += ` <span style="color:#7c3aed;font-weight:700;cursor:pointer;" title="Diferencia ${difFmtMp} JUSTIFICADA por ${(v.mp_dif_por||'')}: ${(v.mp_dif_motivo||'').replace(/"/g,'')}. Click para ver." onclick="${clickMp}">✔</span>`;
+          } else if (v.mp_dif_estado === 'error') {
+            badge += ` <span style="color:#dc2626;font-weight:700;cursor:pointer;" title="Diferencia ${difFmtMp} marcada como ERROR por ${(v.mp_dif_por||'')}. Click para ver." onclick="${clickMp}">✖</span>`;
+          } else {
+            badge += ` <span style="color:#d97706;font-weight:700;cursor:pointer;" title="Cruzado con la cuenta MP (${cuandoMp}): diferencia ${difFmtMp} SIN REVISAR. Click para revisarla." onclick="${clickMp}">⚠</span>`;
+          }
         }
       }
       return `<td class="editable" style="${style}cursor:pointer;" title="${escHtml(title)}" onclick="${onclick}">${display}${badge}</td>`;
     };
 
-
-// ── Detalle del cruce MP de un día: recruza en vivo (por si el scraper trajo
-//    pagos después del último cruce) y muestra qué no matcheó de cada lado.
-window._mpModal = function _mpModal(titulo, cuerpo) {
-  document.getElementById('modal')?.remove();
-  document.body.insertAdjacentHTML('beforeend', `
-    <div id="modal" style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;">
-      <div style="background:white;border-radius:12px;padding:22px;max-width:560px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
-        <h3 style="margin:0 0 12px;color:var(--primary);">${titulo}</h3>
-        ${cuerpo}
-        <div style="text-align:right;margin-top:14px;"><button onclick="cerrarModal()" style="padding:8px 18px;border:1px solid var(--border);background:white;border-radius:8px;cursor:pointer;">Cerrar</button></div>
-      </div>
-    </div>`);
-};
-window.abrirDetalleMp = async function abrirDetalleMp(fecha, localId) {
-  const esc = x => String(x ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const fFmt = new Date(fecha + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
-  _mpModal(`💳 Cruce MP · ${fFmt}`, `<div style="padding:4px 0;color:var(--muted);">Recalculando cruce…</div>`);
-  try {
-    // Recruzar primero: los pagos MP pueden indexarse horas/días tarde
-    await sb.rpc('ventas_cruzar_dia_mp', { p_local: localId, p_fecha: fecha });
-    const { data: v, error } = await sb.from('ventas_diarias_view')
-      .select('qr, mp_cuenta_dia, mp_diferencia_dia, mp_cruzado_at, mp_cruce_detalle')
-      .eq('local', localId).eq('fecha', fecha).single();
-    if (error) throw error;
-    const det = v.mp_cruce_detalle || {};
-    const sum = det.summary || {};
-    const dif = +(v.mp_diferencia_dia || 0);
-    const sinPago  = (det.txs_dragonfish || []).filter(t => !t.tiene_match);
-    const sinVenta = (det.movs_cuenta || []).filter(m => !m.tiene_match);
-    const fmtHora = h => h ? new Date(h).toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' }) : '';
-    const difTxt = Math.abs(dif) < 1 ? '<span style="color:#16a34a;font-weight:700;">Sin diferencia ✓</span>'
-      : `<span style="color:${dif < 0 ? '#d97706' : '#0369a1'};font-weight:700;">${dif < 0 ? '-' : '+'}$${Math.abs(dif).toLocaleString('es-AR')}</span> <span style="font-size:12px;color:var(--muted);">${dif < 0 ? '(la cuenta MP cobró MENOS que lo cargado en Dragonfish)' : '(la cuenta MP cobró MÁS que lo cargado)'}</span>`;
-    let html = `
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;font-size:13px;">
-        <div style="background:var(--bg);border-radius:8px;padding:10px;"><div style="color:var(--muted);font-size:11px;">Dragonfish (MP/QR)</div><div style="font-weight:700;">$${(+v.qr||0).toLocaleString('es-AR')} · ${sum.df_n||0} ventas</div></div>
-        <div style="background:var(--bg);border-radius:8px;padding:10px;"><div style="color:var(--muted);font-size:11px;">Cuenta MP</div><div style="font-weight:700;">$${(+v.mp_cuenta_dia||0).toLocaleString('es-AR')} · ${sum.cuenta_n||0} pagos</div></div>
-      </div>
-      <div style="margin-bottom:12px;font-size:13px;">${difTxt}</div>`;
-    if (+(sum.link_sum||0) > 0) {
-      html += `<div style="font-size:12px;color:var(--muted);margin:-6px 0 12px;">🔗 Cobrado por link de pago: <strong>$${(+sum.link_sum).toLocaleString('es-AR')}</strong> — va a la cuenta general de MP, excluido del cruce.</div>`;
-    }
-    if (sinPago.length) {
-      html += `<div style="font-weight:700;font-size:12px;margin:8px 0 4px;">🧾 Ventas en Dragonfish SIN pago igual en MP (${sinPago.length})</div>
-        <table style="width:100%;font-size:12px;border-collapse:collapse;">` +
-        sinPago.map(t => `<tr style="border-bottom:1px solid var(--border);"><td style="padding:3px 4px;">${esc(t.numero_comprobante||'—')}</td><td style="padding:3px 4px;color:var(--muted);">${esc((t.codigo_jjco||'').trim())}</td><td style="padding:3px 4px;text-align:right;font-weight:600;">$${(+t.importe||0).toLocaleString('es-AR')}</td></tr>`).join('') + `</table>`;
-    }
-    if (sinVenta.length) {
-      html += `<div style="font-weight:700;font-size:12px;margin:10px 0 4px;">💳 Pagos en la cuenta MP SIN venta igual en Dragonfish (${sinVenta.length})</div>
-        <table style="width:100%;font-size:12px;border-collapse:collapse;">` +
-        sinVenta.map(m => `<tr style="border-bottom:1px solid var(--border);"><td style="padding:3px 4px;">${fmtHora(m.hora)}</td><td style="padding:3px 4px;color:var(--muted);">${esc(m.pos_name||m.canal||'—')}</td><td style="padding:3px 4px;text-align:right;font-weight:600;">$${(+m.importe||0).toLocaleString('es-AR')}</td></tr>`).join('') + `</table>`;
-      html += `<div style="font-size:11px;color:var(--muted);margin-top:6px;">💡 Un pago sin venta igual suele ser varias ventas cobradas JUNTAS en un solo cobro Point (comparar con la lista de arriba).</div>`;
-    }
-    if (!sinPago.length && !sinVenta.length) html += `<div style="font-size:13px;color:var(--muted);">Todos los importes matchean 1 a 1.</div>`;
-    html += `<div style="font-size:11px;color:var(--muted);margin-top:10px;">El match es por importe exacto: con dos ventas del mismo monto y un solo pago, ambas figuran con match — la diferencia total de arriba es el número confiable. El cruce se recalculó recién ahora.</div>`;
-    _mpModal(`💳 Cruce MP · ${fFmt}`, html);
-    cargar(); // refrescar el tilde con el cruce nuevo
-  } catch (e) {
-    _mpModal('💳 Cruce MP', `<div style="color:#dc2626;">Error: ${esc(e.message || String(e))}</div>`);
-  }
-};
 
     // ── Columna de turnos ──
     // Si hay turnos cerrados, mostramos badge con cantidad y si hay discrepancia
@@ -1788,9 +1850,12 @@ async function abrirGestionSolicitudes() {
 }
 
 async function resolverSolicitud(id, estado) {
-  const comentario = estado === 'rechazada'
-    ? prompt('Comentario al rechazo (opcional):') || ''
-    : '';
+  let comentario = '';
+  if (estado === 'rechazada') {
+    const resp = prompt('Comentario al rechazo (opcional):');
+    if (resp === null) return;  // (10-ago) Cancelar = abortar, no rechazar
+    comentario = resp;
+  }
   try {
     const { error } = await sb.from('ventas_correcciones').update({
       estado,
@@ -2136,11 +2201,7 @@ async function cerrarTurnoAhora(fecha, localId) {
     toast(`✓ Turno ${data.numero} cerrado`);
     mostrarResultadoTurno(data, fecha, localId);
     // Refrescar grilla
-    if (typeof verPlanilla === 'function') {
-      verPlanilla();
-    } else {
-      location.reload();
-    }
+    cargar();  // (10-ago) verPlanilla no existía — la grilla no se refrescaba
   } catch (e) {
     alert('Error al cerrar turno: ' + e.message);
   }
@@ -2242,11 +2303,7 @@ async function cerrarDiaAhora(fecha, localId) {
       try { await sb.rpc('ventas_cruzar_dia_mp', { p_local: localId, p_fecha: fecha }); } catch (_) {}
     }
     // Refrescar grilla
-    if (typeof verPlanilla === 'function') {
-      verPlanilla();
-    } else {
-      location.reload();
-    }
+    cargar();  // (10-ago) verPlanilla no existía — la grilla no se refrescaba
   } catch (e) {
     alert('Error al cerrar día: ' + e.message);
   }
@@ -2390,7 +2447,7 @@ async function resolverReaperturaAhora(id, aprobar) {
     if (error) throw error;
     toast(aprobar ? '✓ Aprobada · día reabierto' : '✗ Rechazada');
     abrirBandejaReaperturas();  // refrescar
-    if (typeof verPlanilla === 'function') verPlanilla();
+    cargar();  // (10-ago) fix: verPlanilla no existía
   } catch (e) {
     alert('Error al resolver: ' + e.message);
   }
@@ -2429,8 +2486,7 @@ async function reabrirDiaAhora(fecha, localId) {
     });
     if (error) throw error;
     toast('🔓 Día reabierto');
-    if (typeof verPlanilla === 'function') verPlanilla();
-    else location.reload();
+    cargar();  // (10-ago) fix: verPlanilla no existía
   } catch (e) {
     alert('Error al reabrir día: ' + e.message);
   }
