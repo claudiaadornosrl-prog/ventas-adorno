@@ -65,7 +65,7 @@ function _manualSecciones() {
       icon: '⋮', titulo: 'Menú de opciones',
       desc: 'Arriba a la derecha, el botón ⋮ agrupa las herramientas extra.',
       pasos: [
-        '🔔 Notificaciones: activalas para recibir alertas de cierres y diferencias de MP. En iPhone solo funcionan si la app está instalada en la pantalla de inicio.',
+        '🔔 Notificaciones: activalas para recibir alertas de cierres y diferencias de MP. En iPhone solo funcionan si la app está instalada en la pantalla de inicio. Si el teléfono las "apaga solo" (maña de iOS), la app las reactiva automáticamente al abrirla.',
         '🐉 Resincronizar mes: vuelve a traer de Dragonfish los días no cerrados.',
         '⬇ Instalar la app: para tenerla como aplicación en el celu.',
       ],

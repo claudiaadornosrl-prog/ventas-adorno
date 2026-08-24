@@ -2738,7 +2738,36 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=2"></script>
+<script src="manual.js?v=3"></script>
 <script src="reporte.js?v=1"></script>
+<script>
+// (24-ago) Blindaje iOS: re-suscripcion automatica de push. iOS suelta la
+// suscripcion silenciosamente cada tanto; si el permiso sigue concedido y
+// esta usuaria YA tenia la campanita activa en ESTA app (hay fila propia,
+// no del hub), se renueva sola al abrir. Si la apago a proposito (fila
+// borrada), no se toca. Regla viva: mantener igual en las 4 apps + hub.
+(async function _autoResubPush() {
+  try {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    if (typeof pushManager === 'undefined' || !pushManager.soportado()) return;
+    const { data: { session: _s } } = await sb.auth.getSession();
+    if (!_s) return;
+    let _emp = null, _gen = null;
+    try {
+      const { data: u } = await sb.rpc('rrhh_current_user');
+      const _u = Array.isArray(u) ? u[0] : u;
+      _emp = _u?.empleado_id ?? null;
+      if (!_emp) _gen = _u?.local_gerencia ?? null;
+    } catch (_) {}
+    if (!_emp && !_gen) return;
+    let q = sb.from('rrhh_push_subscriptions').select('id')
+      .eq('app', 'ventas').or('plataforma.is.null,plataforma.neq.hub').limit(1);
+    q = _emp ? q.eq('empleado_id', _emp) : q.eq('local_generico', _gen);
+    const { data: filas } = await q;
+    if (!filas || !filas.length) return;
+    await pushManager.activar();
+  } catch (_) {}
+})();
+</script>
 </body>
 </html>
