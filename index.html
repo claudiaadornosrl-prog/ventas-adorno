@@ -446,6 +446,25 @@ const URL_LOCAL = (() => {
 })();
 
 const fmt$ = n => (n || 0).toLocaleString('es-AR', { maximumFractionDigits: 0 });
+// (2-sep, pedido JP) importes con separador de miles TAMBIÉN al cargar
+const nmParse = v => {
+  v = String(v ?? '').trim().replace(/\$|\s/g, '');
+  if (!v || v === '-') return 0;
+  if (!v.includes(',')) {
+    const m = v.match(/^(-?\d+)\.(\d{1,2})$/);
+    if (m) return Number(v) || 0;
+  }
+  return Number(v.replace(/\./g, '').replace(',', '.')) || 0;
+};
+const nmShow = n => { n = Number(n) || 0; return n === 0 ? '' :
+  n.toLocaleString('es-AR', { maximumFractionDigits: 2 }); };
+function wireImporte(el) {
+  if (!el || el._wireImp) return;
+  el._wireImp = true;
+  el.addEventListener('focus', () => { const n = nmParse(el.value);
+    el.value = n ? String(n).replace('.', ',') : ''; el.select?.(); });
+  el.addEventListener('blur',  () => { el.value = nmShow(nmParse(el.value)); });
+}
 // (3-ago) Formato "01 - Lun": día del mes + día de semana (pedido JP).
 const _DIAS_SEM = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 const fmtFecha = d => {
@@ -1665,14 +1684,14 @@ function abrirEditar(fecha, localId, v) {
         <h3 style="margin:0 0 4px;color:var(--primary);">📊 ${v ? 'Editar' : 'Cargar'} venta del día</h3>
         <p style="margin:0 0 16px;font-size:12px;color:var(--muted);">${LOCALES[localId]?.icon} ${LOCALES[localId]?.nombre} · ${fmtFecha(fecha)}</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-          <div><label style="font-size:11px;color:var(--muted);">💵 Efectivo</label><input id="f-efectivo" type="number" step="any" value="${v?.efectivo || ''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
+          <div><label style="font-size:11px;color:var(--muted);">💵 Efectivo</label><input id="f-efectivo" type="text" inputmode="decimal" value="${nmShow(v?.efectivo)}" onfocus="wireImporte(this)" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
           ${mostrarCampoTarjeta
-            ? `<div><label style="font-size:11px;color:var(--muted);">💳 Tarjeta</label><input id="f-tarjeta" type="number" step="any" value="${v?.tarjeta || ''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>`
+            ? `<div><label style="font-size:11px;color:var(--muted);">💳 Tarjeta</label><input id="f-tarjeta" type="text" inputmode="decimal" value="${nmShow(v?.tarjeta)}" onfocus="wireImporte(this)" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>`
             : `<input id="f-tarjeta" type="hidden" value="${v?.tarjeta || ''}">`}
-          <div><label style="font-size:11px;color:var(--muted);">📱 MP</label><input id="f-qr" type="number" step="any" value="${v?.qr || ''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
-          <div><label style="font-size:11px;color:var(--muted);">🎟 Vales</label><input id="f-vales" type="number" step="any" value="${v?.vales || ''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
-          <div><label style="font-size:11px;color:var(--muted);">🌐 Online</label><input id="f-online" type="number" step="any" value="${v?.online || ''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
-          <div><label style="font-size:11px;color:var(--muted);">🧾 Fc Oficina</label><input id="f-fc-of" type="number" step="any" value="${v?.fc_oficina || ''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
+          <div><label style="font-size:11px;color:var(--muted);">📱 MP</label><input id="f-qr" type="text" inputmode="decimal" value="${nmShow(v?.qr)}" onfocus="wireImporte(this)" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
+          <div><label style="font-size:11px;color:var(--muted);">🎟 Vales</label><input id="f-vales" type="text" inputmode="decimal" value="${nmShow(v?.vales)}" onfocus="wireImporte(this)" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
+          <div><label style="font-size:11px;color:var(--muted);">🌐 Online</label><input id="f-online" type="text" inputmode="decimal" value="${nmShow(v?.online)}" onfocus="wireImporte(this)" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
+          <div><label style="font-size:11px;color:var(--muted);">🧾 Fc Oficina</label><input id="f-fc-of" type="text" inputmode="decimal" value="${nmShow(v?.fc_oficina)}" onfocus="wireImporte(this)" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
           <div><label style="font-size:11px;color:var(--muted);">🛒 Cant. transacciones</label><input id="f-cant" type="number" value="${v?.cant_transacciones || ''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
           <div><label style="font-size:11px;color:var(--muted);">Control</label>
             <label style="display:flex;align-items:center;gap:6px;padding:9px;font-size:14px;">
@@ -1703,7 +1722,7 @@ function abrirEditarFcOficina(fecha, localId, v) {
         <h3 style="margin:0 0 4px;color:var(--primary);">🧾 Fc Oficina</h3>
         <p style="margin:0 0 16px;font-size:12px;color:var(--muted);">${LOCALES[localId]?.icon} ${LOCALES[localId]?.nombre} · ${fmtFecha(fecha)}</p>
         <label style="font-size:12px;color:var(--muted);font-weight:600;">Monto Fc Oficina</label>
-        <input id="f-fc-of" type="number" step="any" value="${actual||''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;margin-top:6px;">
+        <input id="f-fc-of" type="text" inputmode="decimal" value="${nmShow(actual)}" onfocus="wireImporte(this)" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;margin-top:6px;">
         <div id="form-error" style="color:var(--primary);font-size:12px;margin-top:10px;display:none;"></div>
         <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;">
           <button onclick="cerrarModal()" style="padding:9px 16px;border:1px solid var(--border);background:white;border-radius:6px;cursor:pointer;font-size:13px;">Cancelar</button>
@@ -1718,7 +1737,7 @@ function abrirEditarFcOficina(fecha, localId, v) {
 async function guardarFcOficina(fecha, localId, vId) {
   const btn = document.getElementById('btn-guardar-fcof');
   const errEl = document.getElementById('form-error');
-  const valor = parseFloat(document.getElementById('f-fc-of').value || '0');
+  const valor = nmParse(document.getElementById('f-fc-of').value);
   if (errEl) { errEl.style.display='none'; errEl.textContent=''; }
   if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
   try {
@@ -1750,7 +1769,7 @@ function abrirSolicitudCorreccion(fecha, localId, campo, valorActual) {
           <div style="font-weight:700;font-size:16px;">${campo==='cant_transacciones' ? valorActual : '$ '+fmt$(valorActual)}</div>
         </div>
         <label style="font-size:12px;font-weight:600;color:var(--muted);">Valor correcto que propones</label>
-        <input id="f-correcto" type="number" step="any" placeholder="${valorActual||0}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;margin:6px 0 12px;">
+        <input id="f-correcto" type="text" inputmode="decimal" placeholder="${nmShow(valorActual)||'0'}" onfocus="wireImporte(this)" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;margin:6px 0 12px;">
         <label style="font-size:12px;font-weight:600;color:var(--muted);">Motivo (qué pasó, evidencia, etc.)</label>
         <textarea id="f-motivo" rows="3" placeholder="Ej: hubo un cierre raro en Dragonfish, el efectivo correcto según el arqueo es 120, no 100."
           style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;margin-top:6px;"></textarea>
@@ -1768,10 +1787,11 @@ function abrirSolicitudCorreccion(fecha, localId, campo, valorActual) {
 async function enviarSolicitudCorreccion(fecha, localId, campo, valorActual) {
   const btn = document.getElementById('btn-pedir');
   const errEl = document.getElementById('form-error');
-  const propuesto = parseFloat(document.getElementById('f-correcto').value);
+  const _propTxt = document.getElementById('f-correcto').value.trim();
+  const propuesto = nmParse(_propTxt);
   const motivo = document.getElementById('f-motivo').value.trim();
   if (errEl) { errEl.style.display='none'; errEl.textContent=''; }
-  if (isNaN(propuesto)) { errEl.textContent='Poné el valor correcto'; errEl.style.display='block'; return; }
+  if (_propTxt === '') { errEl.textContent='Poné el valor correcto'; errEl.style.display='block'; return; }
   if (!motivo || motivo.length < 5) { errEl.textContent='Escribí un motivo (mínimo 5 caracteres)'; errEl.style.display='block'; return; }
   if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
   try {
@@ -1876,10 +1896,7 @@ async function resolverSolicitud(id, estado) {
 async function guardarVenta(fecha, localId, vId) {
   const btn = document.getElementById('btn-guardar');
   const errEl = document.getElementById('form-error');
-  const num = id => {
-    const v = document.getElementById(id).value;
-    return v === '' ? 0 : parseFloat(v);
-  };
+  const num = id => nmParse(document.getElementById(id).value);
   const intNum = id => {
     const v = document.getElementById(id).value;
     return v === '' ? 0 : parseInt(v);
