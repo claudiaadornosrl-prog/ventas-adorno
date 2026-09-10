@@ -1,6 +1,58 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+<script>
+// ═══ SESIÓN COMPARTIDA ENTRE MÓDULOS · SSO Adorno (10-sep-2026) ═══
+// Todos los módulos viven en el mismo origen (claudiaadornosrl-prog.github.io),
+// así que pueden compartir la sesión: se guarda bajo la clave 'adorno-auth' en
+// vez de una por módulo. Que un módulo te deje pasar SIN escribir la clave
+// depende de dos marcas, y alcanza con una:
+//   · dispositivo confiable → se tilda UNA vez en el Hub ("Confiar en esta
+//     computadora"). Vale para todos los módulos de ese equipo. Pensado para
+//     la PC de JP; en los locales, que son compartidos, nadie la tilda.
+//   · módulo recordado → ya te habías logueado en ESE módulo con ese mismo
+//     usuario. Conserva el comportamiento de siempre para las vendedoras.
+// Sin ninguna de las dos, el módulo pide usuario y contraseña como antes.
+window.ADORNO_SSO = (function () {
+  var KEY = 'adorno-auth', DEV = 'adorno-equipo-confiable', MOD = 'adorno-modulo-';
+  function get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function del(k) { try { localStorage.removeItem(k); } catch (e) {} }
+  return {
+    KEY: KEY,
+    // Al estrenar la clave compartida, adopta la sesión que este módulo ya
+    // tenía guardada con su clave vieja: nadie se queda afuera por el cambio.
+    migrar: function (keyVieja, modulo) {
+      if (!keyVieja) return;
+      var v = get(keyVieja);
+      if (!v) return;
+      // La sesión se copia una sola vez; la marca del módulo se pone siempre
+      // que este módulo tuviera sesión propia — Documentos y Compras
+      // compartían la clave por defecto y si no, al segundo le pediría login.
+      if (!get(KEY)) set(KEY, v);
+      var mail = '1';
+      try { mail = (JSON.parse(v).user || {}).email || '1'; } catch (e) {}
+      set(MOD + modulo, String(mail).toLowerCase());
+    },
+    confiable: function () { return get(DEV) === '1'; },
+    confiar: function (si) { si ? set(DEV, '1') : del(DEV); },
+    recordar: function (modulo, email) { set(MOD + modulo, String(email || '1').toLowerCase()); },
+    entraDirecto: function (modulo, email) {
+      if (this.confiable()) return true;
+      var m = get(MOD + modulo);
+      return !!m && (m === '1' || m === String(email || '').toLowerCase());
+    },
+    // Al cerrar sesión se olvidan los módulos, pero NO que el equipo es de
+    // confianza: eso es una propiedad de la computadora, no de la sesión.
+    olvidarModulos: function () {
+      try {
+        Object.keys(localStorage).filter(function (k) { return k.indexOf(MOD) === 0; }).forEach(del);
+      } catch (e) {}
+    }
+  };
+})();
+</script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Ventas · Claudia Adorno</title>
@@ -270,9 +322,29 @@ td input { width: 100%; padding: 4px; border: 1px solid var(--primary); border-r
 // ═══════════════════════════════════════════════════════════════════════
 const SUPA_URL = 'https://kwwiykssrpabncpqtmwi.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt3d2l5a3NzcnBhYm5jcHF0bXdpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNjI1NTQsImV4cCI6MjA5NDkzODU1NH0.O1VhKdjPahnJJ9qXcQuSKQbnKGhsEZqYmjDEfRuRpkc';
+ADORNO_SSO.migrar('ventas-adorno-auth', 'ventas');
 const sb = window.supabase.createClient(SUPA_URL, SUPA_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true, storageKey: 'ventas-adorno-auth' }
+  auth: { persistSession: true, autoRefreshToken: true, storageKey: ADORNO_SSO.KEY }
 });
+
+// (SSO) Envolver login/logout una sola vez cubre todas las pantallas del
+// módulo: al loguearte acá queda recordado (para no pedirte la clave de
+// nuevo la próxima), y al salir se olvidan TODOS los módulos — pero no que
+// esta computadora es de confianza, que se maneja desde el Hub.
+(function (mod) {
+  var inOrig = sb.auth.signInWithPassword.bind(sb.auth);
+  sb.auth.signInWithPassword = async function (cred) {
+    var r = await inOrig(cred);
+    if (!r.error && r.data && r.data.user) ADORNO_SSO.recordar(mod, r.data.user.email);
+    return r;
+  };
+  var outOrig = sb.auth.signOut.bind(sb.auth);
+  sb.auth.signOut = async function () {
+    ADORNO_SSO.olvidarModulos();
+    return outOrig.apply(null, arguments);
+  };
+})('ventas');
+
 
 const LOCAL_EMAILS = {
   alcorta:   'alcorta@claudiaadorno.com',
@@ -2112,7 +2184,9 @@ async function reabrirMesActual() {
 // ═══════════════════════════════════════════════════════════════════════
 (async function init() {
   const { data: { session: authSession } } = await sb.auth.getSession();
-  if (authSession?.user) {
+  // (SSO) Con sesión heredada de otro módulo, entra directo solo si el
+  // equipo es de confianza o si ya te habías logueado acá antes.
+  if (authSession?.user && ADORNO_SSO.entraDirecto('ventas', authSession.user.email)) {
     const email = (authSession.user.email || '').toLowerCase();
     // (7-ago) ADMIN_EMAILS: JP y Clau — antes solo reconocía a JP y la sesión
     // de Clau quedaba rota (sin local, header "null", grilla mezclada).
@@ -2755,7 +2829,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=3"></script>
+<script src="manual.js?v=4"></script>
 <script src="reporte.js?v=1"></script>
 <script>
 // (24-ago) Blindaje iOS: re-suscripcion automatica de push. iOS suelta la

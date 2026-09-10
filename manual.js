@@ -14,6 +14,16 @@ function _manualSecciones() {
 
   const base = [
     {
+      icon: '🔐', titulo: 'Entrar una sola vez',
+      desc: 'La sesión se comparte entre todos los módulos del sistema.',
+      pasos: [
+        'En el Hub, con el ícono 👤 de arriba, ingresás con tu usuario y podés tildar "Confiar en esta computadora".',
+        'Con eso tildado, entrás a todos los módulos de ese equipo sin volver a escribir la clave.',
+        'En las computadoras de los locales, que usan varias personas, NO se tilda: cada módulo sigue pidiendo usuario y contraseña por separado.',
+        'Al salir de cualquier módulo se cierra la sesión en todos. La computadora sigue marcada como de confianza hasta que lo apagues desde el Hub.',
+      ],
+    },
+    {
       icon: '📋', titulo: 'Planilla del mes',
       desc: 'La planilla diaria de ventas del local. Reemplaza la planilla Excel de siempre.',
       pasos: [
