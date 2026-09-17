@@ -109,6 +109,54 @@ function cerrarReporteVentas() {
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarReporteVentas(); });
 
+// UPT = unidades por ticket. El dato ya venía en el payload (unidades + tickets);
+// solo faltaba la división. Es el KPI del análisis semanal que no se veía.
+function _upt(k) {
+  if (!k || !k.tickets) return 0;
+  return Math.round((k.unidades || 0) / k.tickets * 100) / 100;
+}
+
+// Día más fuerte y más flojo del período — lo pide el análisis semanal y sale
+// de por_dia, que ya está en el payload.
+function _diaFuerteDebil(porDia) {
+  const dias = (porDia || []).filter(d => (d.monto || 0) > 0);
+  if (dias.length < 2) return '';
+  const orden = [...dias].sort((a, b) => b.monto - a.monto);
+  const f = orden[0], d = orden[orden.length - 1];
+  const nombre = (iso) => {
+    const [y, m, dd] = iso.split('-').map(Number);
+    const dt = new Date(y, m - 1, dd);
+    return dt.toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+  };
+  return `<span class="r-muted" style="font-weight:400;"> · 🔝 ${nombre(f.fecha)} ${_rFmtK(f.monto)}`
+       + ` · 🔻 ${nombre(d.fecha)} ${_rFmtK(d.monto)}</span>`;
+}
+
+// El análisis del lunes viene en texto con estructura (títulos con ##, viñetas
+// con -). Se renderiza como tal en vez de un párrafo plano: el diagnóstico y las
+// acciones son lo que se lee primero, no un bloque de texto corrido.
+// Si alguien escribe texto pelado, igual se ve — solo queda sin subtítulos.
+function _repNarrativa(txt) {
+  if (!txt || !String(txt).trim()) return '';
+  const lineas = String(txt).replace(/\r/g, '').split('\n');
+  const negrita = (t) => _rEsc(t).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  let html = '', enLista = false;
+  const cerrarLista = () => { if (enLista) { html += '</ul>'; enLista = false; } };
+  for (const ln of lineas) {
+    const t = ln.trim();
+    if (!t) { cerrarLista(); continue; }
+    const tit = t.match(/^#{1,6}\s+(.*)$/);
+    const item = t.match(/^[-*•]\s+(.*)$/) || t.match(/^\d+[.)]\s+(.*)$/);
+    if (tit) { cerrarLista(); html += `<div class="r-reco-h">${negrita(tit[1])}</div>`; }
+    else if (item) {
+      if (!enLista) { html += '<ul class="r-reco-ul">'; enLista = true; }
+      html += `<li>${negrita(item[1])}</li>`;
+    } else { cerrarLista(); html += `<p class="r-reco-p">${negrita(t)}</p>`; }
+  }
+  cerrarLista();
+  return `<div class="r-reco"><div class="r-reco-t">💬 Análisis de la semana</div>${html}</div>`;
+}
+
 async function _repRender() {
   const body = document.getElementById('r-body');
   if (!body || !_repSel.periodo) { if (body) body.innerHTML = '<div class="r-loading">Sin reportes generados todavía.</div>'; return; }
@@ -195,19 +243,20 @@ async function _repRender() {
   const lista = (items, fm) => (items || []).map(fm).join('') || '<div class="r-muted" style="padding:8px;">Sin datos</div>';
 
   body.innerHTML = `
-    ${act.recomendacion ? `<div class="r-reco"><div class="r-reco-t">💬 Recomendación del gerente</div>${_rEsc(act.recomendacion).replace(/\n/g, '<br>')}</div>` : ''}
+    ${_repNarrativa(act.recomendacion)}
     <div class="r-kpis">
       ${kpi('Venta', k.venta, ka?.venta, ky?.venta)}
       ${kpi('Tickets', k.tickets, ka?.tickets, ky?.tickets, false)}
       ${kpi('Ticket promedio', k.ticket_prom, ka?.ticket_prom, ky?.ticket_prom)}
       ${kpi('Unidades', k.unidades, ka?.unidades, ky?.unidades, false)}
+      ${kpi('UPT (unid./ticket)', _upt(k), _upt(ka), _upt(ky), false)}
       ${kpi('Venta prom./día', k.venta_prom_dia, ka?.venta_prom_dia, ky?.venta_prom_dia)}
       ${kpi('SKUs vendidos', k.skus, ka?.skus, ky?.skus, false)}
       ${kpi('Ticket máximo', k.ticket_max, ka?.ticket_max, ky?.ticket_max)}
       <div class="r-kpi"><div class="r-kpi-l">Venta blue</div><div class="r-kpi-v">${k.blue_pct}%</div>
         <div class="r-kpi-d r-muted">${ka ? 'ant: ' + ka.blue_pct + '%' : ''} ${ky ? '· A/A: ' + ky.blue_pct + '%' : ''}</div></div>
     </div>
-    <div class="r-card"><div class="r-ct">Venta por día</div><div class="r-bars">${barras}</div></div>
+    <div class="r-card"><div class="r-ct">Venta por día ${_diaFuerteDebil(act.por_dia)}</div><div class="r-bars">${barras}</div></div>
     <div class="r-card"><div class="r-ct">Categorías <span class="r-muted">(tocá para expandir · Δ vs mismo período año anterior)</span></div>
       <table class="r-tbl"><thead><tr><th></th><th>Categoría</th><th class="r-num">Monto</th><th class="r-num">Unid.</th><th class="r-num">%</th><th class="r-num">A/A</th></tr></thead>
       <tbody>${filasCat}</tbody></table></div>
@@ -256,6 +305,11 @@ function _repToggle(cls, row) {
     #reporte-overlay .r-loading{padding:50px;text-align:center;color:#64748b;}
     #reporte-overlay .r-reco{margin:12px 12px 0;background:#ecfdf5;border-left:4px solid #16a34a;border-radius:10px;padding:12px 16px;font-size:13.5px;line-height:1.6;color:#064e3b;}
     #reporte-overlay .r-reco-t{font-weight:700;margin-bottom:4px;}
+    #reporte-overlay .r-reco-h{font-weight:800;font-size:13px;margin:10px 0 4px;}
+    #reporte-overlay .r-reco-h:first-child{margin-top:0;}
+    #reporte-overlay .r-reco-p{margin:0 0 6px;line-height:1.45;}
+    #reporte-overlay .r-reco-ul{margin:0 0 8px;padding-left:18px;line-height:1.45;}
+    #reporte-overlay .r-reco-ul li{margin-bottom:3px;}
     #reporte-overlay .r-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px;}
     @media (max-width:640px){#reporte-overlay .r-kpis{grid-template-columns:repeat(2,1fr);}}
     #reporte-overlay .r-kpi{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;}

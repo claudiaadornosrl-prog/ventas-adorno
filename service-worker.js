@@ -1,5 +1,5 @@
 // Service Worker — Ventas Adorno
-const CACHE_VERSION = 'ventas-adorno-v79-sso';
+const CACHE_VERSION = 'ventas-adorno-v80-analisis-semanal';
 const CACHE_ASSETS = ['./', './index.html',
   './manual.js', './reporte.js', './manifest.webmanifest',
   './manifest-alcorta.webmanifest', './manifest-unicenter.webmanifest', './manifest-oficina.webmanifest',

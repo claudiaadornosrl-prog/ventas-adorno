@@ -89,7 +89,8 @@ function _manualSecciones() {
       pasos: [
         'Entrando sin local (o con "Todos") se ve el consolidado de los 3 locales.',
         'El botón "📊 Análisis" abre gráficos de evolución, comparativas por medio de pago y por local.',
-        '"📊 Reporte semanal/mensual" (menú ⋮): el reporte profundo por categorías — KPIs comparados contra el período anterior y el año pasado, drill-down Grupo→Subcategoría→Clasificación, top artículos/proveedores/clientes, mapa de calor por hora y recomendación del gerente. Se genera solo los martes a la madrugada; historia desde 2019.',
+        '"📊 Reporte semanal/mensual" (menú ⋮): el reporte profundo por categorías — KPIs comparados contra el período anterior y el año pasado (incluido UPT, unidades por ticket), día más fuerte y más flojo, drill-down Grupo→Subcategoría→Clasificación, top artículos/proveedores/clientes y mapa de calor por hora. Historia desde 2019.',
+        'Arriba de todo aparece el 💬 Análisis de la semana: diagnóstico, las acciones concretas y las cosas raras para mirar. Se escribe los lunes a la mañana, después de que se generan los números de madrugada.',
         '"🔒 Cerrar mes" congela el mes completo; "🔓 Reabrir mes" lo habilita de nuevo.',
         'Las solicitudes de corrección de las chicas llegan a "📩 Solicitudes" del menú ⋮.',
       ],
