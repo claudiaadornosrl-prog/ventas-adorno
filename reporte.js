@@ -269,6 +269,37 @@ function _repSinCategoria(act, k, $A) {
     </div>`;
 }
 
+// ── Origen y material ────────────────────────────────────────────────────
+// Dos cortes que el maestro de Dragonfish ya tenía cargados y que el reporte
+// nunca había usado: FAMILIA (que la empresa usa como ORIGEN/país, confirmado
+// por JP) y MAT (material, cargado en el 89% del catálogo).
+// 🚨 Se muestran CRUDOS. El campo Origen tiene ~200 artículos con rubros
+// (COCINA/DECO/BAÑO) metidos adentro y typos (ARGENTNA, PROTUGAL): eso tiene
+// que VERSE, porque es la cola de limpieza. Si el front lo maquillara, nadie
+// se enteraría de que el dato está sucio.
+function _repCorte(titulo, items, k, $A, tope) {
+  if (!items || !items.length) return '';
+  const tot = items.reduce((a, x) => a + (x.monto || 0), 0) || 1;
+  const top = items.slice(0, tope);
+  const resto = items.slice(tope);
+  const restoM = resto.reduce((a, x) => a + (x.monto || 0), 0);
+  const fila = (nom, m, mudo) => `
+    <div class="r-mp-row"><span${mudo ? ' class="r-muted"' : ''}>${_rEsc(nom)}</span>
+      <span class="r-num">${_rFmtK($A(m))} · ${(m / tot * 100).toFixed(1)}%</span></div>
+    <div class="r-mp-bar"><div style="width:${(m / tot * 100).toFixed(1)}%"></div></div>`;
+  return `<div class="r-card"><div class="r-ct">${titulo}
+      <span class="r-muted">(${items.length} valores)</span></div>
+    ${top.map(x => fila(x.nombre, x.monto)).join('')}
+    ${resto.length ? fila(`+ otros ${resto.length}`, restoM, true) : ''}</div>`;
+}
+
+function _repOrigenMaterial(act, k, $A) {
+  const o = _repCorte('🌍 Venta por origen', act.origenes, k, $A, 12);
+  const m = _repCorte('🧱 Venta por material', act.materiales, k, $A, 12);
+  if (!o && !m) return '';
+  return `<div class="r-2col">${o}${m}</div>`;
+}
+
 async function _repRender() {
   const body = document.getElementById('r-body');
   if (!body) return;
@@ -431,6 +462,7 @@ async function _repRender() {
       <div class="r-card"><div class="r-ct">Top clientes</div>
         ${lista(act.clientes, c => `<div class="r-mp-row"><span>${_rEsc(c.nombre)}</span><span class="r-num">${_rFmtK($A(c.monto))}${pct(c.monto)}</span></div>`)}</div>
     </div>
+    ${_repOrigenMaterial(act, k, $A)}
     ${_repSinCategoria(act, k, $A)}
     <div class="r-2col">
       <div class="r-card"><div class="r-ct">Mapa de calor · día × hora</div>${heat}</div>
