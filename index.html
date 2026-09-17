@@ -1826,9 +1826,14 @@ async function guardarFcOficina(fecha, localId, vId) {
 }
 
 // ─── Modal "Solicitar corrección" (para vendedoras) ──────────────────
+// 🚨 Tiene que tener TODAS las columnas que la grilla deja corregir, y las
+// mismas que ventas_correcciones_campo_check. Transferencia y Cta. Cte. son
+// de Oficina y faltaban en los dos lados: el pedido moría con 23514 y el modal
+// mostraba el nombre crudo de la columna.
 const CAMPO_LABEL = {
   efectivo: '💵 Efectivo', tarjeta: '💳 Tarjeta', qr: '📱 MP', vales: '🎟 Vales',
   online: '🌐 Online', fc_oficina: '🧾 Fc Oficina', cant_transacciones: '🛒 Cant. transacciones',
+  transferencia: '🏦 Transferencia', cc: '📒 Cta. Cte.',
 };
 function abrirSolicitudCorreccion(fecha, localId, campo, valorActual) {
   const html = `
