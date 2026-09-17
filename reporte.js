@@ -239,6 +239,36 @@ function _repNarrativa(txt) {
   return `<div class="r-reco"><div class="r-reco-t">💬 Análisis de la semana</div>${html}</div>`;
 }
 
+// Los artículos sin GRUPO cargado en Dragonfish. La tarjeta aparece SOLO si
+// hay: no tiene sentido ocupar pantalla para decir que está todo bien. Muestra
+// qué son y de qué proveedor, porque el arreglo es cargarles el grupo allá.
+function _repSinCategoria(act, k, $A) {
+  const sc = act.sin_categoria;
+  if (!sc || !sc.skus) return '';
+  const p = k.venta ? (sc.monto / k.venta * 100) : 0;
+  const filas = (sc.items || []).slice(0, 15).map(a => `
+    <tr><td>${_rEsc(a.descr || a.sku)}</td>
+      <td class="r-muted">${_rEsc(a.sku)}</td>
+      <td class="r-muted">${_rEsc(a.prov || '')}</td>
+      <td class="r-num">${_rFmtK($A(a.monto))}</td>
+      <td class="r-num">${(a.cant ?? 0).toLocaleString('es-AR')}</td></tr>`).join('');
+  const resto = sc.skus - Math.min(15, (sc.items || []).length);
+  return `
+    <div class="r-card" style="border-left:4px solid #d97706;">
+      <div class="r-ct">🏷 Artículos sin categoría
+        <span class="r-muted">· ${sc.skus} SKU${sc.skus === 1 ? '' : 's'} · ${_rFmtK($A(sc.monto))} · ${p.toFixed(1)}% de la venta</span></div>
+      <div style="font-size:12.5px;color:#92400e;background:#fffbeb;border-radius:8px;padding:8px 12px;margin-bottom:8px;">
+        Estos artículos no tienen <b>Grupo</b> cargado en Dragonfish, así que no entran
+        en ningún rubro del cuadro de Categorías. Cargándoselo allá, desaparecen de acá
+        en el próximo reporte y su venta pasa al rubro que corresponda.</div>
+      <table class="r-tbl"><thead><tr>
+        <th>Artículo</th><th>SKU</th><th>Proveedor</th>
+        <th class="r-num">Monto</th><th class="r-num">Unid.</th></tr></thead>
+        <tbody>${filas}</tbody></table>
+      ${resto > 0 ? `<div class="r-muted" style="padding-top:6px;">…y ${resto} artículo${resto === 1 ? '' : 's'} más.</div>` : ''}
+    </div>`;
+}
+
 async function _repRender() {
   const body = document.getElementById('r-body');
   if (!body) return;
@@ -312,7 +342,7 @@ async function _repRender() {
 
   // ── venta por día, o por mes cuando el período es largo ──
   // Un año son 365 barras de 1px: ilegible. Desde ~2 meses se agrupa por mes.
-  const diasRaw = act.por_dia || [];
+  const diasRaw = [...(act.por_dia || [])].sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
   const porMes = diasRaw.length > 62;
   const DIAS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
   let puntos;
@@ -367,6 +397,9 @@ async function _repRender() {
     <div class="r-mp-bar"><div style="width:${(m / mpTot * 100).toFixed(1)}%"></div></div>`).join('');
 
   const lista = (items, fm) => (items || []).map(fm).join('') || '<div class="r-muted" style="padding:8px;">Sin datos</div>';
+  // El % se calcula sobre la VENTA del período, no sobre la suma del top: así
+  // "12 %" significa 12 % del negocio y no 12 % de los diez que entraron al cuadro.
+  const pct = m => k.venta ? ` <span class="r-muted">${(m / k.venta * 100).toFixed(1)}%</span>` : '';
 
   body.innerHTML = `
     ${_repNarrativa(act.recomendacion)}
@@ -388,16 +421,17 @@ async function _repRender() {
       <tbody>${filasCat}</tbody></table></div>
     <div class="r-2col">
       <div class="r-card"><div class="r-ct">Top artículos por monto</div>
-        ${lista(act.top_articulos_monto?.slice(0, 12), a => `<div class="r-mp-row"><span title="${_rEsc(a.sku)}">${_rEsc(a.descr || a.sku)}</span><span class="r-num">${_rFmtK($A(a.monto))}</span></div>`)}</div>
+        ${lista(act.top_articulos_monto?.slice(0, 12), a => `<div class="r-mp-row"><span title="${_rEsc(a.sku)}">${_rEsc(a.descr || a.sku)}</span><span class="r-num">${_rFmtK($A(a.monto))}${pct(a.monto)}</span></div>`)}</div>
       <div class="r-card"><div class="r-ct">Top artículos por cantidad</div>
         ${lista(act.top_articulos_cant?.slice(0, 12), a => `<div class="r-mp-row"><span title="${_rEsc(a.sku)}">${_rEsc(a.descr || a.sku)}</span><span class="r-num">${(a.cant || 0).toLocaleString('es-AR')} u.</span></div>`)}</div>
     </div>
     <div class="r-2col">
       <div class="r-card"><div class="r-ct">Top proveedores</div>
-        ${lista(act.proveedores, p => `<div class="r-mp-row"><span>${_rEsc(p.nombre)}</span><span class="r-num">${_rFmtK($A(p.monto))}</span></div>`)}</div>
+        ${lista(act.proveedores, p => `<div class="r-mp-row"><span>${_rEsc(p.nombre)}</span><span class="r-num">${_rFmtK($A(p.monto))}${pct(p.monto)}</span></div>`)}</div>
       <div class="r-card"><div class="r-ct">Top clientes</div>
-        ${lista(act.clientes, c => `<div class="r-mp-row"><span>${_rEsc(c.nombre)}</span><span class="r-num">${_rFmtK($A(c.monto))}</span></div>`)}</div>
+        ${lista(act.clientes, c => `<div class="r-mp-row"><span>${_rEsc(c.nombre)}</span><span class="r-num">${_rFmtK($A(c.monto))}${pct(c.monto)}</span></div>`)}</div>
     </div>
+    ${_repSinCategoria(act, k, $A)}
     <div class="r-2col">
       <div class="r-card"><div class="r-ct">Mapa de calor · día × hora</div>${heat}</div>
       <div class="r-card"><div class="r-ct">Medios de pago</div>${mpHtml}</div>
@@ -594,6 +628,7 @@ function _repToggle(cls, row) {
     #reporte-overlay .r-2col .r-card{margin:0 0 12px;}
     #reporte-overlay .r-tbl{width:100%;border-collapse:collapse;font-size:12.5px;}
     #reporte-overlay .r-tbl th{text-align:left;color:#64748b;font-weight:600;padding:4px 6px;border-bottom:1px solid #e2e8f0;}
+    #reporte-overlay .r-tbl th.r-num{text-align:right;}
     #reporte-overlay .r-tbl td{padding:5px 6px;border-bottom:1px solid #f1f5f9;}
     #reporte-overlay .r-n2 td:nth-child(2){padding-left:20px;} #reporte-overlay .r-n3 td:nth-child(2){padding-left:40px;color:#64748b;}
     #reporte-overlay .r-num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
