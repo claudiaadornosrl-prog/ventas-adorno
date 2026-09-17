@@ -89,8 +89,11 @@ function _manualSecciones() {
       pasos: [
         'Entrando sin local (o con "Todos") se ve el consolidado de los 3 locales.',
         'El botón "📊 Análisis" abre gráficos de evolución, comparativas por medio de pago y por local.',
-        '"📊 Reporte semanal/mensual" (menú ⋮): el reporte profundo por categorías — KPIs comparados contra el período anterior y el año pasado (incluido UPT, unidades por ticket), día más fuerte y más flojo, drill-down Grupo→Subcategoría→Clasificación, top artículos/proveedores/clientes y mapa de calor por hora. Historia desde 2019.',
+        '"📈 Reporte" (el botón verde al lado de Análisis): el reporte profundo por categorías — KPIs comparados contra el período anterior y el año pasado (incluido UPT, unidades por ticket), día más fuerte y más flojo, drill-down Grupo→Subcategoría→Clasificación, top artículos/proveedores/clientes y mapa de calor por hora.',
         'Arriba de todo aparece el 💬 Análisis de la semana: diagnóstico, las acciones concretas y las cosas raras para mirar. Se escribe los lunes a la mañana, después de que se generan los números de madrugada.',
+        'El primer selector elige el período: Semanal, Mensual, Trimestral, Anual (año calendario) o "Últimos 5 años". En los períodos largos las barras se agrupan por mes en vez de por día, para que se puedan leer.',
+        'El botón "$ nominal" de arriba a la derecha pasa todo a pesos de hoy usando el IPC. Sirve para comparar períodos separados en el tiempo: en pesos de cada momento, un año viejo siempre parece chico aunque se haya vendido más. Los meses que el INDEC todavía no publicó van sin ajustar y la pantalla lo avisa — no se inventa inflación.',
+        '"Últimos 5 años" es otra vista: venta por año, los años superpuestos mes a mes para ver la estacionalidad, la comparación por local, y qué categorías ganaron o perdieron participación. Arranca en 2023 porque el Dragonfish no conserva completa la historia anterior de los locales, y el reporte lo dice en vez de dibujar una tendencia que no es.',
         '"🔒 Cerrar mes" congela el mes completo; "🔓 Reabrir mes" lo habilita de nuevo.',
         'Las solicitudes de corrección de las chicas llegan a "📩 Solicitudes" del menú ⋮.',
       ],
