@@ -462,6 +462,7 @@ async function _repRender() {
       <div class="r-card"><div class="r-ct">Top clientes</div>
         ${lista(act.clientes, c => `<div class="r-mp-row"><span>${_rEsc(c.nombre)}</span><span class="r-num">${_rFmtK($A(c.monto))}${pct(c.monto)}</span></div>`)}</div>
     </div>
+    ${k.prueba_monto ? `<div class="r-aviso">🧪 Se excluyeron <b>${_rFmtK($A(k.prueba_monto))}</b> cargados con el artículo PRUEBA (comodín para cobrar extras: fletes, etc.). No es venta de productos, por eso no entra en ninguna cifra de este reporte; sí está en la planilla de ventas diarias, que es plata cobrada.</div>` : ''}
     ${_repOrigenMaterial(act, k, $A)}
     ${_repSinCategoria(act, k, $A)}
     <div class="r-2col">
