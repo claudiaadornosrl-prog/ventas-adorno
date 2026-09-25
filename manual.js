@@ -82,6 +82,19 @@ function _manualSecciones() {
     },
   ];
 
+  if (!esAdmin) {
+    base.push({
+      icon: '📈', titulo: 'Reporte del local (encargadas)',
+      desc: 'El reporte de ventas de tu local, solo para la encargada.',
+      pasos: [
+        'Menú ⋮ → "📈 Reporte del local (encargada)". Pide TU mail y TU clave personal (los mismos de RRHH): la cuenta del local no alcanza, así las vendedoras no lo ven.',
+        'Vas a ver solo tu local: KPIs contra el período anterior y el año pasado, día más fuerte y más flojo, categorías, top artículos, proveedores y clientes, medios de pago y mapa de calor por hora.',
+        'Arriba elegís el período: Semanal, Mensual, Trimestral o Anual. El botón "$ nominal" pasa los importes a pesos de hoy con el IPC, para comparar períodos separados en el tiempo.',
+        'Al cerrar el reporte (✕ o Escape) se cierra tu sesión: no queda abierta en la computadora del local. Si lo dejás abierto 15 minutos sin tocar, se cierra solo. No te cierra la sesión de RRHH en el celular.',
+      ],
+    });
+  }
+
   if (esAdmin) {
     base.push({
       icon: '📊', titulo: 'Análisis y consolidado (admin)',
@@ -96,6 +109,7 @@ function _manualSecciones() {
         'Las tarjetas 🌍 Venta por origen y 🧱 Venta por material salen de dos campos del alta de Dragonfish que el reporte no usaba: Familia (que la empresa usa como país de origen) y Material. Se muestran tal como están cargados: si ves un rubro o un país mal escrito en la lista de orígenes, eso es un dato para corregir en el alta.',
         'El artículo PRUEBA (el comodín de $1 que se usa para cobrar fletes y extras) queda AFUERA de todo el reporte: no es venta de productos y rompía unidades, categorías y tops. Si en el período hubo cargas con PRUEBA, un aviso 🧪 dice cuánto se excluyó. La planilla de ventas diarias sí lo incluye, porque es plata cobrada.',
         'Si aparece la tarjeta 🏷 Artículos sin categoría, son artículos que no tienen Grupo cargado en Dragonfish y por eso no caen en ningún rubro del cuadro de Categorías. Cargándoselo allá desaparecen del reporte siguiente solos.',
+        'Las encargadas (Andrea y Soraya) también lo ven, solo de su local y sin "Últimos 5 años": desde el menú ⋮ del local, entrando con su usuario personal. La base las filtra: con la cuenta del local (alcorta@/unicenter@) no se ve nada.',
         '"Últimos 5 años" es otra vista: venta por año, los años superpuestos mes a mes para ver la estacionalidad, la comparación por local, y qué categorías ganaron o perdieron participación. Arranca en 2023 porque el Dragonfish no conserva completa la historia anterior de los locales, y el reporte lo dice en vez de dibujar una tendencia que no es.',
         '"🔒 Cerrar mes" congela el mes completo; "🔓 Reabrir mes" lo habilita de nuevo.',
         'Las solicitudes de corrección de las chicas llegan a "📩 Solicitudes" del menú ⋮.',

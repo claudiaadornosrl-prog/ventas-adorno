@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════
-//  Ventas Adorno · reporte.js — Reporte semanal/mensual (overlay, SOLO admin)
+//  Ventas Adorno · reporte.js — Reporte semanal/mensual (overlay: admin, y encargadas solo su local)
 //  Lee ventas_reportes (pre-cocinado en PC de JP por generar_reporte_ventas.py).
 //  Comparativos: período anterior + mismo período año anterior (semana: -364d).
 //  🚨 Regla viva: si cambia el generador o este render, actualizar manual.js.
@@ -27,6 +27,28 @@ let _repPeriodos = { semanal: [], mensual: [], trimestral: [], anual: [] };
 let _repSel = { tipo: 'semanal', periodo: null, local: 'consolidado', real: false };
 let _repCache = {};
 
+// ── Modo ENCARGADA (25-sep, JP) ─────────────────────────────────────────────
+// En Ventas se entra con la cuenta del local (la usan también las vendedoras),
+// así que la encargada abre el reporte con SU usuario personal. Ese login vive en
+// un cliente aparte, en memoria: NO toca la sesión del local ni la de los demás
+// módulos, y se cierra solo al cerrar el reporte (o a los 15 min sin uso).
+// La que decide qué ve es la base: policy vr_encargada_read + la función
+// ventas_reporte_local_encargada() (solo gerente con legajo activo, solo su local).
+let _repEnc = null;   // { local, email }
+let _repCli = null;   // cliente supabase del login de la encargada
+const _repDb = () => _repCli || sb;
+let _repIdle = null;
+const _REP_IDLE_MS = 15 * 60 * 1000;
+function _repTocar() {
+  if (!_repEnc) return;
+  clearTimeout(_repIdle);
+  _repIdle = setTimeout(() => { cerrarReporteVentas(); if (typeof toast === 'function') toast('📈 Reporte cerrado por inactividad'); }, _REP_IDLE_MS);
+}
+function _repResetCaches() {
+  _repPeriodos = { semanal: [], mensual: [], trimestral: [], anual: [] };
+  _repCache = {};
+}
+
 // ── IPC ────────────────────────────────────────────────────────────────────
 // Coeficiente por mes para llevar pesos viejos a pesos de hoy. Se pide una vez
 // por sesión. 🚨 Los meses que el INDEC todavía no publicó vienen con coef 1 y
@@ -37,7 +59,7 @@ let _repIpcBase = null;  // último mes con IPC publicado
 async function _repCargarIpc() {
   if (_repIpc) return _repIpc;
   _repIpc = {};
-  const { data, error } = await sb.rpc('ventas_ipc_coef');
+  const { data, error } = await _repDb().rpc('ventas_ipc_coef');
   if (error) { console.warn('IPC no disponible:', error.message); return _repIpc; }
   for (const r of (data || [])) {
     const k = String(r.mes).slice(0, 7);
@@ -70,7 +92,7 @@ function _repCoef(payload) {
 async function _repFetch(tipo, periodo, local) {
   const k = `${tipo}|${periodo}|${local}`;
   if (_repCache[k] !== undefined) return _repCache[k];
-  const { data } = await sb.from('ventas_reportes').select('payload')
+  const { data } = await _repDb().from('ventas_reportes').select('payload')
     .eq('tipo', tipo).eq('periodo', periodo).eq('local', local).maybeSingle();
   _repCache[k] = data ? data.payload : null;
   return _repCache[k];
@@ -137,9 +159,23 @@ async function abrirReporteVentas() {
   document.body.appendChild(ov);
   document.body.style.overflow = 'hidden';
 
+  if (_repEnc) {
+    // La encargada ve SOLO su local y sin el interanual (que es consolidado).
+    const nom = { alcorta: 'Alcorta', unicenter: 'Unicenter' }[_repEnc.local] || _repEnc.local;
+    document.getElementById('r-local').innerHTML = `<option value="${_repEnc.local}">${nom}</option>`;
+    document.querySelector('#r-tipo option[value="interanual"]')?.remove();
+    _repSel.local = _repEnc.local;
+    if (_repSel.tipo === 'interanual') _repSel.tipo = 'semanal';
+    document.getElementById('r-tipo').value = _repSel.tipo;
+    const t = ov.querySelector('.r-head > div');
+    if (t) t.innerHTML = `Reporte de ventas · ${nom}<div style="font-size:11px;font-weight:400;opacity:.85">${_repEnc.email}</div>`;
+    ['click', 'scroll', 'keydown'].forEach(ev => ov.addEventListener(ev, _repTocar, true));
+    _repTocar();
+  }
+
   if (!_repPeriodos.semanal.length) {
-    const { data } = await sb.from('ventas_reportes').select('tipo, periodo')
-      .eq('local', 'consolidado').order('periodo', { ascending: false }).limit(2000);
+    const { data } = await _repDb().from('ventas_reportes').select('tipo, periodo')
+      .eq('local', _repEnc ? _repEnc.local : 'consolidado').order('periodo', { ascending: false }).limit(2000);
     for (const r of (data || [])) {
       if (!_repPeriodos[r.tipo].includes(r.periodo)) _repPeriodos[r.tipo].push(r.periodo);
     }
@@ -188,6 +224,69 @@ function cerrarReporteVentas() {
   const ov = document.getElementById('reporte-overlay');
   if (ov) ov.remove();
   document.body.style.overflow = '';
+  if (_repCli) {
+    // scope 'local': cierra SOLO esta sesión. Con 'global' (el default) se le
+    // cerraría también RRHH en el celular a la encargada.
+    try { _repCli.auth.signOut({ scope: 'local' }); } catch (e) {}
+    _repCli = null; _repEnc = null;
+    clearTimeout(_repIdle);
+    _repResetCaches();
+    _repSel.local = 'consolidado';
+  }
+}
+
+// Login de la encargada con su usuario personal, en un modal propio.
+function abrirReporteEncargada() {
+  if (document.getElementById('rep-login')) return;
+  const d = document.createElement('div');
+  d.id = 'rep-login';
+  d.innerHTML = `<div class="rl-box">
+    <div style="font-size:17px;font-weight:700;margin-bottom:4px">📈 Reporte del local</div>
+    <div style="font-size:12.5px;color:#64748b;margin-bottom:12px;line-height:1.45">Entrá con <b>tu usuario de encargada</b>
+      (el mismo mail y clave de RRHH). La cuenta del local no alcanza.<br>Al cerrar el reporte se cierra tu sesión:
+      no queda abierta en esta computadora.</div>
+    <input id="rl-email" type="email" placeholder="tu email" autocomplete="username">
+    <input id="rl-pass" type="password" placeholder="tu contraseña" autocomplete="current-password">
+    <div id="rl-err" style="color:#dc2626;font-size:12.5px;min-height:16px;margin:4px 0"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="rl-b" onclick="cerrarRepLogin()">Cancelar</button>
+      <button class="rl-b rl-ok" id="rl-ok" onclick="entrarRepEncargada()">Entrar</button>
+    </div></div>`;
+  d.addEventListener('click', e => { if (e.target === d) cerrarRepLogin(); });
+  document.body.appendChild(d);
+  document.getElementById('rl-pass').addEventListener('keydown', e => { if (e.key === 'Enter') entrarRepEncargada(); });
+  document.getElementById('rl-email').focus();
+}
+function cerrarRepLogin() { const d = document.getElementById('rep-login'); if (d) d.remove(); }
+
+async function entrarRepEncargada() {
+  const email = (document.getElementById('rl-email').value || '').trim().toLowerCase();
+  const pass = document.getElementById('rl-pass').value || '';
+  const err = document.getElementById('rl-err');
+  const btn = document.getElementById('rl-ok');
+  err.textContent = '';
+  if (!email || !pass) { err.textContent = 'Completá el mail y la contraseña.'; return; }
+  btn.disabled = true; btn.textContent = 'Entrando…';
+  const cli = window.supabase.createClient(SUPA_URL, SUPA_KEY, {
+    auth: { persistSession: false, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'adorno-reporte-encargada' }
+  });
+  try {
+    const { error } = await cli.auth.signInWithPassword({ email, password: pass });
+    if (error) throw new Error('Mail o contraseña incorrectos.');
+    const { data: local, error: e2 } = await cli.rpc('ventas_reporte_local_encargada');
+    if (e2) throw e2;
+    if (!local) {
+      try { await cli.auth.signOut({ scope: 'local' }); } catch (e) {}
+      throw new Error('Ese usuario no es encargada de un local.');
+    }
+    _repCli = cli; _repEnc = { local, email };
+    _repResetCaches();
+    cerrarRepLogin();
+    abrirReporteVentas();
+  } catch (e) {
+    err.textContent = e.message || 'No se pudo entrar.';
+    btn.disabled = false; btn.textContent = 'Entrar';
+  }
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarReporteVentas(); });
 
@@ -685,7 +784,12 @@ function _repToggle(cls, row) {
     #reporte-overlay .r-leg i{width:11px;height:3px;border-radius:2px;display:inline-block;}
     #reporte-overlay .r-aviso{margin:0 12px 12px;background:#fffbeb;border-left:4px solid #d97706;border-radius:8px;padding:10px 14px;font-size:12.5px;color:#92400e;line-height:1.5;}
     #reporte-overlay .r-aviso div + div{margin-top:6px;}
-    @media (max-width:640px){#btn-reporte-ventas{padding:5px 9px !important;font-size:12px !important;}}`;
+    @media (max-width:640px){#btn-reporte-ventas{padding:5px 9px !important;font-size:12px !important;}}
+    #rep-login{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:14px;}
+    #rep-login .rl-box{background:#fff;border-radius:14px;max-width:360px;width:100%;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+    #rep-login input{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:8px;padding:9px 10px;font-size:14px;margin-bottom:8px;font-family:inherit;}
+    #rep-login .rl-b{border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit;}
+    #rep-login .rl-ok{background:#16a34a;color:#fff;border-color:#16a34a;font-weight:600;}`;
   document.head.appendChild(css);
 
   // El botón va en el header, pegado a "📊 Análisis" (pedido de JP: antes vivía
@@ -694,15 +798,21 @@ function _repToggle(cls, row) {
   let intentos = 0;
   const timer = setInterval(() => {
     intentos++;
-    if (typeof session !== 'undefined' && session?.isAdmin) {
+    // (25-sep) También en Alcorta y Unicenter: ahí el botón pide el usuario de la encargada.
+    const esEnc = typeof session !== 'undefined' && session && !session.isAdmin
+      && ['alcorta', 'unicenter'].includes(session.local_id);
+    if (typeof session !== 'undefined' && (session?.isAdmin || esEnc)) {
       clearInterval(timer);
       if (document.getElementById('btn-reporte-ventas')) return;
       const b = document.createElement('button');
       b.id = 'btn-reporte-ventas';
-      b.title = 'Reporte semanal/mensual: KPIs, categorías, top artículos y el análisis de la semana';
-      b.onclick = () => abrirReporteVentas();
+      b.title = esEnc
+        ? 'Reporte de ventas del local — entra la encargada con su usuario personal'
+        : 'Reporte semanal/mensual: KPIs, categorías, top artículos y el análisis de la semana';
+      const abrir = esEnc ? abrirReporteEncargada : abrirReporteVentas;
+      b.onclick = () => abrir();
       const ana = document.getElementById('btn-analisis');
-      if (ana) {
+      if (ana && !esEnc) {
         // Copia el estilo del de Análisis para que queden parejos aunque alguien
         // lo cambie; solo se le saca el display:none con el que nace oculto.
         b.textContent = '📈 Reporte';
@@ -713,8 +823,8 @@ function _repToggle(cls, row) {
         // Header inesperado: mejor el kebab que perder el acceso al reporte.
         const kebab = document.getElementById('kebab-menu');
         if (!kebab) return;
-        b.textContent = '📈 Reporte semanal/mensual';
-        b.onclick = () => { if (typeof cerrarKebab === 'function') cerrarKebab(); abrirReporteVentas(); };
+        b.textContent = esEnc ? '📈 Reporte del local (encargada)' : '📈 Reporte semanal/mensual';
+        b.onclick = () => { if (typeof cerrarKebab === 'function') cerrarKebab(); abrir(); };
         kebab.insertBefore(b, kebab.firstChild);
       }
     } else if (intentos > 40) clearInterval(timer);
