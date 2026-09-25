@@ -458,10 +458,10 @@ async function _repRender() {
     const subs = Object.entries(g.subs).sort((a, b) => b[1].monto - a[1].monto).map(([sn, s], si) => {
       const sid = gid + 's' + si;
       const cls = s.clas.sort((a, b) => b.monto - a.monto).map(c => `
-        <tr class="r-n3 ${sid}" style="display:none;"><td></td><td>${_rEsc(c.c)}</td>
+        <tr class="r-n3 ${sid}" style="display:none;"><td></td><td><span class="r-rama">└</span>${_rEsc(c.c || '(sin clasificación)')}</td>
           <td class="r-num">${_rFmtK($A(c.monto))}</td><td class="r-num">${c.cant.toLocaleString('es-AR')}</td><td class="r-num r-muted">${(c.monto / totalCat * 100).toFixed(1)}%</td><td></td></tr>`).join('');
       return `
-        <tr class="r-n2 ${gid}" style="display:none;cursor:pointer;" onclick="_repToggle('${sid}', this)"><td class="r-tog">▸</td><td>${_rEsc(sn)}</td>
+        <tr class="r-n2 ${gid}" style="display:none;cursor:pointer;" onclick="_repToggle('${sid}', this)"><td class="r-tog">▸</td><td><span class="r-rama">└</span>${_rEsc(sn && sn !== '—' ? sn : '(sin subcategoría)')}</td>
           <td class="r-num">${_rFmtK($A(s.monto))}</td><td class="r-num">${s.cant.toLocaleString('es-AR')}</td><td class="r-num r-muted">${(s.monto / totalCat * 100).toFixed(1)}%</td><td></td></tr>${cls}`;
     }).join('');
     return `
@@ -728,6 +728,7 @@ function _repToggle(cls, row) {
   });
   const t = row.querySelector('.r-tog');
   if (t) t.textContent = abrir ? '▾' : '▸';
+  row.classList.toggle('r-abierta', !!abrir);   // el padre abierto queda marcado
 }
 
 (function _repInit() {
@@ -762,7 +763,16 @@ function _repToggle(cls, row) {
     #reporte-overlay .r-tbl th{text-align:left;color:#64748b;font-weight:600;padding:4px 6px;border-bottom:1px solid #e2e8f0;}
     #reporte-overlay .r-tbl th.r-num{text-align:right;}
     #reporte-overlay .r-tbl td{padding:5px 6px;border-bottom:1px solid #f1f5f9;}
-    #reporte-overlay .r-n2 td:nth-child(2){padding-left:20px;} #reporte-overlay .r-n3 td:nth-child(2){padding-left:40px;color:#64748b;}
+    /* (25-sep) El index.html de Ventas pone td{text-align:right} para la planilla: sin esto
+       los nombres quedaban alineados a la derecha y la sangría de los subniveles no se veía. */
+    #reporte-overlay .r-tbl td{text-align:left;}
+    #reporte-overlay .r-tbl td.r-num{text-align:right;}
+    #reporte-overlay .r-n1.r-abierta td{background:#ecfdf5;border-bottom-color:#bbf7d0;}
+    #reporte-overlay .r-n2 td{background:#f8fafc;font-size:12px;}
+    #reporte-overlay .r-n2 td:nth-child(2){padding-left:26px;color:#334155;font-weight:500;border-left:3px solid #86efac;}
+    #reporte-overlay .r-n3 td{background:#fff;font-size:11.5px;color:#64748b;}
+    #reporte-overlay .r-n3 td:nth-child(2){padding-left:50px;font-weight:400;border-left:3px solid #dcfce7;}
+    #reporte-overlay .r-rama{color:#94a3b8;margin-right:6px;font-weight:400;}
     #reporte-overlay .r-num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
     #reporte-overlay .r-muted{color:#94a3b8;font-weight:400;font-size:11.5px;}
     #reporte-overlay .r-tog{width:16px;color:#94a3b8;}
