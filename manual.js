@@ -144,6 +144,7 @@ function abrirManual() {
     </div>`;
   ov.addEventListener('click', e => { if (e.target === ov) cerrarManual(); });
   document.body.appendChild(ov);
+  _manualLupa(ov);
   document.body.style.overflow = 'hidden';
 }
 
@@ -177,3 +178,61 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarManual
     kebab.appendChild(b);
   }
 })();
+
+// ── 🔍 Lupa del manual (29-sep, pedido Contreras): busca por palabra, sin tildes ni mayúsculas.
+//    Deja solo las secciones que la contienen, dentro de ellas los pasos que la contienen,
+//    y resalta la palabra. Mismo bloque en todos los módulos (el de RRHH usa _mLupaFiltrar).
+function _mLupaNorm(s){ return String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+function _mLupaMarcar(el, q){
+  const nodos = [], w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  while (w.nextNode()) nodos.push(w.currentNode);
+  nodos.forEach(n => {
+    const t = n.nodeValue; let norm = '', mapa = [];
+    for (let i = 0; i < t.length; i++){ const c = _mLupaNorm(t[i]); for (let k = 0; k < c.length; k++){ norm += c[k]; mapa.push(i); } }
+    let desde = 0, pos, frag = null, ult = 0;
+    while (q && (pos = norm.indexOf(q, desde)) >= 0){
+      frag = frag || document.createDocumentFragment();
+      const a = mapa[pos], b = mapa[pos + q.length - 1] + 1;
+      if (a > ult) frag.appendChild(document.createTextNode(t.slice(ult, a)));
+      const m = document.createElement('mark'); m.textContent = t.slice(a, b);
+      m.style.cssText = 'background:#fde047;color:inherit;padding:0 1px;border-radius:3px'; frag.appendChild(m);
+      ult = b; desde = pos + q.length;
+    }
+    if (frag){ if (ult < t.length) frag.appendChild(document.createTextNode(t.slice(ult))); n.parentNode.replaceChild(frag, n); }
+  });
+}
+function _mLupaFiltrar(cont, selSec, texto, info){
+  if (!cont) return;
+  const q = _mLupaNorm(String(texto || '').trim());
+  let vistas = 0;
+  cont.querySelectorAll(selSec).forEach(sec => {
+    if (sec.dataset.mOrig == null) sec.dataset.mOrig = sec.innerHTML; else sec.innerHTML = sec.dataset.mOrig;
+    if (!q){ sec.style.display = ''; return; }
+    const lis = [...sec.querySelectorAll('li')];
+    const enLis = lis.filter(li => _mLupaNorm(li.textContent).includes(q));
+    const hay = _mLupaNorm(sec.textContent).includes(q);
+    sec.style.display = hay ? '' : 'none';
+    if (!hay) return;
+    vistas++;
+    if (enLis.length) lis.forEach(li => { if (!enLis.includes(li)) li.style.display = 'none'; });
+    _mLupaMarcar(sec, q);
+  });
+  if (info) info.textContent = !q ? '' : vistas ? `${vistas} ${vistas === 1 ? 'sección' : 'secciones'} con «${String(texto).trim()}»` : `No encontré «${String(texto).trim()}» en el manual.`;
+  const primera = q && cont.querySelector('mark');
+  if (primera) primera.scrollIntoView({block: 'center', behavior: 'smooth'});
+}
+function _manualLupa(ov){
+  const head = ov && ov.querySelector('.m-head'); if (!head) return;
+  head.style.flexWrap = 'wrap';
+  const box = document.createElement('div');
+  box.style.cssText = 'flex-basis:100%;display:flex;gap:8px;align-items:center;margin-top:8px';
+  box.innerHTML = '<input type="search" placeholder="🔍 Buscar en el manual (por ej.: equivalencias, remito, echeq)…" '
+    + 'style="flex:1;min-width:0;padding:8px 11px;border-radius:9px;border:none;font-size:14px;color:#0f172a;font-family:inherit">'
+    + '<span class="m-lupa-info" style="font-size:12px;opacity:.9;white-space:nowrap"></span>';
+  head.appendChild(box);
+  const inp = box.querySelector('input'), info = box.querySelector('.m-lupa-info');
+  let t = null;
+  inp.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => _mLupaFiltrar(ov, '.m-sec', inp.value, info), 250); });
+  inp.addEventListener('keydown', e => { if (e.key === 'Escape' && inp.value){ e.stopPropagation(); inp.value = ''; _mLupaFiltrar(ov, '.m-sec', '', info); } });
+  setTimeout(() => inp.focus(), 50);
+}
