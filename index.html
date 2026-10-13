@@ -407,6 +407,15 @@ th.th-der + th.th-der { border-left: none; }
     <div class="login-error" id="login-error"></div>
     <button class="btn-primary" id="login-btn" disabled onclick="doLogin()">Entrar →</button>
     <div class="admin-link"><a onclick="loginAdmin()">Entrar como administrador (JP)</a></div>
+    <!-- (13-oct, v92) formulario de admin en la pantalla: antes usaba prompt(), que algunos navegadores bloquean -->
+    <div id="admin-form" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+      <label>Email de administrador</label>
+      <input type="email" id="admin-email" placeholder="admin@..." autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('admin-pass').focus()">
+      <label>Contraseña</label>
+      <input type="password" id="admin-pass" placeholder="Contraseña" autocomplete="current-password" onkeydown="if(event.key==='Enter')loginAdminEnviar()">
+      <div class="login-error" id="admin-error"></div>
+      <button class="btn-primary" onclick="loginAdminEnviar()">Entrar como admin →</button>
+    </div>
   </div>
 </div>
 
@@ -774,20 +783,27 @@ async function doLogin() {
   }
 }
 
-async function loginAdmin() {
+function loginAdmin() {
   if (URL_LOCAL) { alert('Esta URL es del local ' + LOCALES[URL_LOCAL].nombre + '. Para entrar como admin, abrí la URL sin parámetro.'); return; }
-  const email = (prompt('Email de administrador:', ADMIN_EMAIL) || '').trim().toLowerCase();
-  if (!email) return;
-  if (!ADMIN_EMAILS.includes(email)) { alert('Ese email no es administrador de Ventas.'); return; }
-  const pass = prompt('Contraseña:');
-  if (!pass) return;
+  const f = document.getElementById('admin-form');
+  const abrir = f.style.display === 'none';
+  f.style.display = abrir ? '' : 'none';
+  if (abrir) { const e = document.getElementById('admin-email'); if (!e.value) e.value = ADMIN_EMAIL; document.getElementById('admin-pass').focus(); }
+}
+async function loginAdminEnviar() {
+  const errEl = document.getElementById('admin-error'); errEl.textContent = '';
+  const email = (document.getElementById('admin-email').value || '').trim().toLowerCase();
+  const pass = (document.getElementById('admin-pass').value || '').trim();
+  if (!email || !pass) { errEl.textContent = 'Faltan el email o la contraseña.'; return; }
+  if (!ADMIN_EMAILS.includes(email)) { errEl.textContent = 'Ese email no es administrador de Ventas.'; return; }
   try {
-    const { error } = await sb.auth.signInWithPassword({ email, password: pass.trim() });
+    const { error } = await sb.auth.signInWithPassword({ email, password: pass });
     if (error) throw error;
     session = { email, local_id: null, isAdmin: true };
+    document.getElementById('admin-pass').value = '';
     enterApp();
   } catch (e) {
-    alert('No se pudo entrar como admin: ' + (e.message || 'error'));
+    errEl.textContent = 'No se pudo entrar como admin: ' + (e.message || 'error');
   }
 }
 
@@ -2992,7 +3008,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=13"></script>
+<script src="manual.js?v=14"></script>
 <script src="reporte.js?v=9"></script>
 <script>
 // (24-ago) Blindaje iOS: re-suscripcion automatica de push. iOS suelta la
