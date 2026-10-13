@@ -264,14 +264,17 @@ body { margin: 0; font-family: 'URW Gothic', -apple-system, BlinkMacSystemFont, 
 .admin-link a { color: var(--muted); text-decoration: underline; cursor: pointer; }
 
 /* ═══ APP ═══ */
-.header { background: var(--card); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; position: sticky; top: 0; z-index: 100; }
-.header-title { font-size: 17px; font-weight: 700; color: var(--primary); white-space: nowrap; }
-.header-local { font-size: 12px; color: var(--muted); white-space: nowrap; }
-.header select { padding: 6px 9px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: white; cursor: pointer; }
+.header { background: linear-gradient(90deg, var(--primary), var(--primary-dark)); color: #fff; border-bottom: none; box-shadow: 0 2px 6px rgba(0,0,0,.18); padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; position: sticky; top: 0; z-index: 100; }
+.header-title { font-size: 17px; font-weight: 700; color: #fff; white-space: nowrap; }
+.header-local { font-size: 12px; color: rgba(255,255,255,.8); white-space: nowrap; }
+.header select { padding: 6px 9px; border: 1px solid rgba(255,255,255,.35); border-radius: 6px; font-size: 13px; background: rgba(255,255,255,.14); color: #fff; cursor: pointer; }
+.header select option { color: var(--text); }
+.header .btn-icon { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.35); color: #fff; }
+.header .btn-icon:hover { background: rgba(255,255,255,.26); }
 .header .spacer { flex: 1; }
-.hdr-kpi { font-size: 12px; color: var(--muted); white-space: nowrap; }
-.hdr-kpi b { font-size: 15px; font-weight: 700; color: var(--text); }
-#hdr-kpi-total b { font-size: 17px; color: var(--primary); }
+.hdr-kpi { font-size: 12px; color: rgba(255,255,255,.8); white-space: nowrap; }
+.hdr-kpi b { font-size: 15px; font-weight: 700; color: #fff; }
+#hdr-kpi-total b { font-size: 17px; color: #fff; }
 .kebab-wrap { position: relative; }
 /* Celular: el ⋮ se ancla arriba a la derecha del header para no generar
    una fila extra cuando los selectores hacen wrap */
@@ -284,10 +287,10 @@ body { margin: 0; font-family: 'URW Gothic', -apple-system, BlinkMacSystemFont, 
   #btn-analisis { padding: 5px 9px !important; font-size: 12px !important; }
 }
 #kebab-btn { position: relative; font-size: 19px; line-height: 1; padding: 6px 11px; }
-.kebab-dot { position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: 50%; background: #dc2626; display: none; }
+.kebab-dot { position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: 50%; background: #fbbf24; display: none; }
 .kebab-menu { display: none; position: absolute; right: 0; top: calc(100% + 6px); background: white; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.14); min-width: 215px; z-index: 300; padding: 6px; }
 .kebab-menu.open { display: block; }
-.kebab-menu button { display: block; width: 100%; text-align: left; background: white; border: none; border-radius: 6px; padding: 9px 10px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.kebab-menu button { display: block; width: 100%; text-align: left; background: white; color: var(--text); border: none; border-radius: 6px; padding: 9px 10px; font-size: 13px; cursor: pointer; white-space: nowrap; }
 .kebab-menu button:hover { background: #f3f4f6; }
 .kebab-sep { height: 1px; background: var(--border); margin: 6px 4px; }
 @media (max-width: 640px) { .hdr-kpi { display: none !important; } }
@@ -335,7 +338,7 @@ th:first-child { text-align: left; }
 td { padding: 8px; border-bottom: 1px solid #f3f4f6; text-align: right; font-variant-numeric: tabular-nums; }
 td:first-child { text-align: left; font-weight: 600; }
 /* Zebra striping — filas alternadas como Excel */
-tbody tr:nth-child(even) { background: #f8fafc; }
+tbody tr:nth-child(even) { background: #eef1f5; }
 tbody tr:nth-child(odd)  { background: #ffffff; }
 tbody tr:hover { background: #fef3c7; }
 td.editable { cursor: pointer; }
@@ -350,8 +353,13 @@ td input { width: 100%; padding: 4px; border: 1px solid var(--primary); border-r
    Pintamos en gris suave para que se note que falta el cierre. */
 .row-precargado td { color: #64748b; }
 .row-precargado td:first-child { font-style: italic; }
-.cell-derived { background: #f9fafb; color: var(--muted); }
-.cell-derived.big { background: #eef2ff; color: #4338ca; font-weight: 700; }
+.cell-derived { background: #e9ecf1; color: #374151; border-left: 2px solid #cfd5dd; }
+.cell-derived + .cell-derived { border-left: none; }
+tbody tr:nth-child(even) .cell-derived { background: #dfe3ea; }
+.cell-derived.big { background: #e9ecf1; color: #111827; font-weight: 700; font-size: 14px; }
+tbody tr:nth-child(even) .cell-derived.big { background: #dfe3ea; }
+th.th-der { background: #eceff3; border-left: 2px solid #cfd5dd; }
+th.th-der + th.th-der { border-left: none; }
 
 /* Vista admin */
 .admin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; }
@@ -405,12 +413,12 @@ td input { width: 100%; padding: 4px; border: 1px solid var(--primary); border-r
 <!-- APP -->
 <div id="app-screen" class="screen">
   <div class="header">
-    <a href="https://claudiaadornosrl-prog.github.io/hub/" title="Volver al Hub" aria-label="Volver al Hub" style="text-decoration:none;font-size:17px;line-height:1;color:inherit;opacity:0.65;padding:4px 8px;border-radius:8px;">↩</a><span class="header-title">📊 Ventas</span>
+    <a href="https://claudiaadornosrl-prog.github.io/hub/" title="Volver al Hub" aria-label="Volver al Hub" style="text-decoration:none;font-size:17px;line-height:1;color:#fff;opacity:0.8;padding:4px 8px;border-radius:8px;">↩</a><span class="header-title">📊 Ventas</span>
     <span class="header-local" id="hdr-local"></span>
     <select id="sel-año" onchange="cargar()"></select>
     <select id="sel-mes" onchange="cargar()"></select>
     <select id="sel-local" onchange="cargar()" style="display:none;"></select>
-    <button id="btn-analisis" onclick="toggleAnalisis()" style="display:none;padding:6px 12px;border:1px solid #16a34a;background:white;color:#16a34a;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">📊 Análisis</button>
+    <button id="btn-analisis" onclick="toggleAnalisis()" style="display:none;padding:6px 12px;border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.14);color:#fff;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">📊 Análisis</button>
     <span id="hdr-estado" style="display:none;"></span>
     <span class="hdr-kpi" id="hdr-kpi-total" style="display:none;"></span>
     <span class="hdr-kpi" id="hdr-kpi-prom" style="display:none;"></span>
@@ -1754,7 +1762,7 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
         ${showCC ? celda('cc', v?.cc) : ''}
         ${showVales ? celda('vales', v?.vales) : ''}
         <td class="cell-derived">${v ? fmt$(shopping) : '—'}</td>
-        ${celda('cant_transacciones', v ? ((+v.cant_transacciones||0)+(+v.cant_online||0)+(+v.cant_fc_oficina||0)) : undefined)}
+        ${celda('cant_transacciones', v ? ((+v.cant_transacciones||0)+(+v.cant_online||0)+(+v.cant_fc_oficina||0)) : undefined).replace('<td class="editable"', '<td class="editable cell-derived"')}
         ${showOnline ? celda('online', v?.online) : ''}
         ${showFcOf ? celda('fc_oficina', v?.fc_oficina) : ''}
         <td class="cell-derived big">${v ? fmt$(total) : '—'}</td>
@@ -1775,7 +1783,7 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
         <thead>
           <tr>
             <th>Fecha</th>${showEfectivo ? '<th>Efectivo</th>' : ''}${mostrarTarjeta ? '<th>Tarjeta</th>' : ''}${showQR ? '<th>MP</th>' : ''}${showTransf ? '<th>Transferencia</th>' : ''}${showCC ? '<th>CC</th>' : ''}${showVales ? '<th>Vales</th>' : ''}
-            <th>Shopping</th><th>Cant</th>${showOnline ? '<th>Online</th>' : ''}${showFcOf ? '<th>Fc Oficina</th>' : ''}<th>Total</th><th>Acumulado</th>
+            <th class="th-der">Shopping</th><th class="th-der">Cant</th>${showOnline ? '<th>Online</th>' : ''}${showFcOf ? '<th>Fc Oficina</th>' : ''}<th class="th-der">Total</th><th class="th-der">Acumulado</th>
             <th style="white-space:nowrap;">Turnos</th>
           </tr>
         </thead>
@@ -2984,7 +2992,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=12"></script>
+<script src="manual.js?v=13"></script>
 <script src="reporte.js?v=9"></script>
 <script>
 // (24-ago) Blindaje iOS: re-suscripcion automatica de push. iOS suelta la
