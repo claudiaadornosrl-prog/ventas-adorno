@@ -155,7 +155,6 @@ async function abrirReporteVentas() {
       </div>
       <div id="r-body"><div class="r-loading">Cargando…</div></div>
     </div>`;
-  ov.addEventListener('click', e => { if (e.target === ov) cerrarReporteVentas(); });
   document.body.appendChild(ov);
   document.body.style.overflow = 'hidden';
 

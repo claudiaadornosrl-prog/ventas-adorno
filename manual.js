@@ -142,7 +142,6 @@ function abrirManual() {
         </div>`).join('')}
       <div class="m-foot">💡 Este manual se actualiza junto con el sistema. ¿Falta algo o no funciona? Avisale a JP.</div>
     </div>`;
-  ov.addEventListener('click', e => { if (e.target === ov) cerrarManual(); });
   document.body.appendChild(ov);
   _manualLupa(ov);
   document.body.style.overflow = 'hidden';
