@@ -87,10 +87,10 @@ function _manualSecciones() {
       icon: '📈', titulo: 'Reporte del local (encargadas)',
       desc: 'El reporte de ventas de tu local, solo para la encargada.',
       pasos: [
-        'Menú ⋮ → "📈 Reporte del local (encargada)". Pide TU mail y TU clave personal (los mismos de RRHH): la cuenta del local no alcanza, así las vendedoras no lo ven.',
+        'Menú ⋮ → "📈 Reporte del local (encargada)". Pide TU mail y TU clave personal (los mismos de Colaboradores): la cuenta del local no alcanza, así las vendedoras no lo ven.',
         'Vas a ver solo tu local: KPIs contra el período anterior y el año pasado, día más fuerte y más flojo, categorías, top artículos, proveedores y clientes, medios de pago y mapa de calor por hora.',
         'Arriba elegís el período: Semanal, Mensual, Trimestral o Anual. El botón "$ nominal" pasa los importes a pesos de hoy con el IPC, para comparar períodos separados en el tiempo.',
-        'Al cerrar el reporte (✕ o Escape) se cierra tu sesión: no queda abierta en la computadora del local. Si lo dejás abierto 15 minutos sin tocar, se cierra solo. No te cierra la sesión de RRHH en el celular.',
+        'Al cerrar el reporte (✕ o Escape) se cierra tu sesión: no queda abierta en la computadora del local. Si lo dejás abierto 15 minutos sin tocar, se cierra solo. No te cierra la sesión de Colaboradores en el celular.',
       ],
     });
   }
