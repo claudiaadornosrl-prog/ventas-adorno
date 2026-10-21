@@ -372,7 +372,8 @@ body[data-local="alcorta"] .table-wrap th { background: #dcfce7; color: #166534;
 body[data-local="unicenter"] .table-wrap th { background: #dbeafe; color: #1e40af; border-bottom-color: #93c5fd; }
 body[data-local="oficina"] .table-wrap th { background: #e5e7eb; color: #374151; border-bottom-color: #d1d5db; }
 body[data-local="alcorta"] .row-total { background: #bbf7d0; } body[data-local="unicenter"] .row-total { background: #bfdbfe; } body[data-local="oficina"] .row-total { background: #d1d5db; }
-body[data-local="alcorta"] .kpi { border-top: 4px solid #16a34a; } body[data-local="unicenter"] .kpi { border-top: 4px solid #2563eb; } body[data-local="oficina"] .kpi { border-top: 4px solid #6b7280; }
+/* (21-oct) cada tarjeta conserva SU color aunque esté adentro de otro local; Total general lleva borde oscuro */
+.kpi-row .kpi:not(.kpi-alcorta):not(.kpi-unicenter):not(.kpi-oficina) { border-top: 4px solid #334155; }
 /* (21-oct, JP) "la tabla completa de su color": fondo de toda la planilla, filas pares más marcadas, bordes del tono */
 body[data-local="alcorta"] .table-wrap { background: #f0fdf4; } body[data-local="alcorta"] .table-wrap td { border-bottom-color: #dcfce7; } body[data-local="alcorta"] tbody tr:nth-child(even) { background: #dcfce7; }
 body[data-local="unicenter"] .table-wrap { background: #eff6ff; } body[data-local="unicenter"] .table-wrap td { border-bottom-color: #dbeafe; } body[data-local="unicenter"] tbody tr:nth-child(even) { background: #dbeafe; }
@@ -1125,13 +1126,17 @@ async function cargar() {
     if (session.isAdmin && localSel === 'todos') {
       renderAdminConsolidado(data || [], año, mes);
     } else {
-      renderGrillaLocal(data || [], año, mes, localSel, aplicadas, pendientes, turnos);
-      if (session.isAdmin) {   // (21-oct) tarjetas de los 3 locales también adentro de un local
+      // (21-oct) tarjetas de los 3 locales también adentro de un local: se consultan ANTES de dibujar, para que
+      // la grilla y las tarjetas aparezcan juntas (antes había un parpadeo de un segundo sin tarjetas)
+      let tarjetas = '';
+      if (session.isAdmin) {
         const { data: todos } = await sb.from('ventas_diarias_view').select('local, total').gte('fecha', desde).lte('fecha', hasta);
         const tot = { alcorta: 0, unicenter: 0, oficina: 0 };
         (todos || []).forEach(v => { if (v.local in tot) tot[v.local] += +v.total || 0; });
-        document.getElementById('contenido').insertAdjacentHTML('afterbegin', kpiRowHtml(tot, localSel));
+        tarjetas = kpiRowHtml(tot, localSel);
       }
+      renderGrillaLocal(data || [], año, mes, localSel, aplicadas, pendientes, turnos);
+      if (tarjetas) document.getElementById('contenido').insertAdjacentHTML('afterbegin', tarjetas);
     }
     // Refrescar badge de solicitudes pendientes (para admin)
     if (session.isAdmin) refrescarBadgeSolicitudes();
