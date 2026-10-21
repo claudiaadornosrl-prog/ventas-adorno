@@ -354,6 +354,15 @@ td input { width: 100%; padding: 4px; border: 1px solid var(--primary); border-r
 .row-precargado td:first-child { font-style: italic; }
 .cell-derived { background: #e9ecf1; color: #374151; border-left: 2px solid #cfd5dd; }
 .cell-derived + .cell-derived { border-left: none; }
+/* (21-oct-2026, JP) columnas de cada local con su color en el consolidado: Alcorta verde, Unicenter azul, Oficina gris */
+th.col-alcorta { background: #dcfce7; color: #166534; } td.col-alcorta { background: #f0fdf4; } td.cell-derived.col-alcorta { background: #dcfce7; border-left-color: #86efac; }
+th.col-unicenter { background: #dbeafe; color: #1e40af; } td.col-unicenter { background: #eff6ff; } td.cell-derived.col-unicenter { background: #dbeafe; border-left-color: #93c5fd; }
+th.col-oficina { background: #e5e7eb; color: #374151; } td.col-oficina { background: #f3f4f6; } td.cell-derived.col-oficina { background: #e5e7eb; border-left-color: #d1d5db; }
+tbody tr:nth-child(even) td.col-alcorta { background: #e6f9ec; } tbody tr:nth-child(even) td.cell-derived.col-alcorta { background: #d1f5dc; }
+tbody tr:nth-child(even) td.col-unicenter { background: #e4effd; } tbody tr:nth-child(even) td.cell-derived.col-unicenter { background: #cfe1fb; }
+tbody tr:nth-child(even) td.col-oficina { background: #eceef1; } tbody tr:nth-child(even) td.cell-derived.col-oficina { background: #dcdfe4; }
+.row-total td.col-alcorta { background: #bbf7d0; } .row-total td.col-unicenter { background: #bfdbfe; } .row-total td.col-oficina { background: #d1d5db; }
+.kpi-alcorta { border-top: 4px solid #16a34a; } .kpi-unicenter { border-top: 4px solid #2563eb; } .kpi-oficina { border-top: 4px solid #6b7280; }
 tbody tr:nth-child(even) .cell-derived { background: #dfe3ea; }
 .cell-derived.big { background: #e9ecf1; color: #111827; font-weight: 700; font-size: 14px; }
 tbody tr:nth-child(even) .cell-derived.big { background: #dfe3ea; }
@@ -1849,7 +1858,7 @@ function renderAdminConsolidado(ventas, año, mes) {
       const v = dia[loc] || 0;
       totLocales[loc] += v;
       acumLocales[loc] += v;
-      return `<td>${v ? fmt$(v) : '<span style="color:#cbd5e1">—</span>'}</td><td class="cell-derived">${fmt$(acumLocales[loc])}</td>`;
+      return `<td class="col-${loc}">${v ? fmt$(v) : '<span style="color:#cbd5e1">—</span>'}</td><td class="cell-derived col-${loc}">${fmt$(acumLocales[loc])}</td>`;
     }).join('');
     const totalDia = locales.reduce((s, loc) => s + (dia[loc]||0), 0);
     filas.push(`<tr><td>${fmtFecha(fecha)}</td>${cells}<td class="cell-derived big">${totalDia ? fmt$(totalDia) : '—'}</td></tr>`);
@@ -1859,9 +1868,9 @@ function renderAdminConsolidado(ventas, año, mes) {
   cont.innerHTML = `
     <div class="kpi-row">
       <div class="kpi"><div class="kpi-label">Total general</div><div class="kpi-value">${fmt$(granTotal)}</div></div>
-      <div class="kpi" style="cursor:pointer;" title="Ver el detalle de Alcorta" onclick="irALocal('alcorta')"><div class="kpi-label">🛍️ Alcorta</div><div class="kpi-value">${fmt$(totLocales.alcorta)}</div></div>
-      <div class="kpi" style="cursor:pointer;" title="Ver el detalle de Unicenter" onclick="irALocal('unicenter')"><div class="kpi-label">🏬 Unicenter</div><div class="kpi-value">${fmt$(totLocales.unicenter)}</div></div>
-      <div class="kpi" style="cursor:pointer;" title="Ver el detalle de Oficina" onclick="irALocal('oficina')"><div class="kpi-label">💻 Oficina</div><div class="kpi-value">${fmt$(totLocales.oficina)}</div></div>
+      <div class="kpi kpi-alcorta" style="cursor:pointer;" title="Ver el detalle de Alcorta" onclick="irALocal('alcorta')"><div class="kpi-label">🛍️ Alcorta</div><div class="kpi-value">${fmt$(totLocales.alcorta)}</div></div>
+      <div class="kpi kpi-unicenter" style="cursor:pointer;" title="Ver el detalle de Unicenter" onclick="irALocal('unicenter')"><div class="kpi-label">🏬 Unicenter</div><div class="kpi-value">${fmt$(totLocales.unicenter)}</div></div>
+      <div class="kpi kpi-oficina" style="cursor:pointer;" title="Ver el detalle de Oficina" onclick="irALocal('oficina')"><div class="kpi-label">💻 Oficina</div><div class="kpi-value">${fmt$(totLocales.oficina)}</div></div>
     </div>
 
     <div class="table-wrap">
@@ -1869,24 +1878,24 @@ function renderAdminConsolidado(ventas, año, mes) {
         <thead>
           <tr>
             <th rowspan="2" style="vertical-align:bottom;">Fecha</th>
-            <th colspan="2" style="text-align:center;">🛍️ Alcorta</th>
-            <th colspan="2" style="text-align:center;">🏬 Unicenter</th>
-            <th colspan="2" style="text-align:center;">💻 Oficina</th>
+            <th colspan="2" class="col-alcorta" style="text-align:center;">🛍️ Alcorta</th>
+            <th colspan="2" class="col-unicenter" style="text-align:center;">🏬 Unicenter</th>
+            <th colspan="2" class="col-oficina" style="text-align:center;">💻 Oficina</th>
             <th rowspan="2" style="vertical-align:bottom;">Total día</th>
           </tr>
           <tr>
-            <th>Diaria</th><th>Acumulado</th>
-            <th>Diaria</th><th>Acumulado</th>
-            <th>Diaria</th><th>Acumulado</th>
+            <th class="col-alcorta">Diaria</th><th class="col-alcorta">Acumulado</th>
+            <th class="col-unicenter">Diaria</th><th class="col-unicenter">Acumulado</th>
+            <th class="col-oficina">Diaria</th><th class="col-oficina">Acumulado</th>
           </tr>
         </thead>
         <tbody>${filas.join('')}</tbody>
         <tfoot>
           <tr class="row-total">
             <td>TOTAL</td>
-            <td>${fmt$(totLocales.alcorta)}</td><td>—</td>
-            <td>${fmt$(totLocales.unicenter)}</td><td>—</td>
-            <td>${fmt$(totLocales.oficina)}</td><td>—</td>
+            <td class="col-alcorta">${fmt$(totLocales.alcorta)}</td><td class="col-alcorta">—</td>
+            <td class="col-unicenter">${fmt$(totLocales.unicenter)}</td><td class="col-unicenter">—</td>
+            <td class="col-oficina">${fmt$(totLocales.oficina)}</td><td class="col-oficina">—</td>
             <td>${fmt$(granTotal)}</td>
           </tr>
         </tfoot>
@@ -2998,7 +3007,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=18"></script>
+<script src="manual.js?v=19"></script>
 <script src="reporte.js?v=12"></script>
 <script>
 // (24-ago) Blindaje iOS: re-suscripcion automatica de push. iOS suelta la
