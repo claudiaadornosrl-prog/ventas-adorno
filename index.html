@@ -363,6 +363,7 @@ tbody tr:nth-child(even) td.col-unicenter { background: #e4effd; } tbody tr:nth-
 tbody tr:nth-child(even) td.col-oficina { background: #eceef1; } tbody tr:nth-child(even) td.cell-derived.col-oficina { background: #dcdfe4; }
 .row-total td.col-alcorta { background: #bbf7d0; } .row-total td.col-unicenter { background: #bfdbfe; } .row-total td.col-oficina { background: #d1d5db; }
 .kpi-alcorta { border-top: 4px solid #16a34a; } .kpi-unicenter { border-top: 4px solid #2563eb; } .kpi-oficina { border-top: 4px solid #6b7280; }
+.kpi-activa { box-shadow: 0 0 0 2px #0f172a inset, var(--shadow); } .kpi-activa .kpi-label::after { content: ' · viendo'; font-weight: 400; opacity: .7; text-transform: none; }
 /* (21-oct-2026, JP) vista de UN local: cabecera, encabezados de tabla, fila total y tarjetas con el color del local */
 body[data-local="alcorta"] .header { background: linear-gradient(90deg, #16a34a, #15803d); }
 body[data-local="unicenter"] .header { background: linear-gradient(90deg, #2563eb, #1d4ed8); }
@@ -1125,6 +1126,12 @@ async function cargar() {
       renderAdminConsolidado(data || [], año, mes);
     } else {
       renderGrillaLocal(data || [], año, mes, localSel, aplicadas, pendientes, turnos);
+      if (session.isAdmin) {   // (21-oct) tarjetas de los 3 locales también adentro de un local
+        const { data: todos } = await sb.from('ventas_diarias_view').select('local, total').gte('fecha', desde).lte('fecha', hasta);
+        const tot = { alcorta: 0, unicenter: 0, oficina: 0 };
+        (todos || []).forEach(v => { if (v.local in tot) tot[v.local] += +v.total || 0; });
+        document.getElementById('contenido').insertAdjacentHTML('afterbegin', kpiRowHtml(tot, localSel));
+      }
     }
     // Refrescar badge de solicitudes pendientes (para admin)
     if (session.isAdmin) refrescarBadgeSolicitudes();
@@ -1852,6 +1859,16 @@ function irALocal(local) {
 }
 
 // ─── Vista admin consolidada (todos los locales) ─────────────────────
+// (21-oct-2026, JP) Las tarjetas Total general / Alcorta / Unicenter / Oficina se ven también adentro de cada local
+// (la del local elegido queda marcada; "Total general" vuelve al consolidado).
+function kpiRowHtml(tot, activo) {
+  const granTotal = (tot.alcorta || 0) + (tot.unicenter || 0) + (tot.oficina || 0);
+  const card = (loc, icono, nombre) => `<div class="kpi kpi-${loc} ${activo === loc ? 'kpi-activa' : ''}" style="cursor:pointer;" title="${activo === loc ? 'Estás viendo ' + nombre : 'Ver el detalle de ' + nombre}" onclick="irALocal('${loc}')"><div class="kpi-label">${icono} ${nombre}</div><div class="kpi-value">${fmt$(tot[loc])}</div></div>`;
+  return `<div class="kpi-row">
+      <div class="kpi ${activo === 'todos' ? 'kpi-activa' : ''}" style="cursor:pointer;" title="${activo === 'todos' ? 'Estás viendo el consolidado' : 'Volver al consolidado'}" onclick="document.getElementById('sel-local').value='todos';cargar()"><div class="kpi-label">Total general</div><div class="kpi-value">${fmt$(granTotal)}</div></div>
+      ${card('alcorta', '🛍️', 'Alcorta')}${card('unicenter', '🏬', 'Unicenter')}${card('oficina', '💻', 'Oficina')}
+    </div>`;
+}
 function renderAdminConsolidado(ventas, año, mes) {
   const _kt = document.getElementById('hdr-kpi-total'); if (_kt) _kt.style.display = 'none';
   const _kp = document.getElementById('hdr-kpi-prom'); if (_kp) _kp.style.display = 'none';
@@ -1882,14 +1899,7 @@ function renderAdminConsolidado(ventas, año, mes) {
   }
   const granTotal = totLocales.alcorta + totLocales.unicenter + totLocales.oficina;
 
-  cont.innerHTML = `
-    <div class="kpi-row">
-      <div class="kpi"><div class="kpi-label">Total general</div><div class="kpi-value">${fmt$(granTotal)}</div></div>
-      <div class="kpi kpi-alcorta" style="cursor:pointer;" title="Ver el detalle de Alcorta" onclick="irALocal('alcorta')"><div class="kpi-label">🛍️ Alcorta</div><div class="kpi-value">${fmt$(totLocales.alcorta)}</div></div>
-      <div class="kpi kpi-unicenter" style="cursor:pointer;" title="Ver el detalle de Unicenter" onclick="irALocal('unicenter')"><div class="kpi-label">🏬 Unicenter</div><div class="kpi-value">${fmt$(totLocales.unicenter)}</div></div>
-      <div class="kpi kpi-oficina" style="cursor:pointer;" title="Ver el detalle de Oficina" onclick="irALocal('oficina')"><div class="kpi-label">💻 Oficina</div><div class="kpi-value">${fmt$(totLocales.oficina)}</div></div>
-    </div>
-
+  cont.innerHTML = kpiRowHtml(totLocales, 'todos') + `
     <div class="table-wrap">
       <table>
         <thead>
@@ -3024,7 +3034,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=20"></script>
+<script src="manual.js?v=21"></script>
 <script src="reporte.js?v=12"></script>
 <script>
 // (24-ago) Blindaje iOS: re-suscripcion automatica de push. iOS suelta la
