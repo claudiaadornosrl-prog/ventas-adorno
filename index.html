@@ -363,6 +363,18 @@ tbody tr:nth-child(even) td.col-unicenter { background: #e4effd; } tbody tr:nth-
 tbody tr:nth-child(even) td.col-oficina { background: #eceef1; } tbody tr:nth-child(even) td.cell-derived.col-oficina { background: #dcdfe4; }
 .row-total td.col-alcorta { background: #bbf7d0; } .row-total td.col-unicenter { background: #bfdbfe; } .row-total td.col-oficina { background: #d1d5db; }
 .kpi-alcorta { border-top: 4px solid #16a34a; } .kpi-unicenter { border-top: 4px solid #2563eb; } .kpi-oficina { border-top: 4px solid #6b7280; }
+/* (21-oct-2026, JP) vista de UN local: cabecera, encabezados de tabla, fila total y tarjetas con el color del local */
+body[data-local="alcorta"] .header { background: linear-gradient(90deg, #16a34a, #15803d); }
+body[data-local="unicenter"] .header { background: linear-gradient(90deg, #2563eb, #1d4ed8); }
+body[data-local="oficina"] .header { background: linear-gradient(90deg, #6b7280, #4b5563); }
+body[data-local="alcorta"] .table-wrap th { background: #dcfce7; color: #166534; border-bottom-color: #86efac; }
+body[data-local="unicenter"] .table-wrap th { background: #dbeafe; color: #1e40af; border-bottom-color: #93c5fd; }
+body[data-local="oficina"] .table-wrap th { background: #e5e7eb; color: #374151; border-bottom-color: #d1d5db; }
+body[data-local="alcorta"] .row-total { background: #bbf7d0; } body[data-local="unicenter"] .row-total { background: #bfdbfe; } body[data-local="oficina"] .row-total { background: #d1d5db; }
+body[data-local="alcorta"] .table-wrap .cell-derived { background: #ecfdf5; border-left-color: #a7f3d0; } body[data-local="alcorta"] tbody tr:nth-child(even) .cell-derived { background: #dcfce7; }
+body[data-local="unicenter"] .table-wrap .cell-derived { background: #eff6ff; border-left-color: #bfdbfe; } body[data-local="unicenter"] tbody tr:nth-child(even) .cell-derived { background: #dbeafe; }
+body[data-local="alcorta"] .kpi { border-top: 4px solid #16a34a; } body[data-local="unicenter"] .kpi { border-top: 4px solid #2563eb; } body[data-local="oficina"] .kpi { border-top: 4px solid #6b7280; }
+body[data-local="todos"] .kpi.kpi-alcorta, body[data-local="todos"] .kpi.kpi-unicenter, body[data-local="todos"] .kpi.kpi-oficina { }
 tbody tr:nth-child(even) .cell-derived { background: #dfe3ea; }
 .cell-derived.big { background: #e9ecf1; color: #111827; font-weight: 700; font-size: 14px; }
 tbody tr:nth-child(even) .cell-derived.big { background: #dfe3ea; }
@@ -1053,6 +1065,7 @@ async function cargar() {
   const año = parseInt(document.getElementById('sel-año').value);
   const mes = parseInt(document.getElementById('sel-mes').value);
   const localSel = session.isAdmin ? document.getElementById('sel-local').value : session.local_id;
+  document.body.setAttribute('data-local', localSel || '');   // (21-oct) color del local en la vista por local
   const _sy = document.getElementById('hdr-sync'); if (_sy) _sy.style.display = '';
 
   // Chequear si el mes está cerrado para este local (sólo si hay local específico)
@@ -3007,7 +3020,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=19"></script>
+<script src="manual.js?v=20"></script>
 <script src="reporte.js?v=12"></script>
 <script>
 // (24-ago) Blindaje iOS: re-suscripcion automatica de push. iOS suelta la
