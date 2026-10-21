@@ -284,7 +284,6 @@ body { margin: 0; font-family: 'URW Gothic', -apple-system, BlinkMacSystemFont, 
   .header-title { font-size: 15px; }
   .header-local { font-size: 11px; }
   .header select { padding: 5px 6px; font-size: 12px; }
-  #btn-analisis { padding: 5px 9px !important; font-size: 12px !important; }
 }
 #kebab-btn { position: relative; font-size: 19px; line-height: 1; padding: 6px 11px; }
 .kebab-dot { position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: 50%; background: #fbbf24; display: none; }
@@ -427,7 +426,6 @@ th.th-der + th.th-der { border-left: none; }
     <select id="sel-año" onchange="cargar()"></select>
     <select id="sel-mes" onchange="cargar()"></select>
     <select id="sel-local" onchange="cargar()" style="display:none;"></select>
-    <button id="btn-analisis" onclick="toggleAnalisis()" style="display:none;padding:6px 12px;border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.14);color:#fff;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">📊 Análisis</button>
     <span id="hdr-estado" style="display:none;"></span>
     <span class="hdr-kpi" id="hdr-kpi-total" style="display:none;"></span>
     <span class="hdr-kpi" id="hdr-kpi-prom" style="display:none;"></span>
@@ -843,7 +841,6 @@ function enterApp() {
   // Selector de local solo para admin
   if (session.isAdmin) {
     selLocal.style.display = '';
-    const _ba = document.getElementById('btn-analisis'); if (_ba) _ba.style.display = '';
     selLocal.innerHTML = '<option value="todos">Todos</option>' +
       Object.entries(LOCALES).map(([id, l]) => `<option value="${id}">${l.icon} ${l.nombre}</option>`).join('');
   } else {
@@ -1098,9 +1095,7 @@ async function cargar() {
       turnos = resTu.data || [];
     }
 
-    if (session.isAdmin && window._modoAnalisis) {
-      await renderAnalisis(año, mes, localSel);
-    } else if (session.isAdmin && localSel === 'todos') {
+    if (session.isAdmin && localSel === 'todos') {
       renderAdminConsolidado(data || [], año, mes);
     } else {
       renderGrillaLocal(data || [], año, mes, localSel, aplicadas, pendientes, turnos);
@@ -1120,12 +1115,7 @@ async function cargar() {
 // Fuente: vista ventas_analisis_mensual (diarias agregadas + histórico) e IPC
 // de rrhh_ipc_argentina. El histórico 2025 se carga en ventas_mensual_historico.
 // ═══════════════════════════════════════════════════════════════════════
-function toggleAnalisis() {
-  window._modoAnalisis = !window._modoAnalisis;
-  const b = document.getElementById('btn-analisis');
-  if (b) { b.style.background = window._modoAnalisis ? '#16a34a' : 'white'; b.style.color = window._modoAnalisis ? 'white' : '#16a34a'; }
-  cargar();
-}
+// (21-oct-2026) El botón Análisis se fue: renderAnalisis() ahora lo llama reporte.js (tipo "Evolución del año").
 
 const MESES_CORTOS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const fmtM = (n) => {
@@ -1141,8 +1131,8 @@ const fmtPctDelta = (act, prev) => {
   return `<span style="color:${col};font-weight:600;">${flecha} ${Math.abs(d).toFixed(1)}%</span>`;
 };
 
-async function renderAnalisis(año, mes, localSel) {
-  const cont = document.getElementById('contenido');
+async function renderAnalisis(año, mes, localSel, destino) {
+  const cont = destino || document.getElementById('contenido');
   cont.innerHTML = '<div class="empty"><div class="spinner"></div></div>';
 
   const [rMes, rIpc] = await Promise.all([
@@ -1253,10 +1243,10 @@ async function renderAnalisis(año, mes, localSel) {
       <div style="font-size:12px;">${sub || ''}</div>
     </div>`;
 
-  let html = `<div style="max-width:1180px;margin:0 auto;padding:14px;">
+  let html = `<div style="max-width:1180px;margin:0 auto;padding:${destino ? '0 12px 8px' : '14px'};">
     <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-      <h2 style="margin:0;font-size:20px;">📊 Análisis · ${tituloLocal}</h2>
-      <span style="color:var(--muted);font-size:13px;">${MESES_CORTOS[mes-1]} ${año} · comparativas nominales y ajustadas por IPC (ref. ${refIpc || 's/d'})</span>
+      ${destino ? '' : `<h2 style="margin:0;font-size:20px;">📊 Análisis · ${tituloLocal}</h2>`}
+      <span style="color:var(--muted);font-size:13px;">${destino ? tituloLocal + ' · ' : ''}${MESES_CORTOS[mes-1]} ${año} · comparativas nominales y ajustadas por IPC (ref. ${refIpc || 's/d'})</span>
     </div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
@@ -3008,8 +2998,8 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=17"></script>
-<script src="reporte.js?v=11"></script>
+<script src="manual.js?v=18"></script>
+<script src="reporte.js?v=12"></script>
 <script>
 // (24-ago) Blindaje iOS: re-suscripcion automatica de push. iOS suelta la
 // suscripcion silenciosamente cada tanto; si el permiso sigue concedido y

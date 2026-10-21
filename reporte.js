@@ -142,6 +142,7 @@ async function abrirReporteVentas() {
           <option value="semanal">Semanal</option><option value="mensual">Mensual</option>
           <option value="trimestral">Trimestral</option><option value="anual">Anual</option>
           <option value="interanual">Últimos 5 años</option>
+          <option value="evolucion">Evolución del año</option>
         </select>
         <select id="r-periodo"></select>
         <select id="r-local">
@@ -163,6 +164,7 @@ async function abrirReporteVentas() {
     const nom = { alcorta: 'Alcorta', unicenter: 'Unicenter' }[_repEnc.local] || _repEnc.local;
     document.getElementById('r-local').innerHTML = `<option value="${_repEnc.local}">${nom}</option>`;
     document.querySelector('#r-tipo option[value="interanual"]')?.remove();
+    document.querySelector('#r-tipo option[value="evolucion"]')?.remove();   // (v12) usa vistas de admin
     _repSel.local = _repEnc.local;
     if (_repSel.tipo === 'interanual') _repSel.tipo = 'semanal';
     document.getElementById('r-tipo').value = _repSel.tipo;
@@ -193,11 +195,15 @@ function _repLlenarPeriodos() {
   const sel = document.getElementById('r-periodo');
   const loc = document.getElementById('r-local');
   // El interanual no elige período ni local: es la serie completa, consolidada.
-  const esIA = _repSel.tipo === 'interanual';
+  const esIA = _repSel.tipo === 'interanual', esEvo = _repSel.tipo === 'evolucion';
   sel.style.display = esIA ? 'none' : '';
   loc.style.display = esIA ? 'none' : '';
+  // (v12) "Evolución del año" (el viejo Análisis): elige mes, y el IPC va en sus propias tarjetas → sin interruptor $
+  const btnReal = document.getElementById('r-real'); if (btnReal) btnReal.style.display = esEvo ? 'none' : '';
+  const elSolar = loc.querySelector('option[value="el_solar"]'); if (elSolar) elSolar.disabled = esEvo;
+  if (esEvo && _repSel.local === 'el_solar') { _repSel.local = 'consolidado'; loc.value = 'consolidado'; }
   if (esIA) { _repRender(); return; }
-  const lista = _repPeriodos[_repSel.tipo] || [];
+  const lista = _repPeriodos[esEvo ? 'mensual' : _repSel.tipo] || [];
   sel.innerHTML = lista.map(p => `<option value="${p}">${_repEtiqueta(_repSel.tipo, p)}</option>`).join('');
   _repSel.periodo = lista[0] || null;
   _repRender();
@@ -403,6 +409,7 @@ async function _repRender() {
   if (!body) return;
   document.querySelector('#reporte-overlay .r-box')?.setAttribute('data-local', _repSel.tipo === 'interanual' ? 'consolidado' : _repSel.local);   // (v11) color por local
   if (_repSel.tipo === 'interanual') return _repRenderInteranual();
+  if (_repSel.tipo === 'evolucion') return _repRenderEvolucion(body);
   if (!_repSel.periodo) { body.innerHTML = '<div class="r-loading">Sin reportes generados todavía.</div>'; return; }
   body.innerHTML = '<div class="r-loading">Cargando…</div>';
   const { tipo, periodo, local } = _repSel;
@@ -581,6 +588,21 @@ async function _repRender() {
 // ═══════════════════════════════════════════════════════════════════════
 const _IA_COLOR = ['#94a3b8', '#60a5fa', '#f59e0b', '#16a34a', '#dc2626'];
 let _repIaCache = null;
+
+// (v12, 21-oct-2026, JP) El apartado 📊 Análisis de la pantalla principal se mudó acá: misma función renderAnalisis()
+// del index (proyección de cierre, acumulado del año nominal y real, mes a mes vs año anterior, comparativa de locales,
+// mix de medios por mes, ticket promedio por mes, estacionalidad y día de la semana), dibujada adentro del reporte.
+async function _repRenderEvolucion(body) {
+  const p = _repSel.periodo || _repPeriodos.mensual[0];
+  if (!p) { body.innerHTML = '<div class="r-loading">Sin meses generados todavía.</div>'; return; }
+  const d = new Date(p + 'T12:00:00');
+  const loc = _repSel.local === 'consolidado' ? 'todos' : _repSel.local;
+  try {
+    await renderAnalisis(d.getFullYear(), d.getMonth() + 1, loc, body);
+  } catch (e) {
+    body.innerHTML = `<div class="r-loading">No se pudo armar la evolución: ${_rEsc(e.message || String(e))}</div>`;
+  }
+}
 
 async function _repRenderInteranual() {
   const body = document.getElementById('r-body');
