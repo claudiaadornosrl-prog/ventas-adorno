@@ -371,10 +371,14 @@ body[data-local="alcorta"] .table-wrap th { background: #dcfce7; color: #166534;
 body[data-local="unicenter"] .table-wrap th { background: #dbeafe; color: #1e40af; border-bottom-color: #93c5fd; }
 body[data-local="oficina"] .table-wrap th { background: #e5e7eb; color: #374151; border-bottom-color: #d1d5db; }
 body[data-local="alcorta"] .row-total { background: #bbf7d0; } body[data-local="unicenter"] .row-total { background: #bfdbfe; } body[data-local="oficina"] .row-total { background: #d1d5db; }
-body[data-local="alcorta"] .table-wrap .cell-derived { background: #ecfdf5; border-left-color: #a7f3d0; } body[data-local="alcorta"] tbody tr:nth-child(even) .cell-derived { background: #dcfce7; }
-body[data-local="unicenter"] .table-wrap .cell-derived { background: #eff6ff; border-left-color: #bfdbfe; } body[data-local="unicenter"] tbody tr:nth-child(even) .cell-derived { background: #dbeafe; }
 body[data-local="alcorta"] .kpi { border-top: 4px solid #16a34a; } body[data-local="unicenter"] .kpi { border-top: 4px solid #2563eb; } body[data-local="oficina"] .kpi { border-top: 4px solid #6b7280; }
-body[data-local="todos"] .kpi.kpi-alcorta, body[data-local="todos"] .kpi.kpi-unicenter, body[data-local="todos"] .kpi.kpi-oficina { }
+/* (21-oct, JP) "la tabla completa de su color": fondo de toda la planilla, filas pares más marcadas, bordes del tono */
+body[data-local="alcorta"] .table-wrap { background: #f0fdf4; } body[data-local="alcorta"] .table-wrap td { border-bottom-color: #dcfce7; } body[data-local="alcorta"] tbody tr:nth-child(even) { background: #dcfce7; }
+body[data-local="unicenter"] .table-wrap { background: #eff6ff; } body[data-local="unicenter"] .table-wrap td { border-bottom-color: #dbeafe; } body[data-local="unicenter"] tbody tr:nth-child(even) { background: #dbeafe; }
+body[data-local="oficina"] .table-wrap { background: #f3f4f6; } body[data-local="oficina"] .table-wrap td { border-bottom-color: #e5e7eb; } body[data-local="oficina"] tbody tr:nth-child(even) { background: #e5e7eb; }
+body[data-local="alcorta"] .table-wrap .cell-derived { background: #d9f5e3; } body[data-local="alcorta"] tbody tr:nth-child(even) .cell-derived { background: #c6efd4; }
+body[data-local="unicenter"] .table-wrap .cell-derived { background: #d6e7fc; } body[data-local="unicenter"] tbody tr:nth-child(even) .cell-derived { background: #c3dafa; }
+body[data-local="oficina"] .table-wrap .cell-derived { background: #e2e5ea; } body[data-local="oficina"] tbody tr:nth-child(even) .cell-derived { background: #d6dae0; }
 tbody tr:nth-child(even) .cell-derived { background: #dfe3ea; }
 .cell-derived.big { background: #e9ecf1; color: #111827; font-weight: 700; font-size: 14px; }
 tbody tr:nth-child(even) .cell-derived.big { background: #dfe3ea; }
