@@ -444,7 +444,7 @@ th.th-der + th.th-der { border-left: none; }
         <div class="icon"><img class="logo-local" src="https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-unicenter-marca.svg" alt="Unicenter" title="Unicenter" style="height:44px"></div>
       </div>
       <div class="local-opt" data-local="oficina" onclick="selectLocal(this)">
-        <div class="icon"><img class="logo-local" src="https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-ca-v2.svg" alt="Oficina" title="Oficina" style="height:44px"></div>
+        <div class="icon"><img class="logo-local" src="https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-ca-v3.svg" alt="Oficina" title="Oficina" style="height:44px"></div>
       </div>
     </div>
     <label>Contraseña</label>
@@ -574,7 +574,7 @@ const LOCALES = {
   oficina:   { nombre: 'Oficina',   icon: '' },
 };
 // (22-oct-2026, JP) logos oficiales de los locales en vez de emojis
-const LOGO_LOCAL = { alcorta: 'https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-alcorta.png', unicenter: 'https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-unicenter-marca.svg', oficina: 'https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-ca-v2.svg' };
+const LOGO_LOCAL = { alcorta: 'https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-alcorta.png', unicenter: 'https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-unicenter-marca.svg', oficina: 'https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-ca-v3.svg' };
 const NOMBRE_LOCAL = { alcorta: 'Alcorta', unicenter: 'Unicenter', oficina: 'Oficina' };
 function logoLocal(loc, h) { const u = LOGO_LOCAL[loc]; return u ? `<img class="logo-local" src="${u}" alt="${NOMBRE_LOCAL[loc]}" title="${NOMBRE_LOCAL[loc]}" style="height:${h || 18}px">` : ''; }
 const _LOCALES_FIN = {
