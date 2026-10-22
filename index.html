@@ -1078,68 +1078,40 @@ async function cargar() {
   document.body.setAttribute('data-local', localSel || '');   // (21-oct) color del local en la vista por local
   const _sy = document.getElementById('hdr-sync'); if (_sy) _sy.style.display = '';
 
-  // Chequear si el mes está cerrado para este local (sólo si hay local específico)
+  // (22-oct, JP: "tarda mucho pasar de un local a otro") Antes eran 4 viajes al servidor EN SERIE (mes cerrado →
+  // ventas → correcciones/turnos → totales de los 3 locales). Ahora van todos juntos en paralelo, y para admin la consulta
+  // de ventas trae los 3 locales de una vez (sirve para la grilla y para las tarjetas de arriba).
   const localUnico = localSel && localSel !== 'todos' ? localSel : null;
-  let cerrado = null;
-  if (localUnico) {
-    try {
-      const r = await sb.from('meses_cerrados_ventas')
-        .select('id, cerrado_por, cerrado_at')
-        .eq('local', localUnico).eq('año', año).eq('mes', mes).maybeSingle();
-      cerrado = r.data;
-    } catch(_) {}
-  }
-  _actualizarBotonesCierre(cerrado, localUnico);
-
+  const desde = `${año}-${String(mes).padStart(2,'0')}-01`;
+  const hastaDate = new Date(año, mes, 0);
+  const hasta = hastaDate.toISOString().split('T')[0];
   try {
-    const desde = `${año}-${String(mes).padStart(2,'0')}-01`;
-    const hastaDate = new Date(año, mes, 0);
-    const hasta = hastaDate.toISOString().split('T')[0];
-
-    let q = sb.from('ventas_diarias_view')
-      .select('*')
-      .gte('fecha', desde).lte('fecha', hasta)
-      .order('fecha');
-    if (localSel && localSel !== 'todos') q = q.eq('local', localSel);
-    const { data, error } = await q;
-    if (error) throw error;
-
-    // Traer correcciones aplicadas + pendientes para el rango (para resaltar celdas)
-    let aplicadas = [];
-    let pendientes = [];
-    let turnos = [];
-    if (localUnico) {
-      const [resAp, resPe, resTu] = await Promise.all([
-        sb.from('ventas_correcciones_aplicadas')
-          .select('*').eq('local', localUnico)
-          .gte('fecha', desde).lte('fecha', hasta),
-        sb.from('ventas_correcciones')
-          .select('*').eq('local', localUnico).eq('estado', 'pendiente')
-          .gte('fecha', desde).lte('fecha', hasta)
-          .order('solicitado_at', { ascending: false }),
-        sb.from('ventas_turnos_view')
-          .select('*').eq('local', localUnico)
-          .gte('fecha', desde).lte('fecha', hasta)
-          .order('numero'),
-      ]);
-      aplicadas = resAp.data || [];
-      pendientes = resPe.data || [];
-      turnos = resTu.data || [];
-    }
+    let qv = sb.from('ventas_diarias_view').select('*').gte('fecha', desde).lte('fecha', hasta).order('fecha');
+    if (!session.isAdmin && localSel && localSel !== 'todos') qv = qv.eq('local', localSel);
+    const vacio = Promise.resolve({ data: [] });
+    const [rCerr, rV, resAp, resPe, resTu] = await Promise.all([
+      localUnico ? sb.from('meses_cerrados_ventas').select('id, cerrado_por, cerrado_at').eq('local', localUnico).eq('año', año).eq('mes', mes).maybeSingle() : Promise.resolve({ data: null }),
+      qv,
+      localUnico ? sb.from('ventas_correcciones_aplicadas').select('*').eq('local', localUnico).gte('fecha', desde).lte('fecha', hasta) : vacio,
+      localUnico ? sb.from('ventas_correcciones').select('*').eq('local', localUnico).eq('estado', 'pendiente').gte('fecha', desde).lte('fecha', hasta).order('solicitado_at', { ascending: false }) : vacio,
+      localUnico ? sb.from('ventas_turnos_view').select('*').eq('local', localUnico).gte('fecha', desde).lte('fecha', hasta).order('numero') : vacio,
+    ]);
+    _actualizarBotonesCierre(rCerr.data || null, localUnico);
+    if (rV.error) throw rV.error;
+    const todas = rV.data || [];
+    const data = localUnico ? todas.filter(v => v.local === localUnico) : todas;
+    const aplicadas = resAp.data || [], pendientes = resPe.data || [], turnos = resTu.data || [];
 
     if (session.isAdmin && localSel === 'todos') {
-      renderAdminConsolidado(data || [], año, mes);
+      renderAdminConsolidado(data, año, mes);
     } else {
-      // (21-oct) tarjetas de los 3 locales también adentro de un local: se consultan ANTES de dibujar, para que
-      // la grilla y las tarjetas aparezcan juntas (antes había un parpadeo de un segundo sin tarjetas)
       let tarjetas = '';
-      if (session.isAdmin) {
-        const { data: todos } = await sb.from('ventas_diarias_view').select('local, total').gte('fecha', desde).lte('fecha', hasta);
+      if (session.isAdmin) {   // tarjetas de los 3 locales también adentro de un local
         const tot = { alcorta: 0, unicenter: 0, oficina: 0 };
-        (todos || []).forEach(v => { if (v.local in tot) tot[v.local] += +v.total || 0; });
+        todas.forEach(v => { if (v.local in tot) tot[v.local] += +v.total || 0; });
         tarjetas = kpiRowHtml(tot, localSel);
       }
-      renderGrillaLocal(data || [], año, mes, localSel, aplicadas, pendientes, turnos);
+      renderGrillaLocal(data, año, mes, localSel, aplicadas, pendientes, turnos);
       if (tarjetas) document.getElementById('contenido').insertAdjacentHTML('afterbegin', tarjetas);
     }
     // Refrescar badge de solicitudes pendientes (para admin)
