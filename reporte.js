@@ -885,12 +885,12 @@ function _repToggle(cls, row) {
       const abrir = esEnc ? abrirReporteEncargada : abrirReporteVentas;
       b.onclick = () => abrir();
       // (22-oct, JP) va en el banner, solo el ícono (como en los otros módulos), a la izquierda del kebab
-      const kw = document.querySelector('#app-screen .header .kebab-wrap');
-      if (kw) {
+      const hub = document.querySelector('#app-screen .header a.hbtn');   // (22-oct, JP) pegado a la derecha del botón del Hub
+      if (hub) {
         b.className = 'hbtn';
         b.setAttribute('aria-label', 'Reporte de ventas');
         b.innerHTML = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="20" x2="20" y2="20"/><rect x="6" y="11" width="3" height="7"/><rect x="11" y="6" width="3" height="12"/><rect x="16" y="3" width="3" height="15"/></svg>';
-        kw.insertAdjacentElement('beforebegin', b);
+        hub.insertAdjacentElement('afterend', b);
       } else {
         // Header inesperado: mejor el kebab que perder el acceso al reporte.
         const kebab = document.getElementById('kebab-menu');
