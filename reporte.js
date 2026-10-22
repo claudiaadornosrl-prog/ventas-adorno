@@ -451,7 +451,7 @@ async function _repRender() {
   const ka = _corte ? _repKpisTramo(ant, _repPeriodoAnterior(tipo, periodo), _corte) : ant?.kpis;
   const ky = _corte ? _repKpisTramo(aa, pAA, _corte) : aa?.kpis;
   const k = act.kpis;
-  const aaLbl = _corte ? `A/A (1 al ${_corte.dia})` : 'A/A', antLbl = _corte ? `ant. (1 al ${_corte.dia})` : 'ant';
+  const aaLbl = 'A/A', antLbl = 'ant';   // (22-oct, JP) el "(1 al N)" va solo en la nota, para que la tarjeta no crezca de renglón
 
   // Reexpresión: cada período con SU coeficiente, para que el delta compare
   // poder de compra y no inflación.
