@@ -106,6 +106,30 @@ function _repPeriodoAnterior(tipo, periodo) {
   else d.setMonth(d.getMonth() - _REP_SALTO[tipo]);
   return d.toISOString().slice(0, 10);
 }
+// (22-oct) ¿El período elegido incluye hoy? Devuelve {dias, dia} (días transcurridos desde el inicio y el día de hoy) o null.
+function _repTramoEnCurso(tipo, periodo) {
+  if (!periodo || tipo === 'interanual' || tipo === 'evolucion') return null;
+  const ini = new Date(periodo + 'T12:00:00'), hoy = new Date(); hoy.setHours(12, 0, 0, 0);
+  const fin = new Date(ini);
+  if (tipo === 'semanal') fin.setDate(fin.getDate() + 6);
+  else if (tipo === 'mensual') { fin.setMonth(fin.getMonth() + 1); fin.setDate(0); }
+  else if (tipo === 'trimestral') { fin.setMonth(fin.getMonth() + 3); fin.setDate(0); }
+  else { fin.setMonth(11); fin.setDate(31); }
+  if (hoy < ini || hoy > fin) return null;
+  return { dias: Math.round((hoy - ini) / 864e5), dia: hoy.getDate() };
+}
+// KPIs de un reporte recortados al mismo tramo (del día 1 al día N) usando su detalle diario. Solo venta, tickets y derivados.
+function _repKpisTramo(rep, periodoRep, corte) {
+  if (!rep) return null;
+  const dias = rep.por_dia || [];
+  if (!dias.length || !periodoRep) return rep.kpis;
+  const ini = new Date(periodoRep + 'T12:00:00'), lim = new Date(ini); lim.setDate(lim.getDate() + corte.dias);
+  const limIso = lim.toISOString().slice(0, 10);
+  const sel = dias.filter(d => String(d.fecha).slice(0, 10) <= limIso);
+  const venta = sel.reduce((s, d) => s + (+d.monto || 0), 0), tickets = sel.reduce((s, d) => s + (+d.tickets || 0), 0);
+  const conVenta = sel.filter(d => +d.monto > 0).length;
+  return { venta, tickets, ticket_prom: tickets ? venta / tickets : 0, venta_prom_dia: conVenta ? venta / conVenta : 0, dias_con_venta: conVenta, _tramo: true };
+}
 function _repPeriodoAA(tipo, periodo) {
   // En el ANUAL el período anterior YA es el año anterior: no hay un segundo
   // comparativo que agregue algo, así que devuelve null y la fila no se dibuja.
@@ -421,7 +445,13 @@ async function _repRender() {
     _repCargarIpc(),
   ]);
   if (!act) { body.innerHTML = '<div class="r-loading">No hay reporte para ese período/local.</div>'; return; }
-  const k = act.kpis, ka = ant?.kpis, ky = aa?.kpis;
+  // (22-oct, JP) si el período está EN CURSO, "ant" y "A/A" se comparan contra el mismo tramo (del día 1 al día de hoy)
+  // del período anterior / año pasado, recalculado desde su detalle diario; antes se comparaba contra el período entero.
+  const _corte = _repTramoEnCurso(tipo, periodo);
+  const ka = _corte ? _repKpisTramo(ant, _repPeriodoAnterior(tipo, periodo), _corte) : ant?.kpis;
+  const ky = _corte ? _repKpisTramo(aa, pAA, _corte) : aa?.kpis;
+  const k = act.kpis;
+  const aaLbl = _corte ? `A/A (1 al ${_corte.dia})` : 'A/A', antLbl = _corte ? `ant. (1 al ${_corte.dia})` : 'ant';
 
   // Reexpresión: cada período con SU coeficiente, para que el delta compare
   // poder de compra y no inflación.
@@ -439,7 +469,7 @@ async function _repRender() {
     return `
     <div class="r-kpi"><div class="r-kpi-l">${lbl}</div>
       <div class="r-kpi-v">${esMonto ? _rFmtK(a_) : (a_ ?? 0).toLocaleString('es-AR')}</div>
-      <div class="r-kpi-d">${_rDelta(a_, b_)} ant${pAA ? ` · ${_rDelta(a_, y_)} A/A` : ''}</div></div>`;
+      <div class="r-kpi-d">${_rDelta(a_, b_)} ${antLbl}${pAA ? ` · ${_rDelta(a_, y_)} ${aaLbl}` : ''}</div></div>`;
   };
 
   // ── categorías: árbol g → s → c ──
@@ -550,7 +580,7 @@ async function _repRender() {
       ${kpi('SKUs vendidos', k.skus, ka?.skus, ky?.skus, false)}
       ${kpi('Ticket máximo', k.ticket_max, ka?.ticket_max, ky?.ticket_max)}
       <div class="r-kpi"><div class="r-kpi-l">Venta blue</div><div class="r-kpi-v">${k.blue_pct}%</div>
-        <div class="r-kpi-d r-muted">${ka ? 'ant: ' + ka.blue_pct + '%' : ''} ${ky ? '· A/A: ' + ky.blue_pct + '%' : ''}</div></div>
+        <div class="r-kpi-d r-muted">${ka && ka.blue_pct != null ? 'ant: ' + ka.blue_pct + '%' : ''} ${ky && ky.blue_pct != null ? '· A/A: ' + ky.blue_pct + '%' : ''}${_corte ? ' <span title="Para el período en curso, unidades, UPT, SKUs, ticket máximo y venta blue no tienen comparación por tramo (el detalle diario solo trae venta y tickets)">ⓘ</span>' : ''}</div></div>
     </div>
     <div class="r-card"><div class="r-ct">Venta por ${porMes ? 'mes' : 'día'} ${_diaFuerteDebil(act.por_dia, aj ? cA.coef : 1)}</div><div class="r-bars">${barras}</div></div>
     <div class="r-card"><div class="r-ct">Categorías <span class="r-muted">(tocá para expandir · Δ ${aa ? 'vs mismo período del año anterior' : 'vs el período anterior'})</span></div>
@@ -854,14 +884,13 @@ function _repToggle(cls, row) {
         : 'Reporte semanal/mensual: KPIs, categorías, top artículos y el análisis de la semana';
       const abrir = esEnc ? abrirReporteEncargada : abrirReporteVentas;
       b.onclick = () => abrir();
-      const ana = document.getElementById('btn-analisis');
-      if (ana && !esEnc) {
-        // Copia el estilo del de Análisis para que queden parejos aunque alguien
-        // lo cambie; solo se le saca el display:none con el que nace oculto.
-        b.textContent = '📈 Reporte';
-        b.style.cssText = ana.style.cssText;
-        b.style.removeProperty('display');
-        ana.insertAdjacentElement('afterend', b);
+      // (22-oct, JP) va en el banner, solo el ícono (como en los otros módulos), a la izquierda del kebab
+      const kw = document.querySelector('#app-screen .header .kebab-wrap');
+      if (kw) {
+        b.className = 'hbtn';
+        b.setAttribute('aria-label', 'Reporte de ventas');
+        b.innerHTML = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="20" x2="20" y2="20"/><rect x="6" y="11" width="3" height="7"/><rect x="11" y="6" width="3" height="12"/><rect x="16" y="3" width="3" height="15"/></svg>';
+        kw.insertAdjacentElement('beforebegin', b);
       } else {
         // Header inesperado: mejor el kebab que perder el acceso al reporte.
         const kebab = document.getElementById('kebab-menu');
