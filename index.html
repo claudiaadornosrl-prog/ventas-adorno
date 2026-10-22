@@ -438,13 +438,13 @@ th.th-der + th.th-der { border-left: none; }
     <label>Local</label>
     <div class="local-grid">
       <div class="local-opt" data-local="alcorta" onclick="selectLocal(this)">
-        <div class="icon"><img class="logo-local" src="https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-alcorta.png" alt="Alcorta" title="Alcorta" style="height:50px"></div>
+        <div class="icon"><img class="logo-local" src="https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-alcorta.png" alt="Alcorta" title="Alcorta" style="height:44px"></div>
       </div>
       <div class="local-opt" data-local="unicenter" onclick="selectLocal(this)">
         <div class="icon"><img class="logo-local" src="https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-unicenter-marca.svg" alt="Unicenter" title="Unicenter" style="height:44px"></div>
       </div>
       <div class="local-opt" data-local="oficina" onclick="selectLocal(this)">
-        <div class="icon"><img class="logo-local" src="https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-ca-v2.svg" alt="Oficina" title="Oficina" style="height:34px"></div>
+        <div class="icon"><img class="logo-local" src="https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-ca-v2.svg" alt="Oficina" title="Oficina" style="height:44px"></div>
       </div>
     </div>
     <label>Contraseña</label>
@@ -1370,9 +1370,9 @@ async function renderAnalisis(año, mes, localSel, destino) {
     return { label, vMes, vAnt, vAA, vYtd, vYtdAA };
   };
   const filasLoc = [
-    filaLocal('alcorta', logoLocal('alcorta', 20)),
-    filaLocal('unicenter', logoLocal('unicenter', 20)),
-    filaLocal('oficina', logoLocal('oficina', 16)),
+    filaLocal('alcorta', logoLocal('alcorta', 18)),
+    filaLocal('unicenter', logoLocal('unicenter', 18)),
+    filaLocal('oficina', logoLocal('oficina', 18)),
   ];
   const consTotal = filasLoc.reduce((s, f) => s + f.vMes, 0);
   html += `<div style="background:white;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:18px;overflow-x:auto;">
@@ -1901,10 +1901,10 @@ function kpiRowHtml(tot, activo) {
   const _nombre = (loc) => LOCALES[loc]?.nombre || (loc.charAt(0).toUpperCase() + loc.slice(1));
   const _ico = (loc, h) => logoLocal(loc, h) || `<span style="font-weight:700;text-transform:none;letter-spacing:0;font-size:14px">${_nombre(loc)}</span>`;
   const card = (loc, icono, nombre) => `<div class="kpi kpi-${loc} ${activo === loc ? 'kpi-activa' : ''}" style="cursor:pointer;" title="${activo === loc ? 'Estás viendo ' + nombre : 'Ver el detalle de ' + nombre}" onclick="irALocal('${loc}')"><div class="kpi-label">${icono}</div><div class="kpi-value">${fmt$(tot[loc])}</div></div>`;
-  const _extra = Object.keys(tot).filter(l => !['alcorta', 'unicenter', 'oficina'].includes(l)).map(l => card(l, _ico(l, 16), _nombre(l))).join('');
+  const _extra = Object.keys(tot).filter(l => !['alcorta', 'unicenter', 'oficina'].includes(l)).map(l => card(l, _ico(l, 18), _nombre(l))).join('');
   return `<div class="kpi-row">
       <div class="kpi ${activo === 'todos' ? 'kpi-activa' : ''}" style="cursor:pointer;" title="${activo === 'todos' ? 'Estás viendo el consolidado' : 'Volver al consolidado'}" onclick="document.getElementById('sel-local').value='todos';cargar()"><div class="kpi-label">Total general</div><div class="kpi-value">${fmt$(granTotal)}</div></div>
-      ${card('alcorta', logoLocal('alcorta', 20), 'Alcorta')}${card('unicenter', logoLocal('unicenter', 20), 'Unicenter')}${card('oficina', logoLocal('oficina', 16), 'Oficina')}${_extra}
+      ${card('alcorta', logoLocal('alcorta', 18), 'Alcorta')}${card('unicenter', logoLocal('unicenter', 18), 'Unicenter')}${card('oficina', logoLocal('oficina', 18), 'Oficina')}${_extra}
     </div>`;
 }
 function renderAdminConsolidado(ventas, año, mes) {
@@ -1945,7 +1945,7 @@ function renderAdminConsolidado(ventas, año, mes) {
         <thead>
           <tr>
             <th rowspan="2" style="vertical-align:bottom;">Fecha</th>
-            ${locales.map(l => `<th colspan="2" class="col-${l}" style="text-align:center;">${logoLocal(l, l === 'oficina' ? 16 : 20) || _nomLoc(l)}</th>`).join('')}
+            ${locales.map(l => `<th colspan="2" class="col-${l}" style="text-align:center;">${logoLocal(l, 18) || _nomLoc(l)}</th>`).join('')}
             <th rowspan="2" style="vertical-align:bottom;">Total día</th>
           </tr>
           <tr>
