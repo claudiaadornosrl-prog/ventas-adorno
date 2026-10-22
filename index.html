@@ -324,6 +324,7 @@ body { margin: 0; font-family: 'URW Gothic', -apple-system, BlinkMacSystemFont, 
 .kpi-row .kpi { display: flex; align-items: center; gap: 10px; min-height: 52px; }
 .kpi-row .kpi .kpi-label { flex: 0 0 auto; display: flex; align-items: center; }
 .kpi-row .kpi .kpi-value { margin-top: 0; margin-left: auto; white-space: nowrap; }
+.lbl-corto { display: none; }
 .kpi-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
 
 /* KPI strip compacto — una sola fila delgada (v36) */
@@ -412,6 +413,9 @@ th.th-der + th.th-der { border-left: none; }
   .kpi-activa .kpi-label::after { display: none; }
   /* (22-oct, JP) Total general ocupa la fila entera solo si las tarjetas son impares (4 locales); con 3 locales queda 2x2 */
   .kpi-row.kpi-impar .kpi:first-child { grid-column: 1 / -1; }
+  /* (22-oct, JP) en el formato chico la tarjeta dice solo "Total" */
+  .kpi-row:not(.kpi-impar) .lbl-largo { display: none; }
+  .kpi-row:not(.kpi-impar) .lbl-corto { display: inline; }
 }
 
 .empty { padding: 60px 20px; text-align: center; color: var(--muted); }
@@ -1905,7 +1909,7 @@ function kpiRowHtml(tot, activo) {
   const _extra = Object.keys(tot).filter(l => !['alcorta', 'unicenter', 'oficina'].includes(l)).map(l => card(l, _ico(l, 18), _nombre(l))).join('');
   const _nTarjetas = 1 + Object.keys(tot).length;
   return `<div class="kpi-row${_nTarjetas % 2 ? ' kpi-impar' : ''}">
-      <div class="kpi ${activo === 'todos' ? 'kpi-activa' : ''}" style="cursor:pointer;" title="${activo === 'todos' ? 'Estás viendo el consolidado' : 'Volver al consolidado'}" onclick="document.getElementById('sel-local').value='todos';cargar()"><div class="kpi-label">Total general</div><div class="kpi-value">${fmt$(granTotal)}</div></div>
+      <div class="kpi ${activo === 'todos' ? 'kpi-activa' : ''}" style="cursor:pointer;" title="${activo === 'todos' ? 'Estás viendo el consolidado' : 'Volver al consolidado'}" onclick="document.getElementById('sel-local').value='todos';cargar()"><div class="kpi-label"><span class="lbl-largo">Total general</span><span class="lbl-corto">Total</span></div><div class="kpi-value">${fmt$(granTotal)}</div></div>
       ${card('alcorta', logoLocal('alcorta', 18), 'Alcorta')}${card('unicenter', logoLocal('unicenter', 18), 'Unicenter')}${card('oficina', logoLocal('oficina', 18), 'Oficina')}${_extra}
     </div>`;
 }

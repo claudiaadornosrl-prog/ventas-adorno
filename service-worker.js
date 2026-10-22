@@ -1,5 +1,5 @@
 // Service Worker — Ventas Adorno
-const CACHE_VERSION = 'ventas-adorno-v120-total-2x2';
+const CACHE_VERSION = 'ventas-adorno-v121-total-corto';
 const CACHE_ASSETS = ['./', './index.html',
   './manual.js', './reporte.js', './manifest.webmanifest',
   './manifest-alcorta.webmanifest', './manifest-unicenter.webmanifest', './manifest-oficina.webmanifest',
