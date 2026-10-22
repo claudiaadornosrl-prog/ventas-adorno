@@ -1849,8 +1849,7 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
             <td>${totCant}</td>
             ${showOnline ? `<td>${fmt$(totOnline)}</td>` : ''}
             ${showFcOf ? `<td>${fmt$(totFcOf)}</td>` : ''}
-            <td>${fmt$(totTotal)}</td>
-            <td>—</td>
+            <td colspan="2" style="text-align:center">${fmt$(totTotal)}</td>   <!-- (22-oct, JP) total + acumulado en una sola celda -->
             <td>—</td>
           </tr>
         </tfoot>
