@@ -317,9 +317,13 @@ body { margin: 0; font-family: 'URW Gothic', -apple-system, BlinkMacSystemFont, 
 
 /* KPIs */
 .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; padding: 16px; }
-.kpi { background: white; border-radius: 10px; padding: 14px; box-shadow: var(--shadow); }
+.kpi { background: white; border-radius: 10px; padding: 12px 14px; box-shadow: var(--shadow); }
 .kpi-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .kpi-value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+/* (22-oct, JP) en las tarjetas de locales el logo va a la izquierda y el importe al lado, en un solo renglón */
+.kpi-row .kpi { display: flex; align-items: center; gap: 10px; min-height: 52px; }
+.kpi-row .kpi .kpi-label { flex: 0 0 auto; display: flex; align-items: center; }
+.kpi-row .kpi .kpi-value { margin-top: 0; margin-left: auto; white-space: nowrap; }
 .kpi-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
 
 /* KPI strip compacto — una sola fila delgada (v36) */
@@ -402,7 +406,11 @@ th.th-der + th.th-der { border-left: none; }
 .admin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; }
 @media (max-width: 800px) {
   .admin-grid { grid-template-columns: 1fr; }
-  .kpi-row { grid-template-columns: 1fr 1fr; }
+  .kpi-row { grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 12px; }
+  .kpi-row .kpi { padding: 10px 10px; min-height: 44px; }
+  .kpi-row .kpi .kpi-value { font-size: 17px; }
+  .kpi-activa .kpi-label::after { display: none; }
+  .kpi-row .kpi:first-child { grid-column: 1 / -1; }
 }
 
 .empty { padding: 60px 20px; text-align: center; color: var(--muted); }
@@ -461,8 +469,9 @@ th.th-der + th.th-der { border-left: none; }
   <div class="header">
     <a class="hbtn" href="https://claudiaadornosrl-prog.github.io/hub/" title="Volver al Hub" aria-label="Volver al Hub"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></a><span class="header-title">📊 Ventas</span>
     <span class="header-local" id="hdr-local"></span>
-    <select id="sel-año" onchange="cargar()"></select>
-    <select id="sel-mes" onchange="cargar()"></select>
+    <select id="sel-periodo" onchange="_periodoElegido()" title="Período"></select>
+    <select id="sel-año" onchange="cargar()" style="display:none;"></select>
+    <select id="sel-mes" onchange="cargar()" style="display:none;"></select>
     <select id="sel-local" onchange="cargar()" style="display:none;"></select>
     <span id="hdr-estado" style="display:none;"></span>
     <span class="hdr-kpi" id="hdr-kpi-total" style="display:none;"></span>
@@ -896,9 +905,16 @@ function enterApp() {
   selAño.innerHTML = _años.map(a => `<option value="${a}"${a===añoActual?' selected':''}>${a}</option>`).join('');
   const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   selMes.innerHTML = meses.map((m, i) => `<option value="${i+1}"${(i+1)===(new Date().getMonth()+1)?' selected':''}>${m}</option>`).join('');
-  // Selector de local solo para admin
+  // (22-oct, JP) un solo selector corto "Oct 26" con todos los meses, del más nuevo al más viejo
+  const _mesCorto = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const _hoy = new Date(); const _ops = [];
+  for (let a = _hoy.getFullYear(); a >= _añoDesde; a--)
+    for (let m = (a === _hoy.getFullYear() ? _hoy.getMonth() + 1 : 12); m >= 1; m--)
+      _ops.push(`<option value="${a}-${m}">${_mesCorto[m-1]} ${String(a).slice(2)}</option>`);
+  document.getElementById('sel-periodo').innerHTML = _ops.join('');
+  _sincronizarPeriodo();
+  // Selector de local solo para admin: queda oculto (22-oct, JP: las tarjetas de arriba eligen el local)
   if (session.isAdmin) {
-    selLocal.style.display = '';
     selLocal.innerHTML = '<option value="todos">Todos</option>' +
       Object.entries(LOCALES).map(([id, l]) => `<option value="${id}">${l.nombre}</option>`).join('');
   } else {
@@ -1098,7 +1114,19 @@ function cerrarMesDesdeAlerta() {
   setTimeout(() => cerrarMesActual(), 400);
 }
 
+// (22-oct, JP) el selector de período manda sobre los de año y mes (ocultos); si otro código mueve año/mes, se refleja
+function _periodoElegido() {
+  const [a, m] = document.getElementById('sel-periodo').value.split('-');
+  document.getElementById('sel-año').value = a; document.getElementById('sel-mes').value = m;
+  cargar();
+}
+function _sincronizarPeriodo() {
+  const sp = document.getElementById('sel-periodo'); if (!sp) return;
+  const v = document.getElementById('sel-año').value + '-' + parseInt(document.getElementById('sel-mes').value);
+  if (sp.value !== v && [...sp.options].some(o => o.value === v)) sp.value = v;
+}
 async function cargar() {
+  _sincronizarPeriodo();
   const año = parseInt(document.getElementById('sel-año').value);
   const mes = parseInt(document.getElementById('sel-mes').value);
   const localSel = session.isAdmin ? document.getElementById('sel-local').value : session.local_id;
@@ -1869,11 +1897,14 @@ function irALocal(local) {
 // (21-oct-2026, JP) Las tarjetas Total general / Alcorta / Unicenter / Oficina se ven también adentro de cada local
 // (la del local elegido queda marcada; "Total general" vuelve al consolidado).
 function kpiRowHtml(tot, activo) {
-  const granTotal = (tot.alcorta || 0) + (tot.unicenter || 0) + (tot.oficina || 0);
+  const granTotal = Object.values(tot).reduce((a, b) => a + (b || 0), 0);
+  const _nombre = (loc) => LOCALES[loc]?.nombre || (loc.charAt(0).toUpperCase() + loc.slice(1));
+  const _ico = (loc, h) => logoLocal(loc, h) || `<span style="font-weight:700;text-transform:none;letter-spacing:0;font-size:14px">${_nombre(loc)}</span>`;
   const card = (loc, icono, nombre) => `<div class="kpi kpi-${loc} ${activo === loc ? 'kpi-activa' : ''}" style="cursor:pointer;" title="${activo === loc ? 'Estás viendo ' + nombre : 'Ver el detalle de ' + nombre}" onclick="irALocal('${loc}')"><div class="kpi-label">${icono}</div><div class="kpi-value">${fmt$(tot[loc])}</div></div>`;
+  const _extra = Object.keys(tot).filter(l => !['alcorta', 'unicenter', 'oficina'].includes(l)).map(l => card(l, _ico(l, 16), _nombre(l))).join('');
   return `<div class="kpi-row">
       <div class="kpi ${activo === 'todos' ? 'kpi-activa' : ''}" style="cursor:pointer;" title="${activo === 'todos' ? 'Estás viendo el consolidado' : 'Volver al consolidado'}" onclick="document.getElementById('sel-local').value='todos';cargar()"><div class="kpi-label">Total general</div><div class="kpi-value">${fmt$(granTotal)}</div></div>
-      ${card('alcorta', logoLocal('alcorta', 20), 'Alcorta')}${card('unicenter', logoLocal('unicenter', 20), 'Unicenter')}${card('oficina', logoLocal('oficina', 16), 'Oficina')}
+      ${card('alcorta', logoLocal('alcorta', 20), 'Alcorta')}${card('unicenter', logoLocal('unicenter', 20), 'Unicenter')}${card('oficina', logoLocal('oficina', 16), 'Oficina')}${_extra}
     </div>`;
 }
 function renderAdminConsolidado(ventas, año, mes) {
@@ -1888,9 +1919,10 @@ function renderAdminConsolidado(ventas, año, mes) {
     porFecha[v.fecha][v.local] = +v.total || 0;
   });
 
-  const locales = ['alcorta', 'unicenter', 'oficina'];
-  const totLocales = { alcorta: 0, unicenter: 0, oficina: 0 };
-  const acumLocales = { alcorta: 0, unicenter: 0, oficina: 0 };
+  // (22-oct, JP) si en el período hay un local nuevo, se suma solo (tarjeta y columnas)
+  const locales = [...new Set(['alcorta', 'unicenter', 'oficina', ...ventas.map(v => v.local).filter(Boolean)])];
+  const totLocales = Object.fromEntries(locales.map(l => [l, 0]));
+  const acumLocales = Object.fromEntries(locales.map(l => [l, 0]));
   const filas = [];
   for (let d = 1; d <= diasMes; d++) {
     const fecha = `${año}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
@@ -1904,7 +1936,8 @@ function renderAdminConsolidado(ventas, año, mes) {
     const totalDia = locales.reduce((s, loc) => s + (dia[loc]||0), 0);
     filas.push(`<tr><td>${fmtFecha(fecha)}</td>${cells}<td class="cell-derived big">${totalDia ? fmt$(totalDia) : '—'}</td></tr>`);
   }
-  const granTotal = totLocales.alcorta + totLocales.unicenter + totLocales.oficina;
+  const granTotal = locales.reduce((a, l) => a + totLocales[l], 0);
+  const _nomLoc = (l) => LOCALES[l]?.nombre || (l.charAt(0).toUpperCase() + l.slice(1));
 
   cont.innerHTML = kpiRowHtml(totLocales, 'todos') + `
     <div class="table-wrap">
@@ -1912,24 +1945,18 @@ function renderAdminConsolidado(ventas, año, mes) {
         <thead>
           <tr>
             <th rowspan="2" style="vertical-align:bottom;">Fecha</th>
-            <th colspan="2" class="col-alcorta" style="text-align:center;">${logoLocal('alcorta', 20)}</th>
-            <th colspan="2" class="col-unicenter" style="text-align:center;">${logoLocal('unicenter', 20)}</th>
-            <th colspan="2" class="col-oficina" style="text-align:center;">${logoLocal('oficina', 16)}</th>
+            ${locales.map(l => `<th colspan="2" class="col-${l}" style="text-align:center;">${logoLocal(l, l === 'oficina' ? 16 : 20) || _nomLoc(l)}</th>`).join('')}
             <th rowspan="2" style="vertical-align:bottom;">Total día</th>
           </tr>
           <tr>
-            <th class="col-alcorta">Diaria</th><th class="col-alcorta">Acumulado</th>
-            <th class="col-unicenter">Diaria</th><th class="col-unicenter">Acumulado</th>
-            <th class="col-oficina">Diaria</th><th class="col-oficina">Acumulado</th>
+            ${locales.map(l => `<th class="col-${l}">Diaria</th><th class="col-${l}">Acumulado</th>`).join('')}
           </tr>
         </thead>
         <tbody>${filas.join('')}</tbody>
         <tfoot>
           <tr class="row-total">
             <td>TOTAL</td>
-            <td class="col-alcorta" colspan="2" style="text-align:center">${fmt$(totLocales.alcorta)}</td>
-            <td class="col-unicenter" colspan="2" style="text-align:center">${fmt$(totLocales.unicenter)}</td>
-            <td class="col-oficina" colspan="2" style="text-align:center">${fmt$(totLocales.oficina)}</td>
+            ${locales.map(l => `<td class="col-${l}" colspan="2" style="text-align:center">${fmt$(totLocales[l])}</td>`).join('')}
             <td>${fmt$(granTotal)}</td>
           </tr>
         </tfoot>
