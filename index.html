@@ -155,7 +155,9 @@ window.ADORNO_SSO = (function () {
   // (22-oct-2026, migración a São Paulo) una sesión guardada del proyecto viejo no sirve en el nuevo: se descarta y se pide login
   try {
     var _s = JSON.parse(get(KEY) || 'null'), _t = _s && _s.access_token;
-    if (_t && JSON.parse(atob(_t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).ref !== 'jfwtiagteuwmyvblgwms') del(KEY);
+    // los tokens de sesión traen el proyecto en `iss` (https://<ref>.supabase.co/auth/v1); las claves del proyecto, en `ref`
+    var _p = _t ? JSON.parse(atob(_t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))) : null;
+    if (_p && String(_p.iss || '').indexOf('jfwtiagteuwmyvblgwms') < 0 && _p.ref !== 'jfwtiagteuwmyvblgwms') del(KEY);
   } catch (e) {}
   return {
     KEY: KEY,
