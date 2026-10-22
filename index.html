@@ -410,7 +410,8 @@ th.th-der + th.th-der { border-left: none; }
   .kpi-row .kpi { padding: 10px 10px; min-height: 44px; }
   .kpi-row .kpi .kpi-value { font-size: 17px; }
   .kpi-activa .kpi-label::after { display: none; }
-  .kpi-row .kpi:first-child { grid-column: 1 / -1; }
+  /* (22-oct, JP) Total general ocupa la fila entera solo si las tarjetas son impares (4 locales); con 3 locales queda 2x2 */
+  .kpi-row.kpi-impar .kpi:first-child { grid-column: 1 / -1; }
 }
 
 .empty { padding: 60px 20px; text-align: center; color: var(--muted); }
@@ -1902,7 +1903,8 @@ function kpiRowHtml(tot, activo) {
   const _ico = (loc, h) => logoLocal(loc, h) || `<span style="font-weight:700;text-transform:none;letter-spacing:0;font-size:14px">${_nombre(loc)}</span>`;
   const card = (loc, icono, nombre) => `<div class="kpi kpi-${loc} ${activo === loc ? 'kpi-activa' : ''}" style="cursor:pointer;" title="${activo === loc ? 'Estás viendo ' + nombre : 'Ver el detalle de ' + nombre}" onclick="irALocal('${loc}')"><div class="kpi-label">${icono}</div><div class="kpi-value">${fmt$(tot[loc])}</div></div>`;
   const _extra = Object.keys(tot).filter(l => !['alcorta', 'unicenter', 'oficina'].includes(l)).map(l => card(l, _ico(l, 18), _nombre(l))).join('');
-  return `<div class="kpi-row">
+  const _nTarjetas = 1 + Object.keys(tot).length;
+  return `<div class="kpi-row${_nTarjetas % 2 ? ' kpi-impar' : ''}">
       <div class="kpi ${activo === 'todos' ? 'kpi-activa' : ''}" style="cursor:pointer;" title="${activo === 'todos' ? 'Estás viendo el consolidado' : 'Volver al consolidado'}" onclick="document.getElementById('sel-local').value='todos';cargar()"><div class="kpi-label">Total general</div><div class="kpi-value">${fmt$(granTotal)}</div></div>
       ${card('alcorta', logoLocal('alcorta', 18), 'Alcorta')}${card('unicenter', logoLocal('unicenter', 18), 'Unicenter')}${card('oficina', logoLocal('oficina', 18), 'Oficina')}${_extra}
     </div>`;
