@@ -462,6 +462,11 @@ async function _repRender() {
   const $B = v => aj ? (v || 0) * cB.coef : (v || 0);
   const $Y = v => aj ? (v || 0) * cY.coef : (v || 0);
 
+  // (22-oct, JP) al pasar el mouse por la comparación se ve el valor de cada período (venta en pesos, o la cantidad si es un conteo)
+  const _fmtV = (v, esMonto) => v == null ? '—' : esMonto ? _rFmt(v) : Number(v).toLocaleString('es-AR', { maximumFractionDigits: 2 });
+  const _tipCmp = (lbl, act, otro, esMonto, etiq) => `${lbl}
+Este período: ${_fmtV(act, esMonto)}
+${etiq}: ${_fmtV(otro, esMonto)}`;
   const kpi = (lbl, val, vAnt, vAA, esMonto = true) => {
     const a_ = esMonto ? $A(val) : (val ?? 0);
     const b_ = esMonto ? $B(vAnt) : vAnt;
@@ -469,7 +474,7 @@ async function _repRender() {
     return `
     <div class="r-kpi"><div class="r-kpi-l">${lbl}</div>
       <div class="r-kpi-v">${esMonto ? _rFmtK(a_) : (a_ ?? 0).toLocaleString('es-AR')}</div>
-      <div class="r-kpi-d">${_rDelta(a_, b_)} ${antLbl}${pAA ? ` · ${_rDelta(a_, y_)} ${aaLbl}` : ''}</div></div>`;
+      <div class="r-kpi-d"><span class="r-cmp" title="${_tipCmp(lbl, a_, b_, esMonto, _repEtiqueta(tipo, _repPeriodoAnterior(tipo, periodo)) + (_corte ? ` (1 al ${_corte.dia})` : ''))}">${_rDelta(a_, b_)} ${antLbl}</span>${pAA ? ` · <span class="r-cmp" title="${_tipCmp(lbl, a_, y_, esMonto, _repEtiqueta(tipo, pAA) + (_corte ? ` (1 al ${_corte.dia})` : ''))}">${_rDelta(a_, y_)} ${aaLbl}</span>` : ''}</div></div>`;
   };
 
   // ── categorías: árbol g → s → c ──
@@ -816,6 +821,7 @@ function _repToggle(cls, row) {
     #reporte-overlay .r-kpi-l{font-size:11px;color:#64748b;}
     #reporte-overlay .r-kpi-v{font-size:19px;font-weight:700;margin:2px 0;}
     #reporte-overlay .r-kpi-d{font-size:11px;}
+    #reporte-overlay .r-cmp{cursor:help;border-bottom:1px dotted transparent;} #reporte-overlay .r-cmp:hover{border-bottom-color:currentColor;}
     #reporte-overlay .r-up{color:#16a34a;font-weight:600;} #reporte-overlay .r-down{color:#dc2626;font-weight:600;} #reporte-overlay .r-flat{color:#94a3b8;}
     #reporte-overlay .r-card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;margin:0 12px 12px;padding:12px 14px;overflow-x:auto;}
     #reporte-overlay .r-ct{font-size:13px;font-weight:700;color:#334155;margin-bottom:8px;}
