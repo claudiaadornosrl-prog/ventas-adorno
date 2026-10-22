@@ -1814,7 +1814,7 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
         ${showOnline ? celda('online', v?.online) : ''}
         ${showFcOf ? celda('fc_oficina', v?.fc_oficina) : ''}
         <td class="cell-derived big">${v ? fmt$(total) : '—'}</td>
-        <td class="cell-derived">${fmt$(acum)}</td>
+        <td class="cell-derived">${v ? fmt$(acum) : '<span style="color:#cbd5e1">—</span>'}</td>   <!-- (22-oct, JP) sin venta cargada no se repite el acumulado -->
         ${celdaTurno}
       </tr>
     `);
@@ -1901,7 +1901,7 @@ function renderAdminConsolidado(ventas, año, mes) {
       const v = dia[loc] || 0;
       totLocales[loc] += v;
       acumLocales[loc] += v;
-      return `<td class="col-${loc}">${v ? fmt$(v) : '<span style="color:#cbd5e1">—</span>'}</td><td class="cell-derived col-${loc}">${fmt$(acumLocales[loc])}</td>`;
+      return `<td class="col-${loc}">${v ? fmt$(v) : '<span style="color:#cbd5e1">—</span>'}</td><td class="cell-derived col-${loc}">${v ? fmt$(acumLocales[loc]) : '<span style="color:#cbd5e1">—</span>'}</td>`;
     }).join('');
     const totalDia = locales.reduce((s, loc) => s + (dia[loc]||0), 0);
     filas.push(`<tr><td>${fmtFecha(fecha)}</td>${cells}<td class="cell-derived big">${totalDia ? fmt$(totalDia) : '—'}</td></tr>`);
