@@ -256,9 +256,9 @@ body { margin: 0; font-family: 'URW Gothic', -apple-system, BlinkMacSystemFont, 
 .login-card input { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 15px; margin-bottom: 14px; }
 .login-card input:focus { outline: none; border-color: var(--primary); }
 .local-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 14px; }
-.local-opt { border: 2px solid var(--border); border-radius: 10px; padding: 12px 8px; text-align: center; cursor: pointer; transition: all 0.15s; background: white; }
-.local-opt:hover { border-color: #aaa; }
-.local-opt.selected { border-color: var(--primary); background: var(--primary); color: white; }
+.local-opt { border: 0; border-bottom: 3px solid transparent; border-radius: 0; padding: 8px 4px 6px; text-align: center; cursor: pointer; transition: all 0.15s; background: transparent; opacity: .45; }
+.local-opt:hover { opacity: .8; }
+.local-opt.selected { opacity: 1; border-bottom-color: var(--primary); }
 .local-opt .icon { height: 52px; display: flex; align-items: center; justify-content: center; margin-bottom: 4px; }
 .logo-local{display:inline-block;width:auto;max-width:100%;object-fit:contain;vertical-align:middle}
 .local-opt .icon .logo-local{max-width:92%}
@@ -430,13 +430,13 @@ th.th-der + th.th-der { border-left: none; }
     <label>Local</label>
     <div class="local-grid">
       <div class="local-opt" data-local="alcorta" onclick="selectLocal(this)">
-        <div class="icon"><img class="logo-local" src="https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-alcorta.png" alt="Alcorta" title="Alcorta" style="height:52px"></div>
+        <div class="icon"><img class="logo-local" src="https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-alcorta.png" alt="Alcorta" title="Alcorta" style="height:50px"></div>
       </div>
       <div class="local-opt" data-local="unicenter" onclick="selectLocal(this)">
-        <div class="icon"><img class="logo-local" src="https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-unicenter.svg" alt="Unicenter" title="Unicenter" style="height:40px"></div>
+        <div class="icon"><img class="logo-local" src="https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-unicenter-marca.svg" alt="Unicenter" title="Unicenter" style="height:44px"></div>
       </div>
       <div class="local-opt" data-local="oficina" onclick="selectLocal(this)">
-        <div class="icon"><img class="logo-local" src="https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-claudiaadorno.gif" alt="Oficina" title="Oficina" style="height:20px"></div>
+        <div class="icon"><img class="logo-local" src="https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-ca.svg" alt="Oficina" title="Oficina" style="height:34px"></div>
       </div>
     </div>
     <label>Contraseña</label>
@@ -565,7 +565,7 @@ const LOCALES = {
   oficina:   { nombre: 'Oficina',   icon: '' },
 };
 // (22-oct-2026, JP) logos oficiales de los locales en vez de emojis
-const LOGO_LOCAL = { alcorta: 'https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-alcorta.png', unicenter: 'https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-unicenter.svg', oficina: 'https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-claudiaadorno.gif' };
+const LOGO_LOCAL = { alcorta: 'https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-alcorta.png', unicenter: 'https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-unicenter-marca.svg', oficina: 'https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-ca.svg' };
 const NOMBRE_LOCAL = { alcorta: 'Alcorta', unicenter: 'Unicenter', oficina: 'Oficina' };
 function logoLocal(loc, h) { const u = LOGO_LOCAL[loc]; return u ? `<img class="logo-local" src="${u}" alt="${NOMBRE_LOCAL[loc]}" title="${NOMBRE_LOCAL[loc]}" style="height:${h || 18}px">` : ''; }
 const _LOCALES_FIN = {
@@ -1343,8 +1343,8 @@ async function renderAnalisis(año, mes, localSel, destino) {
   };
   const filasLoc = [
     filaLocal('alcorta', logoLocal('alcorta', 20)),
-    filaLocal('unicenter', logoLocal('unicenter', 16)),
-    filaLocal('oficina', logoLocal('oficina', 13)),
+    filaLocal('unicenter', logoLocal('unicenter', 20)),
+    filaLocal('oficina', logoLocal('oficina', 16)),
   ];
   const consTotal = filasLoc.reduce((s, f) => s + f.vMes, 0);
   html += `<div style="background:white;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:18px;overflow-x:auto;">
@@ -1873,7 +1873,7 @@ function kpiRowHtml(tot, activo) {
   const card = (loc, icono, nombre) => `<div class="kpi kpi-${loc} ${activo === loc ? 'kpi-activa' : ''}" style="cursor:pointer;" title="${activo === loc ? 'Estás viendo ' + nombre : 'Ver el detalle de ' + nombre}" onclick="irALocal('${loc}')"><div class="kpi-label">${icono}</div><div class="kpi-value">${fmt$(tot[loc])}</div></div>`;
   return `<div class="kpi-row">
       <div class="kpi ${activo === 'todos' ? 'kpi-activa' : ''}" style="cursor:pointer;" title="${activo === 'todos' ? 'Estás viendo el consolidado' : 'Volver al consolidado'}" onclick="document.getElementById('sel-local').value='todos';cargar()"><div class="kpi-label">Total general</div><div class="kpi-value">${fmt$(granTotal)}</div></div>
-      ${card('alcorta', logoLocal('alcorta', 20), 'Alcorta')}${card('unicenter', logoLocal('unicenter', 16), 'Unicenter')}${card('oficina', logoLocal('oficina', 13), 'Oficina')}
+      ${card('alcorta', logoLocal('alcorta', 20), 'Alcorta')}${card('unicenter', logoLocal('unicenter', 20), 'Unicenter')}${card('oficina', logoLocal('oficina', 16), 'Oficina')}
     </div>`;
 }
 function renderAdminConsolidado(ventas, año, mes) {
@@ -1913,8 +1913,8 @@ function renderAdminConsolidado(ventas, año, mes) {
           <tr>
             <th rowspan="2" style="vertical-align:bottom;">Fecha</th>
             <th colspan="2" class="col-alcorta" style="text-align:center;">${logoLocal('alcorta', 20)}</th>
-            <th colspan="2" class="col-unicenter" style="text-align:center;">${logoLocal('unicenter', 16)}</th>
-            <th colspan="2" class="col-oficina" style="text-align:center;">${logoLocal('oficina', 13)}</th>
+            <th colspan="2" class="col-unicenter" style="text-align:center;">${logoLocal('unicenter', 20)}</th>
+            <th colspan="2" class="col-oficina" style="text-align:center;">${logoLocal('oficina', 16)}</th>
             <th rowspan="2" style="vertical-align:bottom;">Total día</th>
           </tr>
           <tr>
