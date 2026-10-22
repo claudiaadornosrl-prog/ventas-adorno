@@ -1929,9 +1929,9 @@ function renderAdminConsolidado(ventas, año, mes) {
         <tfoot>
           <tr class="row-total">
             <td>TOTAL</td>
-            <td class="col-alcorta">${fmt$(totLocales.alcorta)}</td><td class="col-alcorta">—</td>
-            <td class="col-unicenter">${fmt$(totLocales.unicenter)}</td><td class="col-unicenter">—</td>
-            <td class="col-oficina">${fmt$(totLocales.oficina)}</td><td class="col-oficina">—</td>
+            <td class="col-alcorta" colspan="2" style="text-align:center">${fmt$(totLocales.alcorta)}</td>
+            <td class="col-unicenter" colspan="2" style="text-align:center">${fmt$(totLocales.unicenter)}</td>
+            <td class="col-oficina" colspan="2" style="text-align:center">${fmt$(totLocales.oficina)}</td>
             <td>${fmt$(granTotal)}</td>
           </tr>
         </tfoot>
