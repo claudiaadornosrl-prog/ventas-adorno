@@ -28,6 +28,7 @@ function _manualSecciones() {
       desc: 'La planilla diaria de ventas del local. Reemplaza la planilla Excel de siempre.',
       pasos: [
         'Cada fila es un día; las columnas son los medios de pago: Efectivo, Tarjeta, QR (Mercado Pago), Vales, y para Oficina también Transferencia y CC.',
+        'Si el mes elegido no tiene días cargados, arriba de la grilla aparece un aviso con el motivo: mes futuro, mes en curso sin ventas todavía, mes viejo del que solo se conoce el total mensual, o mes en que el local no operaba.',
         'Los números los carga solo el sistema desde Dragonfish — no hace falta tipear nada. Si un día quedó incompleto, tocá "Resincronizar mes" en el menú ⋮ (solo actualiza días NO cerrados).',
         'La columna Online en los locales es el efectivo de la segunda base — si hay que corregir a mano, SIEMPRE se corrige en esa columna.',
         'FC Oficina son facturas emitidas en Oficina pero que corresponden a una venta del local — las carga el sistema solo.',

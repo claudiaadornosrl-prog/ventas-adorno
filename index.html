@@ -1167,6 +1167,50 @@ function _sincronizarPeriodo() {
   const v = document.getElementById('sel-año').value + '-' + parseInt(document.getElementById('sel-mes').value);
   if (sp.value !== v && [...sp.options].some(o => o.value === v)) sp.value = v;
 }
+/** (24-oct) Período sin ventas diarias: aviso arriba de la grilla con el motivo.
+ *  Casos: mes futuro · mes en curso sin sync todavía · mes con total mensual histórico pero sin días
+ *  (3 meses de la planilla vieja no cerraban y no se importaron) · mes sin registro (el local no operaba,
+ *  obras, pandemia — JP: los huecos no son solo la pandemia). */
+async function _explicarMesVacio(año, mes, localUnico) {
+  const cont = document.getElementById('contenido');
+  if (!cont) return;
+  const hoy = new Date();
+  const ym = año * 100 + mes, ymHoy = hoy.getFullYear() * 100 + (hoy.getMonth() + 1);
+  const nombreMes = new Date(año, mes - 1, 1).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+  const quien = localUnico ? (NOMBRE_LOCAL?.[localUnico] || localUnico) : 'ningún local';
+  let titulo = '', detalle = '', tono = '#f1f5f9', borde = '#cbd5e1', color = '#475569';
+  if (ym > ymHoy) {
+    titulo = `${nombreMes} todavía no empezó`;
+    detalle = 'Los días se van a ir cargando solos desde Dragonfish a medida que haya ventas.';
+  } else if (ym === ymHoy) {
+    titulo = `Todavía no hay ventas sincronizadas en ${nombreMes}`;
+    detalle = 'El sistema de cada local sube los días a medida que vende. Si ya hubo ventas y no aparecen, usá "Resincronizar mes" en el menú ⋮.';
+  } else {
+    let hist = [];
+    try {
+      let q = sb.from('ventas_mensual_historico').select('local,total,transacciones,notas').eq('anio', año).eq('mes', mes);
+      if (localUnico) q = q.eq('local', localUnico);
+      const { data } = await q;
+      hist = (data || []).filter(h => +h.total);
+    } catch (e) { /* sin histórico no pasa nada */ }
+    if (hist.length) {
+      tono = '#fffbeb'; borde = '#f59e0b'; color = '#78350f';
+      titulo = `${nombreMes}: se conoce el total del mes, pero no el día a día`;
+      const partes = hist.map(h => `${(NOMBRE_LOCAL?.[h.local] || h.local)}: $ ${fmt$(+h.total)}${h.transacciones ? ` (${fmt$(+h.transacciones)} tickets)` : ''}`);
+      detalle = `${partes.join(' · ')}. Viene de la planilla histórica, que para este mes no cerraba contra sus días y por eso no se importaron. El Reporte lo cuenta igual.`;
+    } else {
+      titulo = `No hay registro de ventas de ${quien} en ${nombreMes}`;
+      detalle = localUnico
+        ? 'El local no operaba ese mes, estaba en obras o cerrado. Si tendría que haber ventas, usá "Resincronizar mes" en el menú ⋮ (solo trae lo que el Dragonfish de hoy conserva).'
+        : 'Ningún local tiene días cargados en ese mes.';
+    }
+  }
+  const html = `<div class="mes-vacio" style="margin:0 0 12px;padding:12px 16px;border-radius:10px;background:${tono};border:1px solid ${borde};color:${color};font-size:13px;line-height:1.45;">
+      <div style="font-weight:700;font-size:14px;margin-bottom:2px;">${escHtml(titulo)}</div><div>${escHtml(detalle)}</div></div>`;
+  const kpis = cont.querySelector('.kpi-row');
+  if (kpis) kpis.insertAdjacentHTML('afterend', html); else cont.insertAdjacentHTML('afterbegin', html);
+}
+
 async function cargar() {
   _sincronizarPeriodo();
   const año = parseInt(document.getElementById('sel-año').value);
@@ -1211,6 +1255,8 @@ async function cargar() {
       renderGrillaLocal(data, año, mes, localSel, aplicadas, pendientes, turnos);
       if (tarjetas) document.getElementById('contenido').insertAdjacentHTML('afterbegin', tarjetas);
     }
+    // (24-oct, JP) La grilla no queda muda: si el período no tiene días cargados, dice por qué.
+    if (!data.length) await _explicarMesVacio(año, mes, localUnico);
     // Refrescar badge de solicitudes pendientes (para admin)
     if (session.isAdmin) { refrescarBadgeSolicitudes(); refrescarBadgeControlCerrados(); }
     refrescarBadgeReaperturas();
@@ -3221,7 +3267,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=26"></script>
+<script src="manual.js?v=27"></script>
 <script src="reporte.js?v=16"></script>
 <script>
 // (24-ago) Blindaje iOS: re-suscripcion automatica de push. iOS suelta la
