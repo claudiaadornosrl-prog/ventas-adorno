@@ -134,7 +134,7 @@ function abrirManual() {
   ov.innerHTML = `
     <div class="m-box">
       <div class="m-head">
-        <span style="font-size:22px;">📖</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true" style="width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
         <div style="flex:1;">
           <div style="font-weight:700;font-size:16px;">Manual · Ventas</div>
           <div style="font-size:12px;opacity:.85;">Guía rápida de cada herramienta del módulo</div>

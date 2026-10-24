@@ -455,7 +455,7 @@ th.th-der + th.th-der { border-left: none; }
 <!-- LOGIN -->
 <div id="login-screen" class="screen active">
   <div class="login-card">
-    <h1>📊 Ventas</h1>
+    <h1>Ventas</h1>
     <p class="sub">Claudia Adorno · Carga de ventas diarias</p>
     <label>Local</label>
     <div class="local-grid">
@@ -489,7 +489,7 @@ th.th-der + th.th-der { border-left: none; }
 <!-- APP -->
 <div id="app-screen" class="screen">
   <div class="header">
-    <a class="hbtn" href="https://claudiaadornosrl-prog.github.io/hub/" title="Volver al Hub" aria-label="Volver al Hub"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></a><span class="header-title">📊 Ventas</span>
+    <a class="hbtn" href="https://claudiaadornosrl-prog.github.io/hub/" title="Volver al Hub" aria-label="Volver al Hub"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></a><span class="header-title">Ventas</span>
     <span class="header-local" id="hdr-local"></span>
     <select id="sel-periodo" onchange="_periodoElegido()" title="Período"></select>
     <select id="sel-año" onchange="cargar()" style="display:none;"></select>
@@ -517,13 +517,13 @@ th.th-der + th.th-der { border-left: none; }
   </div>
 
   <div id="alerta-sync-finmes" style="display:none;background:linear-gradient(90deg,#fed7aa,#fdba74);border-bottom:1px solid #ea580c;padding:10px 16px;align-items:center;gap:10px;flex-wrap:wrap;">
-    <span style="font-size:18px;">📅</span>
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="width:20px;height:20px;fill:none;stroke:#7c2d12;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
     <span id="alerta-sync-finmes-text" style="flex:1;font-size:14px;color:#7c2d12;font-weight:600;"></span>
     <button id="alerta-sync-finmes-btn" onclick="hacerSyncFinDeMes()" style="padding:6px 14px;background:#c2410c;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;" class="alerta-cta"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"/></svg>Sincronizar ahora</button>
   </div>
 
   <div id="alerta-cerrar-mes" style="display:none;background:linear-gradient(90deg,#fef3c7,#fde68a);border-bottom:1px solid #f59e0b;padding:10px 16px;display:none;align-items:center;gap:10px;flex-wrap:wrap;">
-    <span style="font-size:18px;">🎉</span>
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="width:20px;height:20px;fill:none;stroke:#78350f;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16 9"/></svg>
     <span id="alerta-cerrar-mes-text" style="flex:1;font-size:14px;color:#78350f;font-weight:600;"></span>
     <button id="alerta-cerrar-mes-btn" onclick="cerrarMesDesdeAlerta()" style="padding:6px 14px;background:#92400e;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;" class="alerta-cta"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Cerrar ahora</button>
     <button onclick="document.getElementById('alerta-cerrar-mes').style.display='none';" style="padding:4px 8px;background:transparent;border:none;color:#78350f;font-size:18px;cursor:pointer;" title="Cerrar aviso">×</button>
@@ -1085,8 +1085,8 @@ async function chequearSyncFinDeMes() {
       _syncFinMesPendiente = { localId, año: añoAnt, mes: mesAnt, fechaUlt };
       const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
       const txt = session.isAdmin
-        ? `📅 Falta el sync de fin de mes para ${meses[mesAnt-1]} ${añoAnt} de ${LOCALES[localId].nombre}`
-        : `📅 Tenés que hacer el sync de fin de mes de ${meses[mesAnt-1]} ${añoAnt} antes de que JP cierre el mes`;
+        ? `Falta el sync de fin de mes para ${meses[mesAnt-1]} ${añoAnt} de ${LOCALES[localId].nombre}`
+        : `Tenés que hacer el sync de fin de mes de ${meses[mesAnt-1]} ${añoAnt} antes de que JP cierre el mes`;
       document.getElementById('alerta-sync-finmes-text').textContent = txt;
       document.getElementById('alerta-sync-finmes').style.display = 'flex';
       return;
@@ -1403,7 +1403,7 @@ async function renderAnalisis(año, mes, localSel, destino) {
 
   let html = `<div style="max-width:1180px;margin:0 auto;padding:${destino ? '0 12px 8px' : '14px'};">
     <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-      ${destino ? '' : `<h2 style="margin:0;font-size:20px;">📊 Análisis · ${tituloLocal}</h2>`}
+      ${destino ? '' : `<h2 style="margin:0;font-size:20px;">Análisis · ${tituloLocal}</h2>`}
       <span style="color:var(--muted);font-size:13px;">${destino ? tituloLocal + ' · ' : ''}${MESES_CORTOS[mes-1]} ${año} · comparativas nominales y ajustadas por IPC (ref. ${refIpc || 's/d'})</span>
     </div>
 
@@ -1526,7 +1526,7 @@ async function renderAnalisis(año, mes, localSel, destino) {
           return `<td style="padding:6px 5px;font-family:monospace;">${tr2 ? fmtM(vv/tr2) : '—'}</td>`;
         }).join('')}</tr>
     </table>
-    <div style="font-size:11px;color:var(--muted);margin-top:8px;">💡 El histórico ${año-1} cargado desde planillas solo tiene totales mensuales: el mix de medios y el ticket aplican al detalle diario (${año} en adelante).</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px;">El histórico ${año-1} cargado desde planillas solo tiene totales mensuales: el mix de medios y el ticket aplican al detalle diario (${año} en adelante).</div>
   </div>`;
 
   // ── ESTACIONALIDAD: % del año que aporta cada mes ──
@@ -1598,7 +1598,7 @@ async function renderAnalisis(año, mes, localSel, destino) {
         </div>
       </div>`;
     } else {
-      html += `<div style="font-size:12px;color:var(--muted);margin-bottom:24px;">📅 El desglose por día de la semana está disponible para años con detalle diario (2026 en adelante).</div>`;
+      html += `<div style="font-size:12px;color:var(--muted);margin-bottom:24px;">El desglose por día de la semana está disponible para años con detalle diario (2026 en adelante).</div>`;
     }
   } catch (_) {}
 
@@ -1628,7 +1628,7 @@ window._mpModal = function _mpModal(titulo, cuerpo) {
 window.abrirDetalleMp = async function abrirDetalleMp(fecha, localId) {
   const esc = x => String(x ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const fFmt = new Date(fecha + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
-  _mpModal(`💳 Cruce MP · ${fFmt}`, `<div style="padding:4px 0;color:var(--muted);">Recalculando cruce…</div>`);
+  _mpModal(`Cruce MP · ${fFmt}`, `<div style="padding:4px 0;color:var(--muted);">Recalculando cruce…</div>`);
   try {
     // Recruzar primero: los pagos MP pueden indexarse horas/días tarde
     await sb.rpc('ventas_cruzar_dia_mp', { p_local: localId, p_fecha: fecha });
@@ -1651,18 +1651,18 @@ window.abrirDetalleMp = async function abrirDetalleMp(fecha, localId) {
       </div>
       <div style="margin-bottom:12px;font-size:13px;">${difTxt}</div>`;
     if (+(sum.link_sum||0) > 0) {
-      html += `<div style="font-size:12px;color:var(--muted);margin:-6px 0 12px;">🔗 Cobrado por link de pago: <strong>$${(+sum.link_sum).toLocaleString('es-AR')}</strong> — va a la cuenta general de MP, excluido del cruce.</div>`;
+      html += `<div style="font-size:12px;color:var(--muted);margin:-6px 0 12px;">Cobrado por link de pago: <strong>$${(+sum.link_sum).toLocaleString('es-AR')}</strong> — va a la cuenta general de MP, excluido del cruce.</div>`;
     }
     if (sinPago.length) {
-      html += `<div style="font-weight:700;font-size:12px;margin:8px 0 4px;">🧾 Ventas en Dragonfish SIN pago igual en MP (${sinPago.length})</div>
+      html += `<div style="font-weight:700;font-size:12px;margin:8px 0 4px;">Ventas en Dragonfish SIN pago igual en MP (${sinPago.length})</div>
         <table style="width:100%;font-size:12px;border-collapse:collapse;">` +
         sinPago.map(t => `<tr style="border-bottom:1px solid var(--border);"><td style="width:1%;padding:3px 10px 3px 4px;white-space:nowrap;">${esc(t.numero_comprobante||'—')}</td><td style="width:1%;padding:3px 10px 3px 0;color:var(--muted);white-space:nowrap;">${esc((t.codigo_jjco||'').trim())}</td><td style="width:1%;padding:3px 4px 3px 0;font-weight:600;white-space:nowrap;">$${(+t.importe||0).toLocaleString('es-AR')}</td><td></td></tr>`).join('') + `</table>`;
     }
     if (sinVenta.length) {
-      html += `<div style="font-weight:700;font-size:12px;margin:10px 0 4px;">💳 Pagos en la cuenta MP SIN venta igual en Dragonfish (${sinVenta.length})</div>
+      html += `<div style="font-weight:700;font-size:12px;margin:10px 0 4px;">Pagos en la cuenta MP SIN venta igual en Dragonfish (${sinVenta.length})</div>
         <table style="width:100%;font-size:12px;border-collapse:collapse;">` +
         sinVenta.map(m => `<tr style="border-bottom:1px solid var(--border);"><td style="width:1%;padding:3px 10px 3px 4px;white-space:nowrap;">${fmtHora(m.hora)}</td><td style="width:1%;padding:3px 10px 3px 0;color:var(--muted);white-space:nowrap;">${esc(m.pos_name||m.canal||'—')}</td><td style="width:1%;padding:3px 4px 3px 0;font-weight:600;white-space:nowrap;">$${(+m.importe||0).toLocaleString('es-AR')}</td><td></td></tr>`).join('') + `</table>`;
-      html += `<div style="font-size:11px;color:var(--muted);margin-top:6px;">💡 Un pago sin venta igual suele ser varias ventas cobradas JUNTAS en un solo cobro Point (comparar con la lista de arriba).</div>`;
+      html += `<div style="font-size:11px;color:var(--muted);margin-top:6px;">Un pago sin venta igual suele ser varias ventas cobradas JUNTAS en un solo cobro Point (comparar con la lista de arriba).</div>`;
     }
     if (!sinPago.length && !sinVenta.length) html += `<div style="font-size:13px;color:var(--muted);">Todos los importes matchean 1 a 1.</div>`;
     html += `<div style="font-size:11px;color:var(--muted);margin-top:10px;">El match es por importe exacto: con dos ventas del mismo monto y un solo pago, ambas figuran con match — la diferencia total de arriba es el número confiable. El cruce se recalculó recién ahora.</div>`;
@@ -1682,14 +1682,14 @@ window.abrirDetalleMp = async function abrirDetalleMp(fecha, localId) {
         html += `<div id="mp-salvar-wrap" style="margin-top:12px;padding:10px 12px;border-radius:8px;background:#fffbeb;border-left:4px solid #d97706;">
           <div style="font-weight:700;font-size:13px;color:#92400e;">Esta diferencia está SIN REVISAR</div>
           <div style="font-size:12px;color:#92400e;margin:3px 0 8px;">Si tiene una explicación (cobro de otro local, devolución, venta cargada distinta a propósito), justificala. Si no, marcala como error.</div>
-          <button onclick="salvarDifMpForm('${fecha}','${localId}')" style="font-size:13px;font-weight:700;padding:8px 14px;border:none;background:#d97706;color:white;border-radius:8px;cursor:pointer;">📝 Revisar y salvar</button>
+          <button onclick="salvarDifMpForm('${fecha}','${localId}')" style="font-size:13px;font-weight:700;padding:8px 14px;border:none;background:#d97706;color:white;border-radius:8px;cursor:pointer;">Revisar y salvar</button>
         </div>`;
       }
     }
-    _mpModal(`💳 Cruce MP · ${fFmt}`, html);
+    _mpModal(`Cruce MP · ${fFmt}`, html);
     cargar(); // refrescar el tilde con el cruce nuevo
   } catch (e) {
-    _mpModal('💳 Cruce MP', `<div style="color:#dc2626;">Error: ${esc(e.message || String(e))}</div>`);
+    _mpModal('Cruce MP', `<div style="color:#dc2626;">Error: ${esc(e.message || String(e))}</div>`);
   }
 };
 
@@ -1698,7 +1698,7 @@ window.salvarDifMpForm = function salvarDifMpForm(fecha, localId) {
   const wrap = document.getElementById('mp-salvar-wrap') || document.querySelector('#modal h3').parentElement;
   const nombreGuardado = localStorage.getItem('ventas_revisor_nombre') || '';
   const formHtml = `<div id="mp-salvar-form" style="margin-top:12px;padding:12px;border-radius:8px;background:var(--bg);border:1px solid var(--border);">
-    <div style="font-weight:700;font-size:13px;margin-bottom:8px;">📝 Salvar la diferencia</div>
+    <div style="font-weight:700;font-size:13px;margin-bottom:8px;">Salvar la diferencia</div>
     <input id="mp-rev-nombre" type="text" placeholder="Tu nombre *" value="${nombreGuardado.replace(/"/g,'&quot;')}"
            style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-bottom:6px;">
     <textarea id="mp-rev-motivo" rows="2" placeholder="Motivo (obligatorio para justificar): ej. cobraron con el Point de Alcorta / devolución del día anterior / se cargó a propósito así…"
@@ -1826,7 +1826,7 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
       }
       if (pe) {
         style += 'border:2px solid #f59e0b;';
-        badge = ' 📝';
+        badge = ' ✎';
         title = (title?title+'\n\n':'') + `Solicitud pendiente: ${fmt$(pe.valor_anterior)} → ${fmt$(pe.valor_propuesto)}\nMotivo: ${pe.motivo}\nPor: ${pe.solicitado_por}`;
       }
       // Determinar acción al click según rol y campo
@@ -1885,10 +1885,10 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
       const diaCerrado = !!v?.controlado;
       const badgeColor = conDiscrep > 0 ? '#fee2e2' : (diaCerrado ? '#e0e7ff' : '#dcfce7');
       const badgeTxt   = conDiscrep > 0 ? '#991b1b' : (diaCerrado ? '#3730a3' : '#166534');
-      const badgeIcon  = diaCerrado ? '🏁 ' : '';
+      const badgeIcon  = diaCerrado ? '✓ ' : '';
       const badge = nTurnos > 0
         ? `<span title="${nTurnos} turno${nTurnos>1?'s':''}${conDiscrep>0?' — con diferencia en el arqueo':''}" style="background:${badgeColor};color:${badgeTxt};padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">${badgeIcon}${nTurnos}${conDiscrep>0?' ⚠':''}</span>`
-        : (diaCerrado ? `<span style="background:#e0e7ff;color:#3730a3;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">🏁 cerrado</span>` : '');
+        : (diaCerrado ? `<span style="background:#e0e7ff;color:#3730a3;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">✓ cerrado</span>` : '');
       // Botón "Cerrar turno" disponible si es HOY y el día NO está cerrado.
       // Antes requeríamos venta cargada, pero eso bloqueaba a Oficina cuando
       // todavía no había corrido el sync horario. El pre-sync forzado dentro
@@ -2107,18 +2107,18 @@ function abrirEditar(fecha, localId, v) {
   const html = `
     <div id="modal" style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;">
       <div style="background:white;border-radius:12px;padding:22px;max-width:520px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
-        <h3 style="margin:0 0 4px;color:var(--primary);">📊 ${v ? 'Editar' : 'Cargar'} venta del día</h3>
+        <h3 style="margin:0 0 4px;color:var(--primary);">${v ? 'Editar' : 'Cargar'} venta del día</h3>
         <p style="margin:0 0 16px;font-size:12px;color:var(--muted);">${LOCALES[localId]?.nombre} · ${fmtFecha(fecha)}</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-          <div><label style="font-size:11px;color:var(--muted);">💵 Efectivo</label><input id="f-efectivo" type="text" inputmode="decimal" value="${nmShow(v?.efectivo)}" onfocus="wireImporte(this)" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
+          <div><label style="font-size:11px;color:var(--muted);">Efectivo</label><input id="f-efectivo" type="text" inputmode="decimal" value="${nmShow(v?.efectivo)}" onfocus="wireImporte(this)" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
           ${mostrarCampoTarjeta
-            ? `<div><label style="font-size:11px;color:var(--muted);">💳 Tarjeta</label><input id="f-tarjeta" type="text" inputmode="decimal" value="${nmShow(v?.tarjeta)}" onfocus="wireImporte(this)" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>`
+            ? `<div><label style="font-size:11px;color:var(--muted);">Tarjeta</label><input id="f-tarjeta" type="text" inputmode="decimal" value="${nmShow(v?.tarjeta)}" onfocus="wireImporte(this)" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>`
             : `<input id="f-tarjeta" type="hidden" value="${v?.tarjeta || ''}">`}
-          <div><label style="font-size:11px;color:var(--muted);">📱 MP</label><input id="f-qr" type="text" inputmode="decimal" value="${nmShow(v?.qr)}" onfocus="wireImporte(this)" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
-          <div><label style="font-size:11px;color:var(--muted);">🎟 Vales</label><input id="f-vales" type="text" inputmode="decimal" value="${nmShow(v?.vales)}" onfocus="wireImporte(this)" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
-          <div><label style="font-size:11px;color:var(--muted);">🌐 Online</label><input id="f-online" type="text" inputmode="decimal" value="${nmShow(v?.online)}" onfocus="wireImporte(this)" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
-          <div><label style="font-size:11px;color:var(--muted);">🧾 Fc Oficina</label><input id="f-fc-of" type="text" inputmode="decimal" value="${nmShow(v?.fc_oficina)}" onfocus="wireImporte(this)" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
-          <div><label style="font-size:11px;color:var(--muted);">🛒 Cant. transacciones</label><input id="f-cant" type="number" value="${v?.cant_transacciones || ''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
+          <div><label style="font-size:11px;color:var(--muted);">MP</label><input id="f-qr" type="text" inputmode="decimal" value="${nmShow(v?.qr)}" onfocus="wireImporte(this)" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
+          <div><label style="font-size:11px;color:var(--muted);">Vales</label><input id="f-vales" type="text" inputmode="decimal" value="${nmShow(v?.vales)}" onfocus="wireImporte(this)" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
+          <div><label style="font-size:11px;color:var(--muted);">Online</label><input id="f-online" type="text" inputmode="decimal" value="${nmShow(v?.online)}" onfocus="wireImporte(this)" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
+          <div><label style="font-size:11px;color:var(--muted);">Fc Oficina</label><input id="f-fc-of" type="text" inputmode="decimal" value="${nmShow(v?.fc_oficina)}" onfocus="wireImporte(this)" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
+          <div><label style="font-size:11px;color:var(--muted);">Cant. transacciones</label><input id="f-cant" type="number" value="${v?.cant_transacciones || ''}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>
           <div><label style="font-size:11px;color:var(--muted);">Control</label>
             <label style="display:flex;align-items:center;gap:6px;padding:9px;font-size:14px;">
               <input type="checkbox" id="f-controlado" ${v?.controlado ? 'checked' : ''}> Día controlado
@@ -2145,7 +2145,7 @@ function abrirEditarFcOficina(fecha, localId, v) {
   const html = `
     <div id="modal" style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;">
       <div style="background:white;border-radius:12px;padding:22px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
-        <h3 style="margin:0 0 4px;color:var(--primary);">🧾 Fc Oficina</h3>
+        <h3 style="margin:0 0 4px;color:var(--primary);">Fc Oficina</h3>
         <p style="margin:0 0 16px;font-size:12px;color:var(--muted);">${LOCALES[localId]?.nombre} · ${fmtFecha(fecha)}</p>
         <label style="font-size:12px;color:var(--muted);font-weight:600;">Monto Fc Oficina</label>
         <input id="f-fc-of" type="text" inputmode="decimal" value="${nmShow(actual)}" onfocus="wireImporte(this)" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;margin-top:6px;">
@@ -2185,15 +2185,15 @@ async function guardarFcOficina(fecha, localId, vId) {
 // de Oficina y faltaban en los dos lados: el pedido moría con 23514 y el modal
 // mostraba el nombre crudo de la columna.
 const CAMPO_LABEL = {
-  efectivo: '💵 Efectivo', tarjeta: '💳 Tarjeta', qr: '📱 MP', vales: '🎟 Vales',
-  online: '🌐 Online', fc_oficina: '🧾 Fc Oficina', cant_transacciones: '🛒 Cant. transacciones',
-  transferencia: '🏦 Transferencia', cc: '📒 Cta. Cte.',
+  efectivo: 'Efectivo', tarjeta: 'Tarjeta', qr: 'MP', vales: 'Vales',
+  online: 'Online', fc_oficina: 'Fc Oficina', cant_transacciones: 'Cant. transacciones',
+  transferencia: 'Transferencia', cc: 'Cta. Cte.',
 };
 function abrirSolicitudCorreccion(fecha, localId, campo, valorActual) {
   const html = `
     <div id="modal" style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;">
       <div style="background:white;border-radius:12px;padding:22px;max-width:460px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
-        <h3 style="margin:0 0 4px;color:var(--primary);">📩 Pedir corrección</h3>
+        <h3 style="margin:0 0 4px;color:var(--primary);">Pedir corrección</h3>
         <p style="margin:0 0 14px;font-size:12px;color:var(--muted);">${LOCALES[localId]?.nombre} · ${fmtFecha(fecha)} · ${CAMPO_LABEL[campo]||campo}</p>
         <div style="background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:13px;">
           <div style="color:var(--muted);font-size:11px;">Valor actual del sistema:</div>
@@ -2289,11 +2289,11 @@ async function abrirGestionSolicitudes() {
     <div id="modal" style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;">
       <div style="background:white;border-radius:12px;padding:22px;max-width:640px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-          <h3 style="margin:0;color:var(--primary);">📩 Solicitudes pendientes (${(solicitudes||[]).length})</h3>
+          <h3 style="margin:0;color:var(--primary);">Solicitudes pendientes (${(solicitudes||[]).length})</h3>
           <button onclick="cerrarModal()" style="background:transparent;border:none;font-size:22px;cursor:pointer;color:var(--muted);">×</button>
         </div>
         ${(solicitudes||[]).length === 0
-          ? '<div style="text-align:center;padding:40px;color:var(--muted);">No hay solicitudes pendientes 🎉</div>'
+          ? '<div style="text-align:center;padding:40px;color:var(--muted);">No hay solicitudes pendientes</div>'
           : filas}
       </div>
     </div>`;
@@ -2479,13 +2479,13 @@ function _actualizarBotonesCierre(cerradoRow, localUnico) {
     const cuando = (cerradoRow.cerrado_at || '').split('T')[0];
     const por = (cerradoRow.cerrado_por || '').split('@')[0];
     statusEl.style.display = '';
-    statusEl.innerHTML = `<span style="background:#dcfce7;color:#065f46;padding:3px 10px;border-radius:999px;font-weight:600;font-size:12px;white-space:nowrap;" title="Mes cerrado por ${escHtml(por)} (${cuando}). Para modificar, reabrir primero.">🔒 Cerrado</span>`;
+    statusEl.innerHTML = `<span style="background:#dcfce7;color:#065f46;padding:3px 10px;border-radius:999px;font-weight:600;font-size:12px;white-space:nowrap;" title="Mes cerrado por ${escHtml(por)} (${cuando}). Para modificar, reabrir primero.">Cerrado</span>`;
     if (session.isAdmin) btnReabrir.style.display = '';
     if (btnDF) btnDF.disabled = true;
   } else {
     // Mes abierto: Resincronizar para todos, Cerrar mes solo admin (ambos en el kebab).
     statusEl.style.display = '';
-    statusEl.innerHTML = `<span style="background:#fef3c7;color:#92400e;padding:3px 10px;border-radius:999px;font-weight:600;font-size:12px;white-space:nowrap;" title="Mes abierto: podés editar y sincronizar">🔓 Abierto</span>`;
+    statusEl.innerHTML = `<span style="background:#fef3c7;color:#92400e;padding:3px 10px;border-radius:999px;font-weight:600;font-size:12px;white-space:nowrap;" title="Mes abierto: podés editar y sincronizar">Abierto</span>`;
     if (btnDFmes) btnDFmes.style.display = '';
     if (session.isAdmin) btnCerrar.style.display = '';
   }
@@ -2737,7 +2737,7 @@ async function cerrarDiaAhora(fecha, localId) {
       p_notas: null,
     });
     if (error) throw error;
-    toast(`🏁 Día cerrado`);
+    toast(`Día cerrado`);
     // (3-ago) El push de cierre a JP/Claudia ahora lo dispara un TRIGGER en la
     // base (trg_ventas_cierre_dia): funciona aunque el local tenga la app vieja.
     // Si se creó un turno final, mostrar su detalle
@@ -2936,7 +2936,7 @@ async function abrirBandejaReaperturas() {
   wrap.innerHTML = `
     <div style="background:#fff;border-radius:12px;max-width:760px;width:100%;max-height:85vh;overflow:auto;padding:24px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <h3 style="margin:0;font-size:18px;">🙏 Reaperturas</h3>
+        <h3 style="margin:0;font-size:18px;">Reaperturas</h3>
         <button onclick="document.getElementById('modal-reaperturas').remove();" style="background:none;border:none;cursor:pointer;font-size:18px;color:#64748b;">✕</button>
       </div>
       <div id="reaperturas-body"><div style="text-align:center;color:#64748b;padding:30px;">Cargando…</div></div>
@@ -2962,7 +2962,7 @@ async function abrirBandejaReaperturas() {
 
   const renderItem = (r) => {
     const colorEstado = r.estado === 'pendiente' ? '#fbbf24' : (r.estado === 'aprobada' ? '#22c55e' : '#dc2626');
-    const labelEstado = r.estado === 'pendiente' ? '⏳ Pendiente' : (r.estado === 'aprobada' ? '✓ Aprobada' : '✗ Rechazada');
+    const labelEstado = r.estado === 'pendiente' ? 'Pendiente' : (r.estado === 'aprobada' ? '✓ Aprobada' : '✗ Rechazada');
     const fechaHora = new Date(r.solicitado_at).toLocaleString('es-AR', { dateStyle:'short', timeStyle:'short' });
     const acciones = (session?.isAdmin && r.estado === 'pendiente')
       ? `<div style="display:flex;gap:6px;margin-top:10px;">
@@ -3070,7 +3070,7 @@ function mostrarResultadoTurno(turno, fecha, localId) {
   wrap.innerHTML = `
     <div style="background:#fff;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.25);max-width:720px;width:100%;max-height:90vh;overflow:auto;padding:24px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <h3 style="margin:0;font-size:18px;">🔒 Turno ${t.numero} · ${localId.toUpperCase()} · ${fmtFecha(fecha)}</h3>
+        <h3 style="margin:0;font-size:18px;">Turno ${t.numero} · ${localId.toUpperCase()} · ${fmtFecha(fecha)}</h3>
         <button onclick="document.getElementById('modal-turno').remove();" style="background:none;border:none;cursor:pointer;font-size:18px;color:#64748b;padding:0 6px;">✕</button>
       </div>
       <div style="font-size:13px;color:#64748b;margin-bottom:16px;">
@@ -3247,7 +3247,7 @@ function abrirTurnos(fecha, localId) {
   wrap.innerHTML = `
     <div style="background:#fff;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.25);max-width:780px;width:100%;max-height:85vh;overflow:auto;padding:24px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <h3 style="margin:0;font-size:18px;">🕐 Turnos · ${localId.toUpperCase()} · ${fmtFecha(fecha)}</h3>
+        <h3 style="margin:0;font-size:18px;">Turnos · ${localId.toUpperCase()} · ${fmtFecha(fecha)}</h3>
         <button onclick="document.getElementById('modal-turno').remove();" style="background:none;border:none;cursor:pointer;font-size:18px;color:#64748b;padding:0 6px;">✕</button>
       </div>
       ${turnosDia.map(t => {
@@ -3297,7 +3297,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=27"></script>
+<script src="manual.js?v=28"></script>
 <script src="reporte.js?v=16"></script>
 <script>
 // (24-ago) Blindaje iOS: re-suscripcion automatica de push. iOS suelta la
