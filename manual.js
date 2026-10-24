@@ -9,12 +9,27 @@ function _mEsc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// (24-oct, regla JP 21-oct) Íconos de sección en SVG (currentColor), no emojis.
+const _M_ICO = {
+  lock:     '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  planilla: '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/>',
+  clock:    '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>',
+  check:    '<circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16 9"/>',
+  inbox:    '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.8 1.1z"/>',
+  menu:     '<circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/>',
+  chart:    '<line x1="4" y1="20" x2="20" y2="20"/><rect x="6" y="11" width="3" height="7"/><rect x="11" y="6" width="3" height="12"/><rect x="16" y="3" width="3" height="15"/>',
+  book:     '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
+};
+function _mIco(n) {
+  return `<svg class="m-ico" viewBox="0 0 24 24" aria-hidden="true" style="width:18px;height:18px;vertical-align:-3px;margin-right:6px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">${_M_ICO[n] || _M_ICO.book}</svg>`;
+}
+
 function _manualSecciones() {
   const esAdmin = (typeof session !== 'undefined') && session?.isAdmin;
 
   const base = [
     {
-      icon: '🔐', titulo: 'Entrar una sola vez',
+      icon: 'lock', titulo: 'Entrar una sola vez',
       desc: 'La sesión se comparte entre todos los módulos del sistema.',
       pasos: [
         'En el Hub, con el ícono 👤 de arriba, ingresás con tu usuario y podés tildar "Confiar en esta computadora".',
@@ -24,7 +39,7 @@ function _manualSecciones() {
       ],
     },
     {
-      icon: '📋', titulo: 'Planilla del mes',
+      icon: 'planilla', titulo: 'Planilla del mes',
       desc: 'La planilla diaria de ventas del local. Reemplaza la planilla Excel de siempre.',
       pasos: [
         'Cada fila es un día; las columnas son los medios de pago: Efectivo, Tarjeta, QR (Mercado Pago), Vales, y para Oficina también Transferencia y CC.',
@@ -35,7 +50,7 @@ function _manualSecciones() {
       ],
     },
     {
-      icon: '🕐', titulo: 'Turnos',
+      icon: 'clock', titulo: 'Turnos',
       desc: 'Cada turno de caja se cierra por separado, contra las transacciones reales del día.',
       pasos: [
         'Los botones de cada día son solo íconos, sin recuadro: pasá el mouse (o dejá el dedo apoyado) para ver qué hace cada uno. El reloj rojo cierra el turno y aparece solo en el día de HOY.',
@@ -44,7 +59,7 @@ function _manualSecciones() {
       ],
     },
     {
-      icon: '🔒', titulo: 'Cierre del día',
+      icon: 'lock', titulo: 'Cierre del día',
       desc: 'El cierre definitivo del día. Se hace DESPUÉS del cierre de caja completo en Dragonfish.',
       pasos: [
         'Primero cerrá la caja en Dragonfish (Z completo), después cerrá el día acá — si no, el día queda congelado con datos viejos.',
@@ -53,7 +68,7 @@ function _manualSecciones() {
       ],
     },
     {
-      icon: '✓', titulo: 'Tilde de Mercado Pago',
+      icon: 'check', titulo: 'Tilde de Mercado Pago',
       desc: 'Al lado del importe QR/MP de cada día cerrado hay un tilde que muestra cómo dio el cruce contra MP.',
       pasos: [
         '✓ verde: el cruce dio perfecto, no hay nada que hacer.',
@@ -64,7 +79,7 @@ function _manualSecciones() {
       ],
     },
     {
-      icon: '📩', titulo: 'Solicitudes y reaperturas',
+      icon: 'inbox', titulo: 'Solicitudes y reaperturas',
       desc: 'Para corregir un dato de un día ya cerrado, no se toca directo: se pide.',
       pasos: [
         'Si un importe está mal en un día cerrado, tocá la celda y "Enviar pedido" — le llega la solicitud de corrección al admin.',
@@ -73,7 +88,7 @@ function _manualSecciones() {
       ],
     },
     {
-      icon: '⋮', titulo: 'Menú de opciones',
+      icon: 'menu', titulo: 'Menú de opciones',
       desc: 'Arriba a la derecha, el botón ⋮ agrupa las herramientas extra.',
       pasos: [
         'Notificaciones: activalas para recibir alertas de cierres y diferencias de MP. En iPhone solo funcionan si la app está instalada en la pantalla de inicio. Si el teléfono las "apaga solo" (maña de iOS), la app las reactiva automáticamente al abrirla.',
@@ -85,10 +100,10 @@ function _manualSecciones() {
 
   if (!esAdmin) {
     base.push({
-      icon: '📈', titulo: 'Reporte del local (encargadas)',
+      icon: 'chart', titulo: 'Reporte del local (encargadas)',
       desc: 'El reporte de ventas de tu local, solo para la encargada.',
       pasos: [
-        'Menú ⋮ → "📈 Reporte del local (encargada)". Pide TU mail y TU clave personal (los mismos de Colaboradores): la cuenta del local no alcanza, así las vendedoras no lo ven.',
+        'Menú ⋮ → "Reporte del local (encargada)". Pide TU mail y TU clave personal (los mismos de Colaboradores): la cuenta del local no alcanza, así las vendedoras no lo ven.',
         'Vas a ver solo tu local: KPIs contra el período anterior y el año pasado, día más fuerte y más flojo, categorías, top artículos, proveedores y clientes, medios de pago y mapa de calor por hora.',
         'Arriba elegís el período: Semanal, Mensual, Trimestral o Anual. El botón "$ nominal" pasa los importes a pesos de hoy con el IPC, para comparar períodos separados en el tiempo.',
         'Al cerrar el reporte (✕ o Escape) se cierra tu sesión: no queda abierta en la computadora del local. Si lo dejás abierto 15 minutos sin tocar, se cierra solo. No te cierra la sesión de Colaboradores en el celular.',
@@ -98,15 +113,15 @@ function _manualSecciones() {
 
   if (esAdmin) {
     base.push({
-      icon: '📊', titulo: 'Análisis y consolidado (admin)',
+      icon: 'chart', titulo: 'Análisis y consolidado (admin)',
       desc: 'Vista comparativa de los 3 locales, solo para administración.',
       pasos: [
         'Entrando sin local (o con "Todos") se ve el consolidado de los 3 locales.',
-        'Lo que antes era el botón "📊 Análisis" ahora está adentro del Reporte, como tipo "Evolución del año": elegís el mes y el local, y ves la proyección de cierre del mes, el acumulado del año contra el anterior (nominal y en pesos de hoy por IPC), la venta mes a mes contra el año pasado, la comparativa de los tres locales, el mix de medios de pago por mes, el ticket promedio por mes, la estacionalidad histórica y la venta por día de la semana.',
+        'Lo que antes era el botón "Análisis" ahora está adentro del Reporte, como tipo "Evolución del año": elegís el mes y el local, y ves la proyección de cierre del mes, el acumulado del año contra el anterior (nominal y en pesos de hoy por IPC), la venta mes a mes contra el año pasado, la comparativa de los tres locales, el mix de medios de pago por mes, el ticket promedio por mes, la estacionalidad histórica y la venta por día de la semana.',
         'En las tarjetas del Reporte, al pasar el mouse por una comparación ("ant." o "A/A") se ve el valor de cada período: la venta en pesos, o la cantidad si es tickets, unidades o SKUs.',
         'En el banner de arriba, el ícono de la casa vuelve al Hub y el ícono de barras abre el Reporte (22-oct).',
         'Período en curso (22-oct): cuando el mes, trimestre o semana todavía no terminó, las comparaciones "ant." y "A/A" del Reporte se hacen contra el mismo tramo (del 1 al día de hoy) del período anterior y del año pasado, no contra el período entero; el tramo "(1 al 22)" se ve en la nota al pasar el mouse por la comparación. Unidades, UPT, SKUs, ticket máximo y venta blue no tienen esa comparación por tramo.',
-        '"📈 Reporte" (el ícono de barras del banner): el reporte profundo por categorías — KPIs comparados contra el período anterior y el año pasado (incluido UPT, unidades por ticket), día más fuerte y más flojo, drill-down Grupo→Subcategoría→Clasificación, top artículos/proveedores/clientes y mapa de calor por hora.',
+        '"Reporte" (el ícono de barras del banner): el reporte profundo por categorías — KPIs comparados contra el período anterior y el año pasado (incluido UPT, unidades por ticket), día más fuerte y más flojo, drill-down Grupo→Subcategoría→Clasificación, top artículos/proveedores/clientes y mapa de calor por hora.',
         'Arriba de todo aparece el 💬 Análisis de la semana: diagnóstico, las acciones concretas y las cosas raras para mirar. Se escribe los lunes a la mañana, después de que se generan los números de madrugada.',
         'El primer selector elige el período: Semanal, Mensual, Trimestral, Anual (año calendario) o "Últimos 5 años". En los períodos largos las barras se agrupan por mes en vez de por día, para que se puedan leer.',
         'El botón "$ nominal" de arriba a la derecha pasa todo a pesos de hoy usando el IPC. Sirve para comparar períodos separados en el tiempo: en pesos de cada momento, un año viejo siempre parece chico aunque se haya vendido más. Los meses que el INDEC todavía no publicó van sin ajustar y la pantalla lo avisa — no se inventa inflación.',
@@ -143,11 +158,11 @@ function abrirManual() {
       </div>
       ${items.map((s, i) => `
         <div class="m-sec">
-          <div class="m-tit">${s.icon} ${i + 1}. ${_mEsc(s.titulo)}</div>
+          <div class="m-tit">${_mIco(s.icon)}${i + 1}. ${_mEsc(s.titulo)}</div>
           <div class="m-desc">${_mEsc(s.desc)}</div>
           <ul class="m-pasos">${s.pasos.map(p => `<li>${_mEsc(p)}</li>`).join('')}</ul>
         </div>`).join('')}
-      <div class="m-foot">💡 Este manual se actualiza junto con el sistema. ¿Falta algo o no funciona? Avisale a JP.</div>
+      <div class="m-foot">Este manual se actualiza junto con el sistema. ¿Falta algo o no funciona? Avisale a JP.</div>
     </div>`;
   document.body.appendChild(ov);
   _manualLupa(ov);
@@ -232,7 +247,7 @@ function _manualLupa(ov){
   head.style.flexWrap = 'wrap';
   const box = document.createElement('div');
   box.style.cssText = 'flex-basis:100%;display:flex;gap:8px;align-items:center;margin-top:8px';
-  box.innerHTML = '<input type="search" placeholder="🔍 Buscar en el manual (por ej.: equivalencias, remito, echeq)…" '
+  box.innerHTML = '<input type="search" placeholder="Buscar en el manual (por ej.: turno, cierre, corrección)…" '
     + 'style="flex:1;min-width:0;padding:8px 11px;border-radius:9px;border:none;font-size:14px;color:#0f172a;font-family:inherit">'
     + '<span class="m-lupa-info" style="font-size:12px;opacity:.9;white-space:nowrap"></span>';
   head.appendChild(box);
