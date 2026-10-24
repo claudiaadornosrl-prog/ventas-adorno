@@ -309,6 +309,21 @@ body { margin: 0; font-family: 'URW Gothic', -apple-system, BlinkMacSystemFont, 
 .btn-secondary { background: white; color: var(--text); border: 1px solid var(--border); padding: 8px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; }
 .btn-secondary:hover { background: #f3f4f6; }
 .btn-icon { background: white; border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+/* (24-oct, regla JP 21-oct) Botones de acción SIN recuadro: solo el ícono, transparente, fondo suave al pasar
+   el mouse y la explicación en el title. El principal va en el color del módulo y más grande. */
+.abtn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; margin-left: 2px; border: none; border-radius: 8px; background: transparent; color: #64748b; cursor: pointer; vertical-align: middle; font-family: inherit; transition: background .15s, color .15s; }
+.abtn svg.ico { width: 18px; height: 18px; display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.abtn:hover { background: #f1f5f9; color: #1e293b; }
+.abtn.principal { color: var(--primary); width: 34px; height: 34px; }
+.abtn.principal svg.ico { width: 22px; height: 22px; stroke-width: 2.2; }
+.abtn.principal:hover { background: #fee2e2; }
+.abtn.violeta { color: #7c3aed; } .abtn.violeta:hover { background: #ede9fe; }
+.abtn.alerta { color: #d97706; } .abtn.alerta:hover { background: #fef3c7; }
+.abtn.peligro { color: #dc2626; } .abtn.peligro:hover { background: #fee2e2; }
+.abtn:disabled { opacity: .35; cursor: default; background: transparent; }
+.kebab-menu button { display: flex; align-items: center; gap: 9px; }
+.kebab-menu svg.ico { width: 17px; height: 17px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; color: #64748b; }
+.alerta-cta svg.ico { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -3px; margin-right: 5px; }
 
 .toolbar { background: white; border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .toolbar select { padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: white; cursor: pointer; }
@@ -488,14 +503,14 @@ th.th-der + th.th-der { border-left: none; }
     <div class="kebab-wrap">
       <button class="btn-icon" id="kebab-btn" onclick="toggleKebab(event)" title="Menú"><span class="kebab-dot" id="kebab-dot"></span>⋮</button>
       <div class="kebab-menu" id="kebab-menu">
-        <button id="btn-notifs" onclick="cerrarKebab();toggleNotificaciones()" title="Activar notificaciones">🔕 Notificaciones</button>
-        <button id="btn-dragonfish-mes" onclick="cerrarKebab();abrirCargaDragonfish('mes')" title="Re-sincroniza desde Dragonfish los días NO cerrados del mes seleccionado. Los días cerrados no se tocan.">🐉 Resincronizar mes</button>
-        <button id="btn-solicitudes" onclick="cerrarKebab();abrirGestionSolicitudes()" style="display:none;" title="Solicitudes de corrección pendientes de las vendedoras">📩 Solicitudes</button>
-        <button id="btn-reaperturas" onclick="cerrarKebab();abrirBandejaReaperturas()" title="Solicitudes de reapertura de día">🙏 Reaperturas</button>
-        <button id="btn-cerrar-mes" onclick="cerrarKebab();cerrarMesActual()" style="display:none;">🔒 Cerrar mes</button>
-        <button id="btn-reabrir-mes" onclick="cerrarKebab();reabrirMesActual()" style="display:none;">🔓 Reabrir mes</button>
+        <button id="btn-notifs" onclick="cerrarKebab();toggleNotificaciones()" title="Activar notificaciones"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/><line x1="2" y1="2" x2="22" y2="22"/></svg><span>Notificaciones</span></button>
+        <button id="btn-dragonfish-mes" onclick="cerrarKebab();abrirCargaDragonfish('mes')" title="Re-sincroniza desde Dragonfish los días NO cerrados del mes seleccionado. Los días cerrados no se tocan."><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"/></svg><span>Resincronizar mes</span></button>
+        <button id="btn-solicitudes" onclick="cerrarKebab();abrirGestionSolicitudes()" style="display:none;" title="Solicitudes de corrección pendientes de las vendedoras"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.8 1.1z"/></svg><span>Solicitudes</span></button>
+        <button id="btn-reaperturas" onclick="cerrarKebab();abrirBandejaReaperturas()" title="Solicitudes de reapertura de día"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M10.85 12.15 19 4"/><path d="m18 5 2 2"/><path d="m15 8 2 2"/></svg><span>Reaperturas</span></button>
+        <button id="btn-cerrar-mes" onclick="cerrarKebab();cerrarMesActual()" style="display:none;"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Cerrar mes</span></button>
+        <button id="btn-reabrir-mes" onclick="cerrarKebab();reabrirMesActual()" style="display:none;"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/></svg><span>Reabrir mes</span></button>
         <div class="kebab-sep"></div>
-        <button onclick="logout()">👋 Salir</button>
+        <button onclick="logout()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span>Salir</span></button>
       </div>
     </div>
   </div>
@@ -503,13 +518,13 @@ th.th-der + th.th-der { border-left: none; }
   <div id="alerta-sync-finmes" style="display:none;background:linear-gradient(90deg,#fed7aa,#fdba74);border-bottom:1px solid #ea580c;padding:10px 16px;align-items:center;gap:10px;flex-wrap:wrap;">
     <span style="font-size:18px;">📅</span>
     <span id="alerta-sync-finmes-text" style="flex:1;font-size:14px;color:#7c2d12;font-weight:600;"></span>
-    <button id="alerta-sync-finmes-btn" onclick="hacerSyncFinDeMes()" style="padding:6px 14px;background:#c2410c;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">🐉 Sincronizar ahora</button>
+    <button id="alerta-sync-finmes-btn" onclick="hacerSyncFinDeMes()" style="padding:6px 14px;background:#c2410c;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;" class="alerta-cta"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"/></svg>Sincronizar ahora</button>
   </div>
 
   <div id="alerta-cerrar-mes" style="display:none;background:linear-gradient(90deg,#fef3c7,#fde68a);border-bottom:1px solid #f59e0b;padding:10px 16px;display:none;align-items:center;gap:10px;flex-wrap:wrap;">
     <span style="font-size:18px;">🎉</span>
     <span id="alerta-cerrar-mes-text" style="flex:1;font-size:14px;color:#78350f;font-weight:600;"></span>
-    <button id="alerta-cerrar-mes-btn" onclick="cerrarMesDesdeAlerta()" style="padding:6px 14px;background:#92400e;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">🔒 Cerrar ahora</button>
+    <button id="alerta-cerrar-mes-btn" onclick="cerrarMesDesdeAlerta()" style="padding:6px 14px;background:#92400e;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;" class="alerta-cta"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Cerrar ahora</button>
     <button onclick="document.getElementById('alerta-cerrar-mes').style.display='none';" style="padding:4px 8px;background:transparent;border:none;color:#78350f;font-size:18px;cursor:pointer;" title="Cerrar aviso">×</button>
   </div>
 
@@ -694,6 +709,24 @@ function actualizarKebabDot() {
   if (dot) dot.style.display = ((window._pendSolic || 0) + (window._pendReap || 0)) > 0 ? 'block' : 'none';
 }
 
+// (24-oct) Íconos SVG en currentColor para botones de acción (regla JP 21-oct: nada de emojis con fondo propio).
+const ICO = {
+  eye:     '<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>',
+  clock:   '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>',
+  lock:    '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  unlock:  '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/>',
+  key:     '<circle cx="8" cy="15" r="4"/><path d="M10.85 12.15 19 4"/><path d="m18 5 2 2"/><path d="m15 8 2 2"/>',
+  search:  '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  inbox:   '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.8 1.1z"/>',
+  bell:    '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
+  bellOff: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/><line x1="2" y1="2" x2="22" y2="22"/>',
+};
+function ico(n) { return `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${ICO[n] || ''}</svg>`; }
+/** Botón de acción sin recuadro: solo ícono + title. extra = 'principal' | 'violeta' | 'alerta' | 'peligro' */
+function abtn(onclick, title, icon, extra = '') {
+  return `<button class="abtn ${extra}" onclick="event.stopPropagation();${onclick}" title="${title}" aria-label="${title}">${ico(icon)}</button>`;
+}
+
 async function toggleNotificaciones() {
   const btn = document.getElementById('btn-notifs');
   try {
@@ -717,7 +750,7 @@ async function actualizarBtnNotifs() {
   const btn = document.getElementById('btn-notifs');
   if (!btn) return;
   const est = await pushManager.estado();
-  btn.textContent = est === 'activo' ? '🔔 Notificaciones ON' : '🔕 Notificaciones';
+  btn.innerHTML = est === 'activo' ? ico('bell') + '<span>Notificaciones ON</span>' : ico('bellOff') + '<span>Notificaciones</span>';
   btn.title = est === 'activo' ? 'Notificaciones activadas (click para desactivar)' : 'Activar notificaciones';
 }
 
@@ -1817,19 +1850,19 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
       const puedeCerrar = esHoy && !diaCerrado;
       const puedeCerrarDia = (esHoy || (esPasado && v)) && !diaCerrado;
       const botonCerrar = puedeCerrar
-        ? `<button onclick="event.stopPropagation();cerrarTurnoAhora('${fecha}','${localId}')" title="Cerrar turno" style="background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:14px;line-height:1.2;cursor:pointer;margin-left:6px;">🕐</button>`
+        ? abtn(`cerrarTurnoAhora('${fecha}','${localId}')`, 'Cerrar turno', 'clock', 'principal')
         : '';
       const botonCerrarDia = puedeCerrarDia
-        ? `<button onclick="event.stopPropagation();cerrarDiaAhora('${fecha}','${localId}')" title="Cerrar día — no se podrán abrir más turnos" style="background:#dc2626;color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:14px;line-height:1.2;cursor:pointer;margin-left:4px;">🔒</button>`
+        ? abtn(`cerrarDiaAhora('${fecha}','${localId}')`, 'Cerrar día — no se podrán abrir más turnos', 'lock', 'peligro')
         : '';
       const verLink = nTurnos > 0
-        ? `<button onclick="event.stopPropagation();abrirTurnos('${fecha}','${localId}')" title="Ver detalle de turnos" style="background:none;border:1px solid #cbd5e1;color:#475569;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;margin-left:4px;">Ver</button>`
+        ? abtn(`abrirTurnos('${fecha}','${localId}')`, 'Ver detalle de turnos', 'eye')
         : '';
       const linkReabrir = (diaCerrado && session?.isAdmin)
-        ? `<button onclick="event.stopPropagation();reabrirDiaAhora('${fecha}','${localId}')" title="Reabrir día" style="background:none;border:1px solid #f59e0b;border-radius:6px;padding:3px 9px;font-size:14px;line-height:1.2;cursor:pointer;margin-left:4px;">🔓</button>`
+        ? abtn(`reabrirDiaAhora('${fecha}','${localId}')`, 'Reabrir día', 'unlock', 'alerta')
         : '';
       const botonSolicitar = (diaCerrado && !session?.isAdmin)
-        ? `<button onclick="event.stopPropagation();solicitarReaperturaAhora('${fecha}','${localId}')" title="Pedir reapertura — le llega la solicitud al admin" style="background:none;border:1px solid #c4b5fd;border-radius:6px;padding:3px 9px;font-size:14px;line-height:1.2;cursor:pointer;margin-left:4px;">🙏</button>`
+        ? abtn(`solicitarReaperturaAhora('${fecha}','${localId}')`, 'Pedir reapertura — le llega la solicitud al admin', 'key', 'violeta')
         : '';
       celdaTurno = `<td style="text-align:center;white-space:nowrap;">${badge}${verLink}${botonCerrar}${botonCerrarDia}${linkReabrir}${botonSolicitar}</td>`;
     }
@@ -2144,7 +2177,7 @@ async function refrescarBadgeSolicitudes() {
     window._pendSolic = count || 0; actualizarKebabDot();
     if (count > 0) {
       btn.style.display = '';
-      btn.innerHTML = `📩 Solicitudes <span style="background:var(--primary);color:white;border-radius:999px;padding:1px 7px;font-weight:700;margin-left:4px;">${count}</span>`;
+      btn.innerHTML = `${ico('inbox')}<span>Solicitudes</span> <span style="background:var(--primary);color:white;border-radius:999px;padding:1px 7px;font-weight:700;margin-left:4px;">${count}</span>`;
     } else {
       btn.style.display = 'none';
     }
@@ -2794,7 +2827,7 @@ async function resolverReaperturaAhora(id, aprobar) {
 /** Actualiza el badge del botón Reaperturas con contador de pendientes (solo admin). */
 async function refrescarBadgeReaperturas() {
   if (!session?.isAdmin) {
-    document.getElementById('btn-reaperturas').textContent = '🙏 Reaperturas';
+    document.getElementById('btn-reaperturas').innerHTML = ico('key') + '<span>Reaperturas</span>';
     return;
   }
   try {
@@ -2804,7 +2837,7 @@ async function refrescarBadgeReaperturas() {
     window._pendReap = count || 0; actualizarKebabDot();
     const btn = document.getElementById('btn-reaperturas');
     if (btn) {
-      btn.innerHTML = `🙏 Reaperturas${count > 0 ? ` <span style="background:#dc2626;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;">${count}</span>` : ''}`;
+      btn.innerHTML = `${ico('key')}<span>Reaperturas</span>${count > 0 ? ` <span style="background:#dc2626;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;">${count}</span>` : ''}`;
     }
   } catch (e) { /* silent */ }
 }
@@ -3057,7 +3090,7 @@ function abrirTurnos(fecha, localId) {
             ${t.mp_cuenta !== null ? `
               <div style="margin-top:10px;padding:8px 12px;background:${tieneDisc?'#fef2f2':'#f0fdf4'};border-left:3px solid ${colorDisc};border-radius:4px;font-size:12px;">
                 Cuenta MP: ${fmt$(+t.mp_cuenta)} · Diferencia: <strong style="color:${colorDisc};">${tieneDisc?'⚠ ':''}${fmt$(+t.discrepancia_mp)}</strong>
-                ${tieneDisc ? `<button onclick="event.stopPropagation();mostrarResultadoTurno(${JSON.stringify(t).replace(/"/g,'&quot;')}, '${fecha}', '${localId}')" style="margin-left:8px;background:#dc2626;color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;">Ver detalle</button>` : ''}
+                ${tieneDisc ? `<button class="abtn peligro" onclick="event.stopPropagation();mostrarResultadoTurno(${JSON.stringify(t).replace(/"/g,'&quot;')}, '${fecha}', '${localId}')" title="Ver el detalle de la diferencia con MP" aria-label="Ver detalle">${ico('search')}</button>` : ''}
               </div>
             ` : ''}
           </div>
@@ -3076,7 +3109,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=24"></script>
+<script src="manual.js?v=25"></script>
 <script src="reporte.js?v=16"></script>
 <script>
 // (24-ago) Blindaje iOS: re-suscripcion automatica de push. iOS suelta la

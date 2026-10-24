@@ -28,7 +28,7 @@ function _manualSecciones() {
       desc: 'La planilla diaria de ventas del local. Reemplaza la planilla Excel de siempre.',
       pasos: [
         'Cada fila es un día; las columnas son los medios de pago: Efectivo, Tarjeta, QR (Mercado Pago), Vales, y para Oficina también Transferencia y CC.',
-        'Los números los carga solo el sistema desde Dragonfish — no hace falta tipear nada. Si un día quedó incompleto, tocá "🐉 Resincronizar mes" en el menú ⋮ (solo actualiza días NO cerrados).',
+        'Los números los carga solo el sistema desde Dragonfish — no hace falta tipear nada. Si un día quedó incompleto, tocá "Resincronizar mes" en el menú ⋮ (solo actualiza días NO cerrados).',
         'La columna Online en los locales es el efectivo de la segunda base — si hay que corregir a mano, SIEMPRE se corrige en esa columna.',
         'FC Oficina son facturas emitidas en Oficina pero que corresponden a una venta del local — las carga el sistema solo.',
       ],
@@ -37,7 +37,7 @@ function _manualSecciones() {
       icon: '🕐', titulo: 'Turnos',
       desc: 'Cada turno de caja se cierra por separado, contra las transacciones reales del día.',
       pasos: [
-        'El botón "🔒 Cerrar turno" aparece cuando el turno tiene ventas cargadas. Solo se puede cerrar el turno de HOY.',
+        'Los botones de cada día son solo íconos, sin recuadro: pasá el mouse (o dejá el dedo apoyado) para ver qué hace cada uno. El reloj rojo cierra el turno y aparece solo en el día de HOY.',
         'El cierre compara fila por fila lo que dice Dragonfish contra las transacciones. Si algo no coincide, revisá antes de cerrar.',
         'El cruce con Mercado Pago NO se hace al cerrar el turno (MP demora horas en publicar los pagos) — se hace al día siguiente.',
       ],
@@ -48,7 +48,7 @@ function _manualSecciones() {
       pasos: [
         'Primero cerrá la caja en Dragonfish (Z completo), después cerrá el día acá — si no, el día queda congelado con datos viejos.',
         'Al cerrar el día, el sistema cruza automáticamente los pagos de Mercado Pago del día ANTERIOR (ya definitivos).',
-        'Si te quedó un día pasado sin cerrar, también lo podés cerrar — el botón 🔒 aparece igual.',
+        'Si te quedó un día pasado sin cerrar, también lo podés cerrar — el candado rojo aparece igual. El ojo abre el detalle de los turnos; el candado abierto (admin) reabre el día; la llave violeta le pide la reapertura al admin.',
       ],
     },
     {
@@ -67,7 +67,7 @@ function _manualSecciones() {
       desc: 'Para corregir un dato de un día ya cerrado, no se toca directo: se pide.',
       pasos: [
         'Si un importe está mal en un día cerrado, tocá la celda y "Enviar pedido" — le llega la solicitud de corrección al admin.',
-        'Si necesitás reabrir un día entero, usá "🙏 Reaperturas" del menú ⋮.',
+        'Si necesitás reabrir un día entero, usá "Reaperturas" del menú ⋮.',
         'El admin aprueba o rechaza; te enterás por notificación.',
       ],
     },
@@ -75,8 +75,8 @@ function _manualSecciones() {
       icon: '⋮', titulo: 'Menú de opciones',
       desc: 'Arriba a la derecha, el botón ⋮ agrupa las herramientas extra.',
       pasos: [
-        '🔔 Notificaciones: activalas para recibir alertas de cierres y diferencias de MP. En iPhone solo funcionan si la app está instalada en la pantalla de inicio. Si el teléfono las "apaga solo" (maña de iOS), la app las reactiva automáticamente al abrirla.',
-        '🐉 Resincronizar mes: vuelve a traer de Dragonfish los días no cerrados.',
+        'Notificaciones: activalas para recibir alertas de cierres y diferencias de MP. En iPhone solo funcionan si la app está instalada en la pantalla de inicio. Si el teléfono las "apaga solo" (maña de iOS), la app las reactiva automáticamente al abrirla.',
+        'Resincronizar mes: vuelve a traer de Dragonfish los días no cerrados.',
         '⬇ Instalar la app: para tenerla como aplicación en el celu.',
       ],
     },
@@ -116,8 +116,8 @@ function _manualSecciones() {
         'Si aparece la tarjeta 🏷 Artículos sin categoría, son artículos que no tienen Grupo cargado en Dragonfish y por eso no caen en ningún rubro del cuadro de Categorías. Cargándoselo allá desaparecen del reporte siguiente solos.',
         'Las encargadas (Andrea y Soraya) también lo ven, solo de su local y sin "Últimos 5 años": desde el menú ⋮ del local, entrando con su usuario personal. La base las filtra: con la cuenta del local (alcorta@/unicenter@) no se ve nada.',
         '"Últimos 5 años" es otra vista: venta por año, los años superpuestos mes a mes para ver la estacionalidad, la comparación por local, y qué categorías ganaron o perdieron participación. Arranca en 2023 porque el Dragonfish no conserva completa la historia anterior de los locales, y el reporte lo dice en vez de dibujar una tendencia que no es.',
-        '"🔒 Cerrar mes" congela el mes completo; "🔓 Reabrir mes" lo habilita de nuevo.',
-        'Las solicitudes de corrección de las chicas llegan a "📩 Solicitudes" del menú ⋮.',
+        '"Cerrar mes" congela el mes completo; "Reabrir mes" lo habilita de nuevo.',
+        'Las solicitudes de corrección de las chicas llegan a "Solicitudes" del menú ⋮.',
       ],
     });
   }
@@ -177,7 +177,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarManual
   const kebab = document.getElementById('kebab-menu');
   if (kebab) {
     const b = document.createElement('button');
-    b.textContent = '📖 Manual';
+    b.innerHTML = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span>Manual</span>';   // (24-oct) ícono SVG, regla JP
     b.onclick = () => { if (typeof cerrarKebab === 'function') cerrarKebab(); abrirManual(); };
     kebab.appendChild(b);
   }
