@@ -1216,6 +1216,7 @@ async function cargar() {
   const año = parseInt(document.getElementById('sel-año').value);
   const mes = parseInt(document.getElementById('sel-mes').value);
   const localSel = session.isAdmin ? document.getElementById('sel-local').value : session.local_id;
+  asegurarEstiloLocal([localSel]);
   document.body.setAttribute('data-local', localSel || '');   // (21-oct) color del local en la vista por local
   const _sy = document.getElementById('hdr-sync'); if (_sy) _sy.style.display = '';
 
@@ -1984,7 +1985,35 @@ function irALocal(local) {
 // ─── Vista admin consolidada (todos los locales) ─────────────────────
 // (21-oct-2026, JP) Las tarjetas Total general / Alcorta / Unicenter / Oficina se ven también adentro de cada local
 // (la del local elegido queda marcada; "Total general" vuelve al consolidado).
+// (24-oct, JP) Color para un local NUEVO. Los 3 fijos tienen sus reglas en el CSS (col-/kpi-/body[data-local]);
+// cualquier otro local que aparezca en los datos recibe una paleta de esta lista (en orden de aparición) y las mismas
+// reglas se generan acá con color-mix a partir de un solo color. Para cambiar el color de un local nuevo, este es el lugar.
+const PALETAS_LOCAL_NUEVO = ['#d97706', '#7c3aed', '#db2777', '#0891b2', '#65a30d'];   // ámbar, violeta, rosa, cian, lima
+const _paletaAsignada = {};
+function asegurarEstiloLocal(locales) {
+  let st = document.getElementById('estilo-locales');
+  if (!st) { st = document.createElement('style'); st.id = 'estilo-locales'; document.head.appendChild(st); }
+  (locales || []).forEach(loc => {
+    if (!loc || ['alcorta', 'unicenter', 'oficina'].includes(loc) || _paletaAsignada[loc]) return;
+    const F = PALETAS_LOCAL_NUEVO[Object.keys(_paletaAsignada).length % PALETAS_LOCAL_NUEVO.length];
+    _paletaAsignada[loc] = F;
+    const mix = (pct, con = 'white') => `color-mix(in srgb, ${F} ${pct}%, ${con})`;
+    const L = CSS.escape(loc);
+    st.textContent += `
+th.col-${L} { background: ${mix(16)}; color: ${mix(75, 'black')}; } td.col-${L} { background: ${mix(7)}; } td.cell-derived.col-${L} { background: ${mix(16)}; border-left-color: ${mix(40)}; }
+tbody tr:nth-child(even) td.col-${L} { background: ${mix(11)}; } tbody tr:nth-child(even) td.cell-derived.col-${L} { background: ${mix(22)}; }
+.row-total td.col-${L} { background: ${mix(30)}; } .kpi-row .kpi.kpi-${L} { border-top: 4px solid ${F} !important; }   /* gana a la regla :not() del Total general */
+body[data-local="${L}"] .header { background: linear-gradient(90deg, ${F}, ${mix(85, 'black')}); }
+body[data-local="${L}"] .table-wrap th { background: ${mix(16)}; color: ${mix(75, 'black')}; border-bottom-color: ${mix(40)}; }
+body[data-local="${L}"] .row-total { background: ${mix(30)}; }
+body[data-local="${L}"] .table-wrap { background: ${mix(7)}; } body[data-local="${L}"] .table-wrap td { border-bottom-color: ${mix(16)}; } body[data-local="${L}"] tbody tr:nth-child(even) { background: ${mix(16)}; }
+body[data-local="${L}"] .table-wrap .cell-derived { background: ${mix(14)}; } body[data-local="${L}"] tbody tr:nth-child(even) .cell-derived { background: ${mix(20)}; }
+`;
+  });
+}
+
 function kpiRowHtml(tot, activo) {
+  asegurarEstiloLocal(Object.keys(tot));
   const granTotal = Object.values(tot).reduce((a, b) => a + (b || 0), 0);
   const _nombre = (loc) => LOCALES[loc]?.nombre || (loc.charAt(0).toUpperCase() + loc.slice(1));
   const _ico = (loc, h) => logoLocal(loc, h) || `<span style="font-weight:700;text-transform:none;letter-spacing:0;font-size:14px">${_nombre(loc)}</span>`;
@@ -2010,6 +2039,7 @@ function renderAdminConsolidado(ventas, año, mes) {
 
   // (22-oct, JP) si en el período hay un local nuevo, se suma solo (tarjeta y columnas)
   const locales = [...new Set(['alcorta', 'unicenter', 'oficina', ...ventas.map(v => v.local).filter(Boolean)])];
+  asegurarEstiloLocal(locales);
   const totLocales = Object.fromEntries(locales.map(l => [l, 0]));
   const acumLocales = Object.fromEntries(locales.map(l => [l, 0]));
   const filas = [];
