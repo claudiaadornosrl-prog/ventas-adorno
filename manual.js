@@ -118,6 +118,7 @@ function _manualSecciones() {
         '"Últimos 5 años" es otra vista: venta por año, los años superpuestos mes a mes para ver la estacionalidad, la comparación por local, y qué categorías ganaron o perdieron participación. Arranca en 2023 porque el Dragonfish no conserva completa la historia anterior de los locales, y el reporte lo dice en vez de dibujar una tendencia que no es.',
         '"Cerrar mes" congela el mes completo; "Reabrir mes" lo habilita de nuevo.',
         'Las solicitudes de corrección de las chicas llegan a "Solicitudes" del menú ⋮.',
+        '"Días cerrados que cambiaron" (menú ⋮): cada mañana el sistema de cada local compara los últimos 7 días ya cerrados contra Dragonfish. Si un día cambió después del cierre (una factura cargada al otro día, una venta borrada), aparece acá con el detalle por columna y te llega un aviso. La planilla no se corrige sola: mirá el caso, corregí a mano si corresponde y marcalo como visto.',
       ],
     });
   }
