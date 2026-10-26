@@ -147,6 +147,162 @@ window.ADORNO_MILES = (function () {
   return { wire, subirNumero, revisar, fmtTexto, aNumStr, deNum };
 })();
 /* ADORNO_MILES:FIN */
+/* ADORNO_ASISTENTE:INI — bloque compartido, idéntico en todos los módulos (fuente: _shared/adorno-asistente.js; se inyecta con _shared/inyectar_asistente.py). NO editar a mano en un módulo. */
+/* Asistente por voz/texto (etapa 1, 26-oct-2026, JP): botón flotante ✦ → panel. La usuaria pregunta "¿cómo hago X?" escribiendo o
+   dictando (reconocimiento de voz del navegador) y la Edge Function `asistente` (Claude Haiku) responde con el manual del módulo.
+   No ejecuta acciones: explica, y si la respuesta corresponde a una pestaña de la pantalla, la abre y la resalta. */
+window.ADORNO_ASISTENTE = (function () {
+  const URL = 'https://jfwtiagteuwmyvblgwms.supabase.co';
+  const KEY = 'sb_publishable_udSPma98Sw9eskeeLCgdCw_S2vIX0Fk';
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  let panel = null, hist = [], ocupado = false, rec = null, grabando = false;
+
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const limpiar = (s) => String(s || '').replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '').replace(/\s+/g, ' ').trim();
+
+  function modulo() {
+    const m = document.querySelector('meta[name="application-name"]');
+    return limpiar((m && m.content) || document.title.split(/[·|–-]/)[0]) || 'Sistema';
+  }
+  async function token() {
+    try { if (window.sb && sb.auth) { const { data } = await sb.auth.getSession(); if (data && data.session) return data.session.access_token; } } catch (_) {}
+    try { const k = (window.ADORNO_SSO && ADORNO_SSO.KEY) || null; const raw = k && localStorage.getItem(k); const j = raw && JSON.parse(raw); return (j && (j.access_token || (j.currentSession && j.currentSession.access_token))) || null; } catch (_) { return null; }
+  }
+  function seccionesATexto(secs) {
+    return (secs || []).map((s) => {
+      const t = ['## ' + limpiar(s.titulo || s.title || '') + (s.tab ? ` (pestaña: ${s.tab})` : '')];
+      if (s.desc) t.push(limpiar(s.desc));
+      (s.pasos || s.steps || []).forEach((p, i) => t.push(`${i + 1}. ${limpiar(typeof p === 'string' ? p : (p.texto || p.text || JSON.stringify(p)))}`));
+      if (s.html && !s.pasos) t.push(limpiar(String(s.html).replace(/<[^>]+>/g, ' ')));
+      return t.join('\n');
+    }).join('\n\n');
+  }
+  function contexto() {
+    if (typeof window.ADORNO_ASISTENTE_CONTEXTO === 'string') return window.ADORNO_ASISTENTE_CONTEXTO;
+    try { if (typeof _manualSecciones === 'function') return seccionesATexto(_manualSecciones()); } catch (_) {}
+    try {
+      const rol = (window.session && (session.rol || session.role)) || '';
+      if (typeof MANUAL_GERENTE !== 'undefined' && (rol === 'admin' || rol === 'gerente' || rol === 'directora')) return seccionesATexto(MANUAL_GERENTE);
+      if (typeof MANUAL_EMPLEADO !== 'undefined') return seccionesATexto(MANUAL_EMPLEADO);
+      if (typeof MANUAL_GERENTE !== 'undefined') return seccionesATexto(MANUAL_GERENTE);
+    } catch (_) {}
+    return '';
+  }
+  function pestanas() {
+    const els = [...document.querySelectorAll('#tabs > button, nav.tabs > button, .tabs > button, .nav-item[data-tab], .tabs .tab[data-tab]')];
+    const out = [];
+    els.forEach((el) => { const lb = limpiar(el.getAttribute('title') || (el.querySelector('.lb') && el.querySelector('.lb').textContent) || el.textContent); if (lb && !out.some((o) => o.lb === lb)) out.push({ lb, el }); });
+    return out;
+  }
+  function irA(nombre) {
+    const p = pestanas().find((x) => x.lb.toLowerCase() === String(nombre).toLowerCase());
+    if (!p) return;
+    try { p.el.click(); } catch (_) {}
+    p.el.classList.add('asist-resalta'); setTimeout(() => p.el.classList.remove('asist-resalta'), 2600);
+  }
+
+  const ICO = {
+    chispa: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 17l.7 2.3L22 20l-2.3.7L19 23l-.7-2.3L16 20l2.3-.7z"/></svg>',
+    mic: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/></svg>',
+    enviar: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>',
+    cerrar: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>',
+    voz: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14"/></svg>',
+  };
+  const CSS = `
+  .asist-fab{position:fixed;right:18px;bottom:18px;z-index:9000;width:48px;height:48px;border-radius:50%;border:0;cursor:pointer;display:flex;align-items:center;justify-content:center;background:var(--accent,#d97757);color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.18);transition:transform .15s}
+  .asist-fab:hover{transform:scale(1.06)} .asist-fab[hidden]{display:none}
+  .asist-panel{position:fixed;right:18px;bottom:76px;z-index:9001;width:min(380px,calc(100vw - 36px));max-height:min(70vh,560px);display:flex;flex-direction:column;background:var(--surface,#fff);color:var(--text,#1a1a1a);border:0.5px solid var(--border,#d3d1c7);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.18);font-family:inherit;font-size:14px}
+  .asist-panel[hidden]{display:none}
+  .asist-head{display:flex;align-items:center;gap:8px;padding:10px 12px 8px;border-bottom:0.5px solid var(--border,#d3d1c7)}
+  .asist-head b{font-weight:600;font-size:13px;letter-spacing:.3px;text-transform:uppercase;color:var(--accent,#d97757)} .asist-head span{flex:1;font-size:11.5px;color:var(--muted,#5f5e5a)}
+  .asist-ib{background:transparent;border:0;cursor:pointer;color:var(--muted,#5f5e5a);padding:6px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center}
+  .asist-ib:hover{background:rgba(0,0,0,.06);color:var(--text,#1a1a1a)} .asist-ib.on{color:#dc2626;animation:asist-pulso 1s infinite}
+  @keyframes asist-pulso{0%,100%{opacity:1}50%{opacity:.45}}
+  .asist-log{flex:1;overflow:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-height:60px}
+  .asist-q{align-self:flex-end;background:var(--accent,#d97757);color:#fff;border-radius:12px 12px 2px 12px;padding:7px 10px;max-width:88%;white-space:pre-wrap}
+  .asist-a{align-self:flex-start;background:var(--bg,#fafaf9);border-radius:12px 12px 12px 2px;padding:8px 10px;max-width:92%;white-space:pre-wrap;line-height:1.4}
+  .asist-a .asist-ib{padding:2px;margin-left:6px;vertical-align:middle} .asist-a i{color:var(--muted,#5f5e5a);font-style:normal;font-size:12px}
+  .asist-err{align-self:flex-start;color:#991b1b;background:#fee2e2;border-radius:10px;padding:7px 10px;font-size:12.5px}
+  .asist-vacio{color:var(--muted,#5f5e5a);font-size:12.5px;line-height:1.45}
+  .asist-in{display:flex;align-items:flex-end;gap:4px;padding:8px 10px 10px;border-top:0.5px solid var(--border,#d3d1c7)}
+  .asist-in textarea{flex:1;resize:none;border:0.5px solid var(--border,#d3d1c7);border-radius:10px;padding:8px 10px;font:inherit;background:var(--bg,#fafaf9);color:inherit;min-height:38px;max-height:110px;outline:none}
+  .asist-in textarea:focus{border-color:var(--accent,#d97757)}
+  .asist-in .asist-env{color:var(--accent,#d97757)} .asist-in .asist-env:hover{background:rgba(217,119,87,.12)}
+  .asist-resalta{outline:3px solid var(--accent,#d97757)!important;outline-offset:2px;border-radius:8px;transition:outline-color 1.2s}
+  @media (max-width:600px){.asist-panel{right:8px;left:8px;width:auto;bottom:70px;max-height:72vh}.asist-fab{right:12px;bottom:12px}}`;
+
+  function armar() {
+    if (panel) return;
+    const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
+    const fab = document.createElement('button'); fab.className = 'asist-fab'; fab.title = 'Asistente: preguntá cómo hacer algo (escribiendo o por voz)'; fab.innerHTML = ICO.chispa; fab.onclick = () => abrir();
+    panel = document.createElement('div'); panel.className = 'asist-panel'; panel.hidden = true; panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'Asistente');
+    panel.innerHTML = `
+      <div class="asist-head"><b>Asistente</b><span>${esc(modulo())} · preguntá cómo hacer algo</span>
+        <button class="asist-ib" title="Cerrar (Esc)" data-a="cerrar">${ICO.cerrar}</button></div>
+      <div class="asist-log"><div class="asist-vacio">Escribí o dictá tu pregunta, por ejemplo: <b>"¿cómo cargo un pedido?"</b> o <b>"¿dónde veo mis vacaciones?"</b>.<br>Te explico los pasos con el manual de este módulo${SR ? '' : '<br><br>(este navegador no tiene dictado por voz: escribí la pregunta)'}.</div></div>
+      <div class="asist-in">
+        <textarea rows="1" placeholder="Tu pregunta…" aria-label="Pregunta"></textarea>
+        ${SR ? `<button class="asist-ib asist-mic" title="Dictar por voz" data-a="mic">${ICO.mic}</button>` : ''}
+        <button class="asist-ib asist-env" title="Enviar (Enter)" data-a="enviar">${ICO.enviar}</button>
+      </div>`;
+    document.body.appendChild(fab); document.body.appendChild(panel);
+    const ta = panel.querySelector('textarea');
+    panel.addEventListener('click', (e) => { const b = e.target.closest('[data-a]'); if (!b) return; const a = b.dataset.a;
+      if (a === 'cerrar') cerrar(); else if (a === 'enviar') enviar(false); else if (a === 'mic') dictar(); else if (a === 'leer') leer(b.dataset.t); });
+    ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(false); } });
+    ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = Math.min(110, ta.scrollHeight) + 'px'; });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && panel && !panel.hidden) cerrar(); });
+  }
+  function abrir() { armar(); panel.hidden = false; panel.querySelector('.asist-head span').textContent = modulo() + ' · preguntá cómo hacer algo'; setTimeout(() => panel.querySelector('textarea').focus(), 50); }
+  function cerrar() { if (!panel) return; panel.hidden = true; if (grabando && rec) { try { rec.stop(); } catch (_) {} } try { speechSynthesis.cancel(); } catch (_) {} }
+
+  function dictar() {
+    if (!SR) return;
+    const btn = panel.querySelector('.asist-mic'), ta = panel.querySelector('textarea');
+    if (grabando && rec) { try { rec.stop(); } catch (_) {} return; }
+    rec = new SR(); rec.lang = 'es-AR'; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
+    let final = '';
+    rec.onstart = () => { grabando = true; btn.classList.add('on'); ta.placeholder = 'Escuchando… hablá y hacé una pausa'; };
+    rec.onresult = (ev) => { let interim = ''; for (let i = ev.resultIndex; i < ev.results.length; i++) { const r = ev.results[i]; if (r.isFinal) final += r[0].transcript; else interim += r[0].transcript; } ta.value = (final + interim).trim(); };
+    rec.onerror = (ev) => { grabando = false; btn.classList.remove('on'); ta.placeholder = 'Tu pregunta…'; if (ev.error !== 'aborted' && ev.error !== 'no-speech') log('err', ev.error === 'not-allowed' ? 'El navegador no dio permiso para usar el micrófono.' : 'No pude escuchar (' + ev.error + '). Escribí la pregunta.'); };
+    rec.onend = () => { grabando = false; btn.classList.remove('on'); ta.placeholder = 'Tu pregunta…'; if ((final || ta.value).trim()) enviar(true); };
+    try { rec.start(); } catch (_) { grabando = false; }
+  }
+  function leer(t) { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang = 'es-AR'; u.rate = 1.02; speechSynthesis.speak(u); } catch (_) {} }
+
+  function log(tipo, texto) {
+    const l = panel.querySelector('.asist-log'); const v = l.querySelector('.asist-vacio'); if (v) v.remove();
+    const d = document.createElement('div');
+    if (tipo === 'q') { d.className = 'asist-q'; d.textContent = texto; }
+    else if (tipo === 'err') { d.className = 'asist-err'; d.textContent = texto; }
+    else if (tipo === 'wait') { d.className = 'asist-a asist-wait'; d.innerHTML = '<i>Buscando en el manual…</i>'; }
+    else { d.className = 'asist-a'; d.innerHTML = esc(texto.respuesta) + (texto.pestana ? `<br><i>→ pestaña <b>${esc(texto.pestana)}</b></i>` : '') + ('speechSynthesis' in window ? ` <button class="asist-ib" title="Escuchar la respuesta" data-a="leer" data-t="${esc(texto.respuesta)}">${ICO.voz}</button>` : ''); }
+    l.appendChild(d); l.scrollTop = l.scrollHeight; return d;
+  }
+  async function enviar(porVoz) {
+    if (ocupado) return;
+    const ta = panel.querySelector('textarea'); const q = ta.value.trim(); if (!q) return;
+    ta.value = ''; ta.style.height = 'auto'; log('q', q); const w = log('wait'); ocupado = true;
+    try {
+      const tk = await token();
+      if (!tk) throw new Error('Tenés que iniciar sesión para usar el asistente.');
+      const ctx = contexto();
+      if (!ctx) throw new Error('Este módulo todavía no tiene manual cargado para el asistente.');
+      const r = await fetch(URL + '/functions/v1/asistente', { method: 'POST', headers: { apikey: KEY, Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ modulo: modulo(), pregunta: q, contexto: ctx, pestanas: pestanas().map((p) => p.lb), por_voz: !!porVoz }) });
+      const j = await r.json().catch(() => ({}));
+      w.remove();
+      if (!r.ok || !j.ok) throw new Error(j.error || ('Error ' + r.status));
+      hist.push({ q, a: j.respuesta }); log('a', j);
+      if (j.pestana) irA(j.pestana);
+      if (porVoz) leer(j.respuesta);
+    } catch (e) { w.remove(); log('err', e.message || String(e)); }
+    finally { ocupado = false; ta.focus(); }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', armar); else armar();
+  return { abrir, cerrar, preguntar: (q) => { abrir(); panel.querySelector('textarea').value = q; enviar(false); } };
+})();
+/* ADORNO_ASISTENTE:FIN */
 window.ADORNO_SSO = (function () {
   var KEY = 'adorno-auth', DEV = 'adorno-equipo-confiable', MOD = 'adorno-modulo-';
   function get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
