@@ -148,14 +148,16 @@ window.ADORNO_MILES = (function () {
 })();
 /* ADORNO_MILES:FIN */
 /* ADORNO_ASISTENTE:INI — bloque compartido, idéntico en todos los módulos (fuente: _shared/adorno-asistente.js; se inyecta con _shared/inyectar_asistente.py). NO editar a mano en un módulo. */
-/* Asistente por voz/texto (etapa 1, 26-oct-2026, JP): botón flotante ✦ → panel. La usuaria pregunta "¿cómo hago X?" escribiendo o
+/* Clodi, asistente por voz/texto (etapa 1, 26-oct-2026; personaje "mini Claudia" 27-oct, JP): botón flotante con la cara de Clodi → panel. La usuaria pregunta "¿cómo hago X?" escribiendo o
    dictando (reconocimiento de voz del navegador) y la Edge Function `asistente` (Claude Haiku) responde con el manual del módulo.
    No ejecuta acciones: explica, y si la respuesta corresponde a una pestaña de la pantalla, la abre y la resalta. */
 window.ADORNO_ASISTENTE = (function () {
   const URL = 'https://jfwtiagteuwmyvblgwms.supabase.co';
   const KEY = 'sb_publishable_udSPma98Sw9eskeeLCgdCw_S2vIX0Fk';
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
-  let panel = null, hist = [], ocupado = false, rec = null, grabando = false;
+  let panel = null, hist = [], ocupado = false, rec = null, grabando = false, nAv = 0;
+  // Personaje Clodi (apodo de Claudia, la fundadora; mismo nombre que el bot de WhatsApp). SVG propio, sin archivos externos.
+  const CLODI = () => { const id = 'clodi' + (++nAv); return `<svg class="clodi" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Clodi"><defs><clipPath id="${id}"><circle cx="50" cy="50" r="50"/></clipPath><linearGradient id="${id}p" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF4EA"/><stop offset="1" stop-color="#F8DCC6"/></linearGradient></defs><g clip-path="url(#${id})"><rect width="100" height="100" fill="url(#${id}p)"/><path fill="#CFA956" d="M20 68 C13 58 12 38 21 25 C29 13 41 8 52 8 C65 8 76 14 82 26 C89 40 88 58 80 68 C78 72 74 73 71 70 C70 73 66 74 64 71 L36 71 C34 74 30 73 29 70 C26 73 22 72 20 68 Z"/><path fill="#E2A47A" d="M12 100 C13 90 21 84 33 82 L44 78 L56 78 L67 82 C79 84 87 90 88 100 Z"/><path fill="#CF8E64" d="M44 66 L56 66 L56 80 C53 82 47 82 44 80 Z"/><path fill="#1E2840" d="M21 100 L23 91 C24 87 26 85 29.5 84 L33 84 C35 90.5 42 94.5 50 94.5 C58 94.5 65 90.5 67 84 L70.5 84 C74 85 76 87 77 91 L79 100 Z"/><path fill="none" stroke="#2E3B5C" stroke-width="1.2" d="M29.5 84 C30.5 88 31 93 30 100 M70.5 84 C69.5 88 69 93 70 100"/><path fill="none" stroke="#D9DEE6" stroke-width="0.9" d="M40.5 79 C42.5 87 46.5 90.5 50 90.5 C53.5 90.5 57.5 87 59.5 79"/><path fill="#EEF1F5" stroke="#AEB6C2" stroke-width="0.5" d="M50 90 L52 92.2 L50 94.6 L48 92.2 Z"/><path fill="#EDB389" d="M50 21 C64.5 21 73.5 31.5 73.5 46 C73.5 60.5 63.5 72 50 72 C36.5 72 26.5 60.5 26.5 46 C26.5 31.5 35.5 21 50 21 Z"/><ellipse cx="35" cy="57.5" rx="5" ry="2.8" fill="#F07F78" opacity=".32"/><ellipse cx="65" cy="57.5" rx="5" ry="2.8" fill="#F07F78" opacity=".32"/><path fill="none" stroke="#A9803F" stroke-width="1.4" stroke-linecap="round" d="M34 40.2 C36.8 38 41 37.8 44 39.2 M56 39.2 C59 37.8 63.2 38 66 40.2"/><g class="clodi-ojos"><ellipse cx="39.5" cy="48" rx="3.9" ry="4.4" fill="#4D78A6"/><ellipse cx="60.5" cy="48" rx="3.9" ry="4.4" fill="#4D78A6"/><ellipse cx="39.5" cy="48.4" rx="2" ry="2.4" fill="#1C2333"/><ellipse cx="60.5" cy="48.4" rx="2" ry="2.4" fill="#1C2333"/><circle cx="38.2" cy="46.6" r="1.25" fill="#fff"/><circle cx="59.2" cy="46.6" r="1.25" fill="#fff"/><circle cx="40.9" cy="49.9" r=".6" fill="#fff"/><circle cx="61.9" cy="49.9" r=".6" fill="#fff"/><path fill="none" stroke="#3A2A20" stroke-width="1.5" stroke-linecap="round" d="M34.8 46.4 C36.3 42.8 42.7 42.8 44.2 46.4 M55.8 46.4 C57.3 42.8 63.7 42.8 65.2 46.4"/><path fill="none" stroke="#3A2A20" stroke-width="1.1" stroke-linecap="round" d="M34.8 46.4 L33.4 45.4 M65.2 46.4 L66.6 45.4"/></g><path fill="none" stroke="#D49A72" stroke-width="1" stroke-linecap="round" d="M36 52.6 C38 53.8 41 53.8 43 52.6 M57 52.6 C59 53.8 62 53.8 64 52.6"/><path fill="none" stroke="#C7865E" stroke-width="1.1" stroke-linecap="round" d="M49.4 52.8 C48.8 55.4 49.6 56.9 51.8 56.7"/><g class="clodi-boca"><path fill="#8B2C37" stroke="#C24F4B" stroke-width="0.9" stroke-linejoin="round" d="M40.5 59.6 C44 60.8 56 60.8 59.5 59.6 C59 66 54.8 69.2 50 69.2 C45.2 69.2 41 66 40.5 59.6 Z"/><path fill="#fff" d="M41.8 60.2 C45 61.2 55 61.2 58.2 60.2 C58 62 57.1 62.9 56 63.1 C52 63.6 48 63.6 44 63.1 C42.9 62.9 42 62 41.8 60.2 Z"/><path fill="#E27C80" d="M45.2 67.1 C47 65.3 53 65.3 54.8 67.1 C53 68.6 47 68.6 45.2 67.1 Z"/></g><path fill="#EACF86" d="M26 30 C21 40 21 54 24 63 C22 66 19 67 17 66 C19 70 25 71 28 69 C30 70 33 69 34 66.5 C31 58 30.5 46 33.5 37 Z"/><path fill="#EACF86" d="M74 30 C79 40 79 54 76 63 C78 66 81 67 83 66 C81 70 75 71 72 69 C70 70 67 69 66 66.5 C69 58 69.5 46 66.5 37 Z"/><path fill="#EFD690" d="M23.5 39 C23 23 35 12 51 12 C66 12 77.5 21 77 38 C74.5 33.5 71 30.5 67 29.5 C67.5 32 66.8 34 65.5 35.5 C63.5 31.5 60 29.6 56.5 29.8 C56.8 33 55 36 52 38 C51.5 34.5 49.5 32.5 47 32 C45 35.5 41 38.5 36 39.2 C37 37 37.5 35.5 37 34 C33 36.5 28 38.6 23.5 39 Z"/><path fill="none" stroke="#EFD690" stroke-width="1.6" stroke-linecap="round" d="M46 12.5 C44.5 9.5 41.5 8.6 39 9.4 M55 12.6 C57 10 60 9.4 62.5 10.4"/><path fill="none" stroke="#FFF5D6" stroke-width="1.3" stroke-linecap="round" opacity=".95" d="M32 21 C38 16 46 14.5 52 15.5 M57 16 C64 17.5 70 21.5 73 27 M27.5 31 C26 37 25.6 43 25.9 49 M41 31 C46 28.5 50 25 54 21.5 M60 24 C64 25 68 27.5 70.5 31 M75.5 44 C76.4 50 76 56 74.6 61"/><path fill="none" stroke="#C49A48" stroke-width="1" stroke-linecap="round" opacity=".75" d="M45 33.5 C49 30.5 53 27 58 26 M72 41 C73.3 49 73 57 71.5 63 M27.8 52 C28 57 28.8 61 30.5 64.5 M61 32 C62.5 30.5 64.5 29.8 66.5 30"/><circle cx="27.6" cy="60.5" r="1.3" fill="#E8ECF2" stroke="#AEB6C2" stroke-width=".4"/><circle cx="72.4" cy="60.5" r="1.3" fill="#E8ECF2" stroke="#AEB6C2" stroke-width=".4"/></g></svg>`; };
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const limpiar = (s) => String(s || '').replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '').replace(/\s+/g, ' ').trim();
@@ -209,12 +211,22 @@ window.ADORNO_ASISTENTE = (function () {
     voz: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14"/></svg>',
   };
   const CSS = `
-  .asist-fab{position:fixed;right:18px;bottom:18px;z-index:9000;width:48px;height:48px;border-radius:50%;border:0;cursor:pointer;display:flex;align-items:center;justify-content:center;background:var(--accent,#d97757);color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.18);transition:transform .15s}
-  .asist-fab:hover{transform:scale(1.06)} .asist-fab[hidden]{display:none}
+  .asist-fab{position:fixed;right:18px;bottom:18px;z-index:9000;width:58px;height:58px;padding:0;border-radius:50%;border:2.5px solid #fff;cursor:pointer;overflow:hidden;background:#FFF4EA;box-shadow:0 0 0 2px var(--accent,#d97757),0 6px 16px rgba(0,0,0,.22);transition:transform .15s}
+  .asist-fab svg,.asist-av svg{display:block;width:100%;height:100%}
+  .asist-av{flex:none;border-radius:50%;overflow:hidden;background:#FFF4EA;box-shadow:0 0 0 1.5px var(--accent,#d97757)}
+  .asist-head .asist-av{width:36px;height:36px} .asist-fila{display:flex;align-items:flex-end;gap:7px;align-self:flex-start;max-width:96%} .asist-fila .asist-av{width:26px;height:26px} .asist-fila .asist-a{max-width:none}
+  .clodi .clodi-ojos{transform-box:fill-box;transform-origin:center;animation:clodi-parpadeo 5.5s infinite}
+  @keyframes clodi-parpadeo{0%,92%,100%{transform:scaleY(1)}94%{transform:scaleY(.1)}96%{transform:scaleY(1)}}
+  .clodi.habla .clodi-boca{transform-box:fill-box;transform-origin:50% 0;animation:clodi-habla .2s ease-in-out infinite alternate}
+  @keyframes clodi-habla{from{transform:scaleY(1)}to{transform:scaleY(.4)}}
+  .clodi.piensa{animation:clodi-piensa 1.1s ease-in-out infinite}
+  @keyframes clodi-piensa{0%,100%{transform:translateY(0)}50%{transform:translateY(-6%)}}
+  @media (prefers-reduced-motion:reduce){.clodi .clodi-ojos,.clodi.habla .clodi-boca,.clodi.piensa{animation:none}}
+  .asist-fab:hover{transform:scale(1.07)} .asist-fab[hidden]{display:none}
   .asist-panel{position:fixed;right:18px;bottom:76px;z-index:9001;width:min(380px,calc(100vw - 36px));max-height:min(70vh,560px);display:flex;flex-direction:column;background:var(--surface,#fff);color:var(--text,#1a1a1a);border:0.5px solid var(--border,#d3d1c7);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.18);font-family:inherit;font-size:14px}
   .asist-panel[hidden]{display:none}
   .asist-head{display:flex;align-items:center;gap:8px;padding:10px 12px 8px;border-bottom:0.5px solid var(--border,#d3d1c7)}
-  .asist-head b{font-weight:600;font-size:13px;letter-spacing:.3px;text-transform:uppercase;color:var(--accent,#d97757)} .asist-head span{flex:1;font-size:11.5px;color:var(--muted,#5f5e5a)}
+  .asist-head b{font-weight:700;font-size:15px;color:var(--accent,#d97757);display:block;line-height:1.15} .asist-head .asist-tit{flex:1;min-width:0} .asist-head .asist-sub{display:block;font-size:11.5px;color:var(--muted,#5f5e5a);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .asist-ib{background:transparent;border:0;cursor:pointer;color:var(--muted,#5f5e5a);padding:6px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center}
   .asist-ib:hover{background:rgba(0,0,0,.06);color:var(--text,#1a1a1a)} .asist-ib.on{color:#dc2626;animation:asist-pulso 1s infinite}
   @keyframes asist-pulso{0%,100%{opacity:1}50%{opacity:.45}}
@@ -229,19 +241,19 @@ window.ADORNO_ASISTENTE = (function () {
   .asist-in textarea:focus{border-color:var(--accent,#d97757)}
   .asist-in .asist-env{color:var(--accent,#d97757)} .asist-in .asist-env:hover{background:rgba(217,119,87,.12)}
   .asist-resalta{outline:3px solid var(--accent,#d97757)!important;outline-offset:2px;border-radius:8px;transition:outline-color 1.2s}
-  @media (max-width:600px){.asist-panel{right:8px;left:8px;width:auto;bottom:70px;max-height:72vh}.asist-fab{right:12px;bottom:12px}}`;
+  @media (max-width:600px){.asist-panel{right:8px;left:8px;width:auto;bottom:80px;max-height:72vh}.asist-fab{right:12px;bottom:12px;width:54px;height:54px}}`;
 
   function armar() {
     if (panel) return;
     const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
-    const fab = document.createElement('button'); fab.className = 'asist-fab'; fab.title = 'Asistente: preguntá cómo hacer algo (escribiendo o por voz)'; fab.innerHTML = ICO.chispa; fab.onclick = () => abrir();
-    panel = document.createElement('div'); panel.className = 'asist-panel'; panel.hidden = true; panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'Asistente');
+    const fab = document.createElement('button'); fab.className = 'asist-fab'; fab.title = 'Clodi: preguntale cómo hacer algo (escribiendo o por voz)'; fab.setAttribute('aria-label', 'Abrir Clodi'); fab.innerHTML = CLODI(); fab.onclick = () => abrir();
+    panel = document.createElement('div'); panel.className = 'asist-panel'; panel.hidden = true; panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'Clodi');
     panel.innerHTML = `
-      <div class="asist-head"><b>Asistente</b><span>${esc(modulo())} · preguntá cómo hacer algo</span>
+      <div class="asist-head"><span class="asist-av">${CLODI()}</span><span class="asist-tit"><b>Clodi</b><span class="asist-sub">${esc(modulo())} · preguntame cómo hacer algo</span></span>
         <button class="asist-ib" title="Cerrar (Esc)" data-a="cerrar">${ICO.cerrar}</button></div>
-      <div class="asist-log"><div class="asist-vacio">Escribí o dictá tu pregunta, por ejemplo: <b>"¿cómo cargo un pedido?"</b> o <b>"¿dónde veo mis vacaciones?"</b>.<br>Te explico los pasos con el manual de este módulo${SR ? '' : '<br><br>(este navegador no tiene dictado por voz: escribí la pregunta)'}.</div></div>
+      <div class="asist-log"><div class="asist-vacio">¡Hola! Soy <b>Clodi</b>. Escribime o dictame tu pregunta, por ejemplo: <b>"¿cómo cargo un pedido?"</b> o <b>"¿dónde veo mis vacaciones?"</b>.<br>Te explico los pasos con el manual de este módulo${SR ? '' : '<br><br>(este navegador no tiene dictado por voz: escribí la pregunta)'}.</div></div>
       <div class="asist-in">
-        <textarea rows="1" placeholder="Tu pregunta…" aria-label="Pregunta"></textarea>
+        <textarea rows="1" placeholder="Preguntale a Clodi…" aria-label="Pregunta para Clodi"></textarea>
         ${SR ? `<button class="asist-ib asist-mic" title="Dictar por voz" data-a="mic">${ICO.mic}</button>` : ''}
         <button class="asist-ib asist-env" title="Enviar (Enter)" data-a="enviar">${ICO.enviar}</button>
       </div>`;
@@ -253,8 +265,8 @@ window.ADORNO_ASISTENTE = (function () {
     ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = Math.min(110, ta.scrollHeight) + 'px'; });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && panel && !panel.hidden) cerrar(); });
   }
-  function abrir() { armar(); panel.hidden = false; panel.querySelector('.asist-head span').textContent = modulo() + ' · preguntá cómo hacer algo'; setTimeout(() => panel.querySelector('textarea').focus(), 50); }
-  function cerrar() { if (!panel) return; panel.hidden = true; if (grabando && rec) { try { rec.stop(); } catch (_) {} } try { speechSynthesis.cancel(); } catch (_) {} }
+  function abrir() { armar(); panel.hidden = false; panel.querySelector('.asist-head .asist-sub').textContent = modulo() + ' · preguntame cómo hacer algo'; setTimeout(() => panel.querySelector('textarea').focus(), 50); }
+  function cerrar() { if (!panel) return; panel.hidden = true; if (grabando && rec) { try { rec.stop(); } catch (_) {} } try { speechSynthesis.cancel(); } catch (_) {} boca(false); }
 
   function dictar() {
     if (!SR) return;
@@ -264,19 +276,30 @@ window.ADORNO_ASISTENTE = (function () {
     let final = '';
     rec.onstart = () => { grabando = true; btn.classList.add('on'); ta.placeholder = 'Escuchando… hablá y hacé una pausa'; };
     rec.onresult = (ev) => { let interim = ''; for (let i = ev.resultIndex; i < ev.results.length; i++) { const r = ev.results[i]; if (r.isFinal) final += r[0].transcript; else interim += r[0].transcript; } ta.value = (final + interim).trim(); };
-    rec.onerror = (ev) => { grabando = false; btn.classList.remove('on'); ta.placeholder = 'Tu pregunta…'; if (ev.error !== 'aborted' && ev.error !== 'no-speech') log('err', ev.error === 'not-allowed' ? 'El navegador no dio permiso para usar el micrófono.' : 'No pude escuchar (' + ev.error + '). Escribí la pregunta.'); };
-    rec.onend = () => { grabando = false; btn.classList.remove('on'); ta.placeholder = 'Tu pregunta…'; if ((final || ta.value).trim()) enviar(true); };
+    rec.onerror = (ev) => { grabando = false; btn.classList.remove('on'); ta.placeholder = 'Preguntale a Clodi…'; if (ev.error !== 'aborted' && ev.error !== 'no-speech') log('err', ev.error === 'not-allowed' ? 'El navegador no dio permiso para usar el micrófono.' : 'No pude escuchar (' + ev.error + '). Escribí la pregunta.'); };
+    rec.onend = () => { grabando = false; btn.classList.remove('on'); ta.placeholder = 'Preguntale a Clodi…'; if ((final || ta.value).trim()) enviar(true); };
     try { rec.start(); } catch (_) { grabando = false; }
   }
-  function leer(t) { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang = 'es-AR'; u.rate = 1.02; speechSynthesis.speak(u); } catch (_) {} }
+  function voz() {  // Clodi habla con una voz femenina en castellano si el equipo tiene alguna (Edge: "Elena" es-AR)
+    try {
+      const vs = speechSynthesis.getVoices().filter((v) => /^es/i.test(v.lang)); if (!vs.length) return null;
+      const fem = /elena|sabina|helena|laura|elvira|dalia|paloma|paulina|m[oó]nica|luc[ií]a|camila|valentina|female|mujer|google espa/i;
+      const pais = ['es-AR', 'es-419', 'es-US', 'es-MX', 'es-ES'];
+      const pts = (v) => (fem.test(v.name) ? 10 : 0) + (v.localService ? 0 : 1) + (pais.includes(v.lang) ? 5 - pais.indexOf(v.lang) : 0);
+      return vs.sort((a, b) => pts(b) - pts(a))[0];
+    } catch (_) { return null; }
+  }
+  function boca(on) { document.querySelectorAll('.asist-av .clodi, .asist-fab .clodi').forEach((c) => c.classList.toggle('habla', on)); }
+  function leer(t) { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); const v = voz(); if (v) u.voice = v; u.lang = (v && v.lang) || 'es-AR'; u.rate = 1.02;
+    u.onstart = () => boca(true); u.onend = u.onerror = () => boca(false); speechSynthesis.speak(u); } catch (_) { boca(false); } }
 
   function log(tipo, texto) {
     const l = panel.querySelector('.asist-log'); const v = l.querySelector('.asist-vacio'); if (v) v.remove();
     const d = document.createElement('div');
     if (tipo === 'q') { d.className = 'asist-q'; d.textContent = texto; }
     else if (tipo === 'err') { d.className = 'asist-err'; d.textContent = texto; }
-    else if (tipo === 'wait') { d.className = 'asist-a asist-wait'; d.innerHTML = '<i>Buscando en el manual…</i>'; }
-    else { d.className = 'asist-a'; d.innerHTML = esc(texto.respuesta) + (texto.pestana ? `<br><i>→ pestaña <b>${esc(texto.pestana)}</b></i>` : '') + ('speechSynthesis' in window ? ` <button class="asist-ib" title="Escuchar la respuesta" data-a="leer" data-t="${esc(texto.respuesta)}">${ICO.voz}</button>` : ''); }
+    else if (tipo === 'wait') { d.className = 'asist-fila'; d.innerHTML = `<span class="asist-av">${CLODI()}</span><div class="asist-a asist-wait"><i>Clodi está buscando en el manual…</i></div>`; d.querySelector('.clodi').classList.add('piensa'); }
+    else { d.className = 'asist-fila'; d.innerHTML = `<span class="asist-av">${CLODI()}</span><div class="asist-a"></div>`; d.lastChild.innerHTML = esc(texto.respuesta) + (texto.pestana ? `<br><i>→ pestaña <b>${esc(texto.pestana)}</b></i>` : '') + ('speechSynthesis' in window ? ` <button class="asist-ib" title="Escuchar la respuesta" data-a="leer" data-t="${esc(texto.respuesta)}">${ICO.voz}</button>` : ''); }
     l.appendChild(d); l.scrollTop = l.scrollHeight; return d;
   }
   async function enviar(porVoz) {
@@ -285,9 +308,9 @@ window.ADORNO_ASISTENTE = (function () {
     ta.value = ''; ta.style.height = 'auto'; log('q', q); const w = log('wait'); ocupado = true;
     try {
       const tk = await token();
-      if (!tk) throw new Error('Tenés que iniciar sesión para usar el asistente.');
+      if (!tk) throw new Error('Tenés que iniciar sesión para hablar con Clodi.');
       const ctx = contexto();
-      if (!ctx) throw new Error('Este módulo todavía no tiene manual cargado para el asistente.');
+      if (!ctx) throw new Error('Este módulo todavía no tiene manual cargado para Clodi.');
       const r = await fetch(URL + '/functions/v1/asistente', { method: 'POST', headers: { apikey: KEY, Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' },
         body: JSON.stringify({ modulo: modulo(), pregunta: q, contexto: ctx, pestanas: pestanas().map((p) => p.lb), por_voz: !!porVoz }) });
       const j = await r.json().catch(() => ({}));
