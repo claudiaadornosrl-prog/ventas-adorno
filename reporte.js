@@ -160,7 +160,7 @@ async function abrirReporteVentas() {
   ov.innerHTML = `
     <div class="r-box">
       <div class="r-head">
-        <span style="font-size:20px;">📊</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true" style="width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><line x1="4" y1="20" x2="20" y2="20"/><rect x="6" y="11" width="3" height="7"/><rect x="11" y="6" width="3" height="12"/><rect x="16" y="3" width="3" height="15"/></svg>
         <div style="font-weight:700;">Reporte de ventas</div>
         <select id="r-tipo">
           <option value="semanal">Semanal</option><option value="mensual">Mensual</option>
@@ -270,7 +270,7 @@ function abrirReporteEncargada() {
   const d = document.createElement('div');
   d.id = 'rep-login';
   d.innerHTML = `<div class="rl-box">
-    <div style="font-size:17px;font-weight:700;margin-bottom:4px">📈 Reporte del local</div>
+    <div style="font-size:17px;font-weight:700;margin-bottom:4px">Reporte del local</div>
     <div style="font-size:12.5px;color:#64748b;margin-bottom:12px;line-height:1.45">Entrá con <b>tu usuario de encargada</b>
       (el mismo mail y clave de RRHH). La cuenta del local no alcanza.<br>Al cerrar el reporte se cierra tu sesión:
       no queda abierta en esta computadora.</div>
@@ -338,8 +338,8 @@ function _diaFuerteDebil(porDia, factor = 1) {
     const dt = new Date(y, m - 1, dd);
     return dt.toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: '2-digit' });
   };
-  return `<span class="r-muted" style="font-weight:400;"> · 🔝 ${nombre(f.fecha)} ${_rFmtK(f.monto * factor)}`
-       + ` · 🔻 ${nombre(d.fecha)} ${_rFmtK(d.monto * factor)}</span>`;
+  return `<span class="r-muted" style="font-weight:400;"> · <span title="Día de mayor venta"><svg viewBox="0 0 10 10" aria-hidden="true" style="width:9px;height:9px;fill:#16a34a"><polygon points="5,1 9.5,9 0.5,9"/></svg></span> ${nombre(f.fecha)} ${_rFmtK(f.monto * factor)}`
+       + ` · <span title="Día de menor venta"><svg viewBox="0 0 10 10" aria-hidden="true" style="width:9px;height:9px;fill:#dc2626"><polygon points="0.5,1 9.5,1 5,9"/></svg></span> ${nombre(d.fecha)} ${_rFmtK(d.monto * factor)}</span>`;
 }
 
 // El análisis del lunes viene en texto con estructura (títulos con ##, viñetas
@@ -364,7 +364,7 @@ function _repNarrativa(txt) {
     } else { cerrarLista(); html += `<p class="r-reco-p">${negrita(t)}</p>`; }
   }
   cerrarLista();
-  return `<div class="r-reco"><div class="r-reco-t">💬 Análisis de la semana</div>${html}</div>`;
+  return `<div class="r-reco"><div class="r-reco-t">Análisis de la semana</div>${html}</div>`;
 }
 
 // Los artículos sin GRUPO cargado en Dragonfish. La tarjeta aparece SOLO si
@@ -383,7 +383,7 @@ function _repSinCategoria(act, k, $A) {
   const resto = sc.skus - Math.min(15, (sc.items || []).length);
   return `
     <div class="r-card" style="border-left:4px solid #d97706;">
-      <div class="r-ct">🏷 Artículos sin categoría
+      <div class="r-ct">Artículos sin categoría
         <span class="r-muted">· ${sc.skus} SKU${sc.skus === 1 ? '' : 's'} · ${_rFmtK($A(sc.monto))} · ${p.toFixed(1)}% de la venta</span></div>
       <div style="font-size:12.5px;color:#92400e;background:#fffbeb;border-radius:8px;padding:8px 12px;margin-bottom:8px;">
         Estos artículos no tienen <b>Grupo</b> cargado en Dragonfish, así que no entran
@@ -422,8 +422,8 @@ function _repCorte(titulo, items, k, $A, tope) {
 }
 
 function _repOrigenMaterial(act, k, $A) {
-  const o = _repCorte('🌍 Venta por origen', act.origenes, k, $A, 12);
-  const m = _repCorte('🧱 Venta por material', act.materiales, k, $A, 12);
+  const o = _repCorte('Venta por origen', act.origenes, k, $A, 12);
+  const m = _repCorte('Venta por material', act.materiales, k, $A, 12);
   if (!o && !m) return '';
   return `<div class="r-2col">${o}${m}</div>`;
 }
@@ -603,7 +603,7 @@ ${etiq}: ${_fmtV(otro, esMonto)}`;
       <div class="r-card"><div class="r-ct">Top clientes</div>
         ${lista(act.clientes, c => `<div class="r-mp-row"><span>${_rEsc(c.nombre)}</span><span class="r-num">${_rFmtK($A(c.monto))}${pct(c.monto)}</span></div>`)}</div>
     </div>
-    ${k.prueba_monto ? `<div class="r-aviso">🧪 Se excluyeron <b>${_rFmtK($A(k.prueba_monto))}</b> cargados con el artículo PRUEBA (comodín para cobrar extras: fletes, etc.). No es venta de productos, por eso no entra en ninguna cifra de este reporte; sí está en la planilla de ventas diarias, que es plata cobrada.</div>` : ''}
+    ${k.prueba_monto ? `<div class="r-aviso">Se excluyeron <b>${_rFmtK($A(k.prueba_monto))}</b> cargados con el artículo PRUEBA (comodín para cobrar extras: fletes, etc.). No es venta de productos, por eso no entra en ninguna cifra de este reporte; sí está en la planilla de ventas diarias, que es plata cobrada.</div>` : ''}
     ${_repOrigenMaterial(act, k, $A)}
     ${_repSinCategoria(act, k, $A)}
     <div class="r-2col">
@@ -901,7 +901,8 @@ function _repToggle(cls, row) {
         // Header inesperado: mejor el kebab que perder el acceso al reporte.
         const kebab = document.getElementById('kebab-menu');
         if (!kebab) return;
-        b.textContent = esEnc ? '📈 Reporte del local (encargada)' : '📈 Reporte semanal/mensual';
+        b.innerHTML = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="20" x2="20" y2="20"/><rect x="6" y="11" width="3" height="7"/><rect x="11" y="6" width="3" height="12"/><rect x="16" y="3" width="3" height="15"/></svg>'
+          + (esEnc ? '<span>Reporte del local (encargada)</span>' : '<span>Reporte semanal/mensual</span>');
         b.onclick = () => { if (typeof cerrarKebab === 'function') cerrarKebab(); abrir(); };
         kebab.insertBefore(b, kebab.firstChild);
       }
