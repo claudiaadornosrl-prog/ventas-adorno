@@ -150,12 +150,23 @@ window.ADORNO_MILES = (function () {
 /* ADORNO_ASISTENTE:INI — bloque compartido, idéntico en todos los módulos (fuente: _shared/adorno-asistente.js; se inyecta con _shared/inyectar_asistente.py). NO editar a mano en un módulo. */
 /* Clodi, asistente por voz/texto (etapa 1, 26-oct-2026; personaje 27-oct; versión 3D sin fondo 28-oct, JP): botón flotante con el busto de Clodi → panel. La usuaria pregunta "¿cómo hago X?" escribiendo o
    dictando (reconocimiento de voz del navegador) y la Edge Function `asistente` (Claude Haiku) responde con el manual del módulo.
-   No ejecuta acciones: explica, y si la respuesta corresponde a una pestaña de la pantalla, la abre y la resalta. */
+   Explica, y si la respuesta corresponde a una pestaña de la pantalla, la abre y la resalta.
+   Etapa 2 (28-oct, JP: "que le prepare todo a las chicas, pero que lo tengan que aprobar"): si el módulo define
+   window.ADORNO_ACCIONES = [{nombre, descripcion, parametros (JSON schema), disponible(), preparar(p), confirmar(p)}], Clodi puede
+   PREPARAR una de esas acciones (completa el formulario del módulo) y la persona la manda con el botón Enviar, que corre la
+   función del propio módulo con su sesión. Nada se envía sin ese clic. Voz: elige la más parecida a Claudia (mujer, es-AR) o la
+   que la persona elija en el panel; opción de leer siempre las respuestas. */
 window.ADORNO_ASISTENTE = (function () {
   const URL = 'https://jfwtiagteuwmyvblgwms.supabase.co';
   const KEY = 'sb_publishable_udSPma98Sw9eskeeLCgdCw_S2vIX0Fk';
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
   let panel = null, hist = [], ocupado = false, rec = null, grabando = false;
+  const LS = { get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (_) {} } };
+  const siempreVoz = () => LS.get('clodi-siempre-voz') === '1';
+  function acciones() {   // acciones del módulo disponibles para quien está usando la pantalla
+    const lista = Array.isArray(window.ADORNO_ACCIONES) ? window.ADORNO_ACCIONES : [];
+    return lista.filter((a) => { try { return a && a.nombre && typeof a.preparar === 'function' && typeof a.confirmar === 'function' && (!a.disponible || a.disponible()); } catch (_) { return false; } });
+  }
   // Personaje Clodi (apodo de Claudia, la fundadora; mismo nombre que el bot de WhatsApp). 28-oct-2026: versión 3D generada
   // con IA (Canva, desde una descripción, sin la foto) y recortada sin fondo. Fuente: _shared/clodi_ia_sinfondo.png.
   const CLODI_BUSTO = 'data:image/webp;base64,UklGRqwlAABXRUJQVlA4WAoAAAAQAAAAsAAAvwAAQUxQSIoJAAAB8EZr27Kn2bat2xlPkAju7u7uXndNcQJlkKvYZXUXoO7u7u7uXooESrBQXEs857muPwiUnse+H5f8iogJgAMNhzczmAEGq5GdXTsBobXGyJl5eXnTB6Sg2pR0JI1Z9tCDd88Y2Ldv34Gnzc7Ly8ubfXrzEJGZv+pgcXHxH9/MHjjwmLzjR1943XHTfqCkPQUrV65cvaO42p2PdA0JZulzN6v6HQWrNx0oKiyu2LyNIvVny5/sauEA/b5VjNXqSClJ/JMqv7+RWQhA2wdLqep5pDqaMa0dDv8Z2j1QonilSpbWBWDmM0Oze0sUzzsurA2Dt81gqH3hPjGOqPVnJ0VSUiJIgJlvDIemzd0sKp7JH/Pzrr127vT8joB5Bklp6YkJxy4XFefcvz8aPbB33w3tM2BeifT45803LZ73RYwK6vaPL24OM/NG4tDXS8mSA1QASYmkdODW5vClIf3MT6sUdFL7H5g6qUWiDwxpUwokSmSQJKpy38bXT0/3AGpNLRDlzBUnmPNSBy9ZJ8qRjDF2dTLMbQ3yfyiXQ6lVpyfA7ZFp2yQ6RLwzE+Y2yy9mTC6N3ZDiNkP6vw6IblmS5jakT1tNuZQqviBicHn61DVyK1VyTSbMYelTC+TeokWZMGelTymQi4sWZsIclXj2WtFBVNHCTJibUudtpFxMFS3MhDnJcq4sFR0kqmhhJsxBhvSrK9wkqmhhJpw08AdRbqaKFmS5x9Dm/lI5myqakwJzi6HNPcVyOPXzMYlwqqHNPcVyOmNfTEh0iAFt7ikWnSbpvZ4wVxgSBz9+UJTbyfJ7GsHcYKhz3udVolxP7V6YAUe2WlIkL1IftYE5oeUdB0VPfNnBBYbGt/4hyhcd3XDmNlG+WDvKAYakSyvoC6lsaQ4saIiM+oKUL6kNJ1nQDE2fjcmn0Scaw4LW8XPRI9T2WakIWs7D9InIr/rCAgUkXlRB+kRFEwOH41bKq1VPtQpezfzfKvxBbT4BDsw+e7noj7dbwgJndsp6b1D7FyQHz9DnfcqX1K8DYAi85ReLvpB2LKqNoBtaPBaVP6mVw2DBMqRftE9e2XVm8Jq/LXpEqnisBSxYkRPX+4Xaf2k2gmyodWdMvt3ytwxYkDKu2O8b6vteQYKhw9uiZ6q+6h+wLh/7Rh8eUwPBnrbHNytPNwQ8v8wzvCMLFijDMQV+od7vFDCg5oI9ok/405CgGU4q8gm1bmotBNvQ4ukqeZT6vB0saANWi17ZvqAWLGAjf/OKqOVDgmWos6xYXiW3HBMspM3eKnpF2hosQ8dPRHm1sujF3gHrvdwvVMF5rVIRZEPvn33zaSsE29D7F++0MwtbbRG45aGrxfPRcAVETlgveuWTwBkaPByVVz4LHGAD347SJy83CR5s/C+iL6iNuUlwYNrUtaIfqNLrMmHBM2RcUiqSXthzNgwONPR+ZWuVfOgOIKXdKY+v2s0wBaDJgOsPis7j3nOcYQacussDWjnaGYBFpu9zn9bPqQlnGvq8GZXzC+fUgDMNmbdWyvHUrgU14JKWH4rO+6gdIi6pc19UbiejyzJg7gBs5Deky0jtONcMTk2+4IDoLurg5/9sArcYTt3ltMrX+6XCsYZ+n8XcFf3i8hGJMMcASWdtIh0V/XBUMmBwraHFO4o5ifpqVARuTp29RSTdo8qrU2BuQtaizXJwTLtzzeDqrNxHvtlS7hpy2wnuMiTk9Dr5mXK3VJVr+8lwVvXdnilzyYGHl20sW1YX5i4zQ/fXopTohJheb1c79+ufhroMgCF3pygnUtumJiBp6LTmcLuh5SOV+1/8uNIB2r20PgwwON86L7u5c//XqoJFav/Ls5oAgMGHtXMi6PdqBRkgiU+1i8CrZoO+UoCjhRuXnwAzf5jBkDrv132kJDL++Ompx4ytaQbPWvaAxYUiFcDY5+Mi8HStZWVUVcHvYlxR+/ISYOYjM3S97r4Pvj/nwv1ifG0/EQZfW43MrqNqN12yPibG1ckeq96yT/1cYjyd5DMzMwCR8e+ViOGoekNit6uLFKYOzTr/52i4MqRM3yHGy4nhIIIpe+Jmd66FAjR6jIpPquLSZJj/Eros3SHGh6Q7aprvDEnHvF2iuKU+7YqI1wxIPP5bxTF18Pbm8LgZElpP+5Zk/Ejaf3fvFJh3zACYAZlnvL6DivfSL6dkAOYTMwNgAGoOXrpegVw7p1EizBdmBiCrSRrQYPx1P5WLDAC15fmzsgEDYOY2MwOQ1faYO16b1vj4RwrLJSqom5Z2TwAsAYCZo8zMAGS0mnTbJ4VVWvP0GkpUUEmVvj+zVaTL3AkNIgDMnGNmAJDRauL17xZWSaIkUUGmtOu1GZdtW/fEnCF1EgCYuQVAama7U254r7BCEilJVNAp7dpYKR5Y/kh+75xEAGbuiDToNv6KBz/4vVISKWeSkkhJB757ZF7/+hEAZk4w63TvD+vKJYmUW0lJJCXtW/7o+SMaJiLgVj1w5m5JJOVskhL/KHhu0Yh6FhgzHL7+yc+WkZTjSUkqXnNXl4CYAYhk1G3ef+iQMTcVVcmPJKXyqzIsYtXGkwFIapu7eMkzb/26ds36EnmUMX3cBoc3ixMDEluedPGbO8uqVD09Impz/ogxo0eP7lUvJQGAxQUiPRa9tqVckli9/Fq5bf2GDRs2/PDUVf+YVMcAi4OaJ7xTLImkPF9VtvbB3CYG+4sMDS5cQ5GUv3lYSdz2ZG4D/LWGpDk7RCockhK33dIlwf6SyOjvRIVISmUv9YD9BZER70cVMqmKO5vAjlpk+PtRhU5q75LGsKNjCcPfjymU7lvSGEfV0OKFmEIptXdJ46OCGhfsFEOJqL03ND4aNecUKrRSe+Yl2Z9Kyi1UiKU+7AY7MkOL18VQU3JbE/yJpOnbGGZE7ZoVOSJD81dFhVrywbqwwxnS5u0IPVp/ih3R4B9Ehd3Y/XVg1Rlq31Qefqj1Jx9J249EhZ/yxREcNmnG1lBUcVky7BBD/WdFhV/qo57VwSYWhKQDs3CoIfOuqMIwVXFpCuyQBq+IYUjUu+2ra/t+aPpt2CGITNkWmnaeA4Mh8z6FZKok3wBD/RfEkNXi7RA1r5qx68JT2eIEAMkXlYUliS82hyHncVEhmVrVB4a6z4SptUNgaPhSmNpzDgyDfglTJXMATNsXpopnA4n/Kgtbte4lFa7qPqswVTLX0OHzECXFbshAv1VhinooO4wduyV0zToYumYX//crL3Ql/6sibGXeKypcZT8cvh76PwRWUDgg/BsAADBwAJ0BKrEAwAA+SSCMQ6KiIZaLhcgoBISzAGmu3v+G6TbNHivys9nyzP5L8Yezfuo6d84rm//qfdd8z/9V/yfaH+oP9n7gn63fsN62P7Ae8390/UJ/OP7p+3fu6/4z9X/dr+1n4q/IB/Qv7l/4uw0/uv+q///uAfx3+5f+P10v+9/yvg3/aP9qPgM/k/9i/+PsAegB6kH8A7GT+zfhF+nflB/qfql9Y/xz6f/Rf3b90f3Y543THmn/Mvyl/B82/CH5if6HqNfkH9X/2fio79K1foR97v+H4nmtP4p/5vuBfrL/z/LF8dvyH9kfgD/on92/6X3SfTN/f/+zzi/of+f/9P+q+Aj+Vf1X/i/3j2tvOA9h79c/v/b23GUzRhe6Bjr+F9dx8ImjE6hTtbdV62qWiQBt+0F0LSeYTQ6gIIjPR9VIf5z1/lq3Nwwxum3RNo/kW9vjFqCB1/i5z9etXhqKpSGMQRhcksDT1yV66OxqMu3+EiVoPtgOSjD2h6FxTwVgFskTD11VY++1a+w+zXVqtQTFnlGlw2m4h/cjj1CIxXS+t3B1HN0a4hhGQ3jtxhlFBAqgkV3/nVIJYwPoqR0LluObT0dlVzSWSiCjpnPApgFhEzaSIbk1NLKIYt9/7ny+EW1w8mPQCC3iU+kH2rBOlSarkBYTkhnOxCKdqu97xPlFKCV5Hj34aOgnPbf3uLEsbdMGK/RanVkvihSLqTfV/VDxjyekynT2bVgQvWnnx6sowMXC1XS6YSkcoKJ0F33/7t3wkG77mvOq+IWwSzZ0j1kIHZvSYLi3E7HmYM6ddom6wrTpQwPp8+5sO4wqT/PKM2s8GoS/5KnO3H60IHpaysHgleyf0NrOvLJ0C3eGY/z82OlL9of3V972mabZVzezVlqypAF6dErj+0gK8/u3SiLSLPTk5ljbBaSm9SnI2kq6KxZE1k4xm5UKhcAtSz+8wcm3jd3V2xsin15Ywxkx3ZUqQBzh1VyGqYiVPxRljfTRKQ9VVd/mMxqgAHowwVi8da6Ui755HbWEZCgR8rApWDfYCJuV7fjdhxp8QZP+ZOMEqeIV6TT77psyKNjEYOx4MHx+EzPzVOLczFX3qYcAvwCH4jQB135DB1XKhXDJv83NhVLsdDsqikSeP8u0Ahzi4E2y47fJ4VTH4xzilJnH1ug+i57ZqyRy2phZxCuXb+5hbAdZYA/0QAD+/2AYpyvNzBsIGBK4FZPVy45shSfzZ8lHo5BTjnVvUR48LXQtwl16j2fw0+mOgejTzoMnaVWMpGI/RVBeZEfZSYV/yI7+LP9fEuTvRAG3m8OST0Pk115BjcTjy9iIuyRiIOWNU3rz0QPBty/iUtNFtUEcrAs5Og7O6P1PfWjSiWVw6JP9OY9j3nOBmoyt4o7BQI6hApRFCO4NIVNsYgCEPRpzZpEPJMvmSik2H1qUQQGld6zmfr08/bhxDFaFeo1U29++LPPNnxmgvxC6TVfZQMAnyW5xB4vjojFDxVfNZkVy3hADKUJ1iFPIU9l+Oftqs78g08DqjgBMAOrV760uHLL8mo/5IE0DeGG0KP7yy6B/02JBuvxitslurIf6/5Zq+jwQ9tkWEZ2EYuT0dQy4ZpjaBFGCUn6/29lyQoDc0VNMfYmNesvV4yBVL08zNujGKQY8Ce0M6EN6hnzg9uwDPKnsK+DPHjRl6+hoJLfn5s8/O2vjspzMombzfg/XZyngPs1h8GQv7BWOYma6lUWF/yltH+f+PM2kGbgjIt27nxZPIrnMkVNdJPmHNMC4L/62CqE3fQGo4z8js1jIAiRmroFsmRBm3N3Zh70WdGh/RHQkVP/lw///b+v/9wj///t/rFV6jucAB4+SkdZwnGxEZ/lN1C+wccGYgWdk+7eNlAEA3/dXMR0C1ccy94UO5H/vbB9+bC7/KD2StmxqgCJ3k6I58ZmWshl/UOpert+9wqhdKE4b2gz5V/76iZ5loqD3qElydv+0woa60QhuBBmaBz3Lb0vlc2PDG12zxWV4Xj1msp86ac/tLU2RE4uOZqv5rnlarUaafS/4DsRKbqP/E0YgFuJ6rGmV/QMmnpoLUiSN167V0SaZo0qu1TKQfKWuCVplM/1Ry69FdnY8elgUlQupSwD8n3B3bmRsqK+/+jS9JPn8fdbygEKCbvqwE7DvBcl+T1Saa2tRDYKbhKgahsE5s4kJNTeCxQoLJ3Eem1WftKzyGxuNrdUAokjylPplrzhzb9YPWQbHYhxcKski8JWffUXWCdHfjsa0SRQP/Ec5i5Bl3g495UZA8nw7mEvftT6LJN07zCyWXcbiwj+Bvy4RLk6MTWnVkMT1pZqDABCAx3KMLMy5HWxOKe4twtKeIcgN+yKpWFee6nzVJRp9ePy06GnxNpE3KXTfpqoCKd48Im/JJsvLL3HvIkRv0+mizeL63ydcJIs5H6dmsVBV8gFSA1C3XORVzO9YFMzNEi1mdOKwnGpdwAes6Qv2q9Axcj44Z9fxANdLSgUANsZA6eXB2noUzrYndQmH7Uu4TxIA89E5iJ7WaaIeLUm7AxINkHKmrm88/ksz0xDIChgmtbB8l27RiViRD54aB32FBkFWvkO5PWOwitbA7ABMfd4lgnN14O0ddEx+yl+bmwXf5kRRflfCceFD5zizeNNt/qD9oRHrIP99sjYsP5XmP03cvnPW1NFOAyWiK4vgCvdBvR/fzs2szq3y/2moOPaA4nuT4qv8RDMJ2wi1NPI3xL9PqZb7oVjYaNIKIzUiLxHk+F0HDPWDQvONq7fzwAa3JcIiJXy6f37+pgyUXStTaEMCggTzH4uSJzfJcvVOFhvmcpx4tXXMo7G0xjRaNiSe0XDmFZCgozvWUlgMf2qc37sqCy3ar1r+6CyJBM+LGA82q7C2d3lmId88e4N1ZfA8wX6ZjSXVb8b3T9kTgKi/UsJwt9es1QFFJQ3ukSB3xHNkwKDJWFAlpfg27atyDbummdiqpGvnIzD0LwAhkm7U0YG/qsTwieNTT6ikp/xmLp9eqa2hB4DfZjsT7C4HgqY8AeKgTuWuRJEoN/BgzJX5yZif9Uu8GKfUzi6hwS8zPgQ094yWGKa1m6zvYyQbK70aKddcZA4cvBgCsAsRW1pOvgOaiTY9tnXzHE80y0ZL25zmB5HPzYHDXgoHbaSmzTinP77r3sudHM/RPRvlY8Oe0oCaFFvGNJ2wmbQF2OEyUO1ym6ZXJCzMuQ5h1IjWxgu9ABZcRsV37EfFWoWHNUPlTNvZmVsfNNmhmltmMHUbIO6gq5ptw3KHe6UtdT/TEt/jtgLUPelDVWCD616BNDjC3QKwiPx+OZKols7mCUhDeb5jUWG++4mChNay+UIOCNhytIJ8uU5teCvClfxBot6C68lTM9BXwiFfrILZzMQ1vMjjF2X9oNFexq89/ZIoM3cFqu5QKiFxuNchl6hS6d5VsE/7wvN6/yiGbKEAIp5z4sIW6tL4pMy3Z7nYDSfBT2sPUYM3Wm2FJrJwMgj1t3sX/eMUpCWsUAZEkPoO5+7RrA9J5mEjklcPoKoxeWU4pUVHX0U+teviArtFaNsYB8aikcy57bq5++188Jzdf/BD5Qj0XNu9VvjTzkHugcvW1EVXrjZFMSWHlI/sBG+jMXk+zNP1KWd1zDGDxv7Qq13fXdNjvw/FEHekrcUxZIyQCXyHttlm0W9Z2bRkLwG1ILWaIyXIXULkWdItJKoEDq25u1yjakh4+9HS7PPctWq8/X9Id09ddQVZ1ubdaRgUm2o19YBvn5juxtmWAcnn51d8+icxwCH3Gqp9DAZ0WgvIODHisFJTQjGg9XsHDaEV33Or/Uh1Sz2PupnbUU3I0dU8x1O72tYhBwlIpAof9HsI9xCwfkLpRiRhoEWNnnndlH5A9b3yHG+lswQli6KrDu+FKfgmyPcqtWUE1ISpgwXrwFnNfPQUPYPamotXyfpdKR8sKoyH+hkjjKG13MKSD+j3CImb0mBdelT6ZfNTt18KJOjhN9ZzJAV/I+gpVIIzuTNdu9lKRBkctWrjnIdrGJ6IBxHDcCtEyHTJ0VwmXSN33dRJxpYFH6E9D4eqxm6foyb2f7ySJf9yOvEBph+XKqndTUAkMYKBlwpBt0V+3ixUuykJQhaLP0I8m6BQnRylu5GRymeZHb8vT7z/TtZLxo5yE1c+9rAoCuWycU+6NbRbrG4eV68GYxk8/7AGIeHl1eCx7oup2UHipjFXjH0zHtUDTxOFybbVQALbAt1xj1ac6fbyCOn8W5KJ6azfsCPrvpuzTJ5RFgevJkaZq1Akw7MNZwYSzmabzlxryP/+bL5Sc5COW1TS4Qd25NMoNZXjtwBTM233XliuD1iPHAzyOtjm+4NeblCql37Qg2LCim7IbJq8PBgREpZr7RVQR+bMrbDPs8hQU6bh0K5DRVQWDi0pYkS3nSKjl5WsKE/W0gMQrWyqB9XhE4AayLz+nMM5GFJtGMEiygqXq+dntHwzbLmrn3SIqDACfpQJbueA5J3VjWzhd0ByXraCxYvq52/toDS2oiPWTseR2d/+IqdIAYfZRPs+EdLU57tdZbrRyS08q7nphlHDffKeDDAOYHxXhrVH9De5e1fLMlUW5IDDmrm352x7pEWzGT7Apsc3vWkDoOfxkaE/AoMQ+ooe+jg1TV8sU3eLe9StnbT1+973PmtNs/+pP02r9SITQZfv+Mzp3Y3Xi0PV+eXsXF3R+wgHOUCJ+JKCuKyYf9gNBedaprmxv/iAMC5QQEQ3lxikbYE4Popt5/dbsrvMhhUrNx25m2AyiJ+Jwzty9VgiSqkRRfZSclI11wKH+tHWXzvSQgO00FtapXB0YFFz2xjFK3EvkezISV1ux9xp0ccbzAbCohdPwmJ22L0ep6hvroCah9cWUoF3WigbVKQFW8eCe2fmqyqtwUANFrst+FXfBfqkjbf3QufPFh5tDtWIXo9PSJRlFAZH6QKGiQXHdLhhg5NMbYREwJ5+pmb7ENHC8fAHuWeWZ4Dgfrv8Zdzmw7cEy2uuMX1MEvAZ++P7URtB6sLoxgPQeiPsPOSfzUNcZd5ydq+xL9/clP4IqUYORiW5KBg0BmGuaXYQPnjGU2tpluxjKNklSlRuf94CuO9Xx8roCQDLUXIN03VbF1TRy2D/tE2YnYscJEd8tYGURscOiJVgfAUBGZiUcnz+hyzkE8Qkm3h9D5nDVDSY+2xMiDOc/cR7TjInDOmjLmg+jUKUii3IENWpGAoSdTrnE1WomffzGgYoncefhfQsuanGb4E51Xcpqvn0J1r9eGSEedrzSlTWGBpbCvctG96vln2AID6j+4OmLCDsgNMwA/k6uD9D2dpnLyz9rzBSSnfUhG3xV5xelpDgqqOtbZ9BIe29fXN9zv2/uVDXZOZVwga7Ge79z3aFQjJw8m3GYdkjlDju4C1aNhlBSAcWyE3UqQMx8DWdNsOC84zpvLmhynQ0mc3Oe7LFBfqKu2RJg7cfEgi/VXq+9Q/p67HRy1RT5nAoZoenxqLsETFre0fqj7cCoclo7K4wLtuWWh5bZod7i/AzTjEenFe502SlmWYsBTetubW08dewiHXeF4eorG9NvUftjQuvTp/m+SmAa67sM6GCpscy2e8mHQr2ytVvIpg83Fgibn68fzqacX/jfcfgF/VO+5WjAltK0sTxBBAkhCZ+2W7RYtdEGQVGlqpSEJVprPDb+iJliEEWqxzQ0fhVl1AWdqR5OdO/hXV+Vl6TZJxBVrQum2Q4/qt+3ClfKYWRyDAJgAIwpNTD8XIlY/zkJUYBZADIoGCH4kCdFI9GAhYTLPe4Lt1WTX3FMXzcOOKLzzmWDJA+HdPSikfSnANmzBtzPAt57l7WTrq5UMYvicx/KJgf0ZWMRQgeVB2P2pmLyNKlf1AvtBYqwACR6z/x8IxCMuR0qF3NQL3OclZXvtLIwOjMN5m/EgjrNRrgxLdWdRxED3KirQUgTMZf5H+fovr8KiV+ayf5bEKp3DVelZMBB0Lna78ENFH+QXZKfdnbmWvioPN5RenRBq3Sn++39nh0WmwRe/JO7zTwGQnP2yZprh8uANZXVLE2OxDV7I1Yhioq5Ds/+E05vg9vqMwmm83slb9DXPduCnx4UavnDt9aR/dZ061Zps25K0ltEOEOg6BhUFOMjXpohC0cfTUvvO3WALfpua3OArUpd6jxITmjSKiWV0LGWISsNgio49Ynq9g6qqX2rEkFD17rmFfyLKCxAi5cDaJf1OFtKOgnL9DUrv67+9yQYKqGypt7FjyDPqeC61/gXf6fs9e629aLf02uY+GAzZJ1zmwUCqyLE0t4tm2MS8WtvFF3HcHffmux1CTzdIY9MYP0o1hOrgwmIl2LfmuGf/j9K6fJ6OUJoFFzn1X+ccQ4SJvm/KTWYWvnxtpwbLfohP+AoU8MlrjgAAAcsnHtwTHdtG9nSvgNtRLVHYCQiE/8J1WeMtH92Seho4BOcH/2RUwn/wartSO9Y+goekk5dHyi1THAZ7N87Dc/7XTETYyMSzbz6CUhUIkuQ4/8QvwoU+0byED1tI1a98JzGCW4v3gxQab/pr/el8vUIAp11W/+h3z12790xPAJf6gsdMtXGykpJPScLnnhEs32MBNPWxkwnRpFLXzKeVmAZfl3qmEPJyGX4ow9lJpZbdekPLSR5Ay9k4hhNgxH6Fl/5IsIJfFusR9F994noQW4Phz8Sjsi3zStOmDpWzgpe7RWYYzxIDpPnj+h+2BzhvWYDyXr3hFOwsjSTcpWQWid+EnW16j6KBW3dRQf5d6m/hI+Tx3ArTk7TfpQ3s1IVl5eeM7EvKCk2H1aXJaE60EXbRrILngN5Physp6SWMHsEFg3zyfacrqM8heEpPOT7yZw2PW+UUG1/4QLr86hFFk7MT3HTWl7IMTaaC0zJ5Z8C0CTMs7AjbTkd9h5KLwbHAAYY8gdEOa6L1NNvImhoFYlQpVGnSi5eJbsnzZK2AvmIR5lCXl0eSFD14ISVNSynMOzGUR6t0nAKpDZ5ms7yDZPJ8s7VTqyV44hJC/3MKAfViSJT8l+ifgn3upkiQlR0a3q2WFVKLGi1QHXyOp0eK+dHzzbwFTSbQDJO9hPYwnm4ZArhWihxrF8HQ9l5EZDWI9hR0yK+w+DLKr/M2S49jOOw9EABAMiYzlKnq1eyFOTJL3ocqS5tFfoTujoTi1xzjEWsfc7VMaSYaNQc7rMLCK9rMfI88zWlssAYOOKzBAgva/kz97FS76TaeSVI6lgK0rgxhOSJyzY0E9M7uyLjUkU2o1JsbRbpGIaTUfqB5my04y0kctXuXFGh7nwl+h8KU8Bx2bi9b7mLavmyvgc5sOCoxQYUmFMBDU/GiuRlZjsy+UY1bYOIa05WU2kWNlapcDtqMr88C8DetnrMPcJHw4MrqdLWcxgOjlxGY9A9glwHtR6JlC4elJJM1ixEJvLm8ig7G7gG2fgTKA5pLfU5OL6e46rqSjAqi67oklIFh+DFG94LT22Mx98FoqnpjsNb9FrxLeddLosaGWZCn8yg0ajReS5yhEL6tF2TSHkrn6fAsNcEVrdhWvqRfDDcLOE/oUWBN+iqIMyk2/NPjrZ79z8j6TgEfvQY3PlxXeD/x4/Lk/0b/jNNGZeVsA9ciJBKxnsul9epx3gV7WXWr30cvqm8BNVr+SpeiUabfRQPoCdmAZVb4ogZY9ITSj13xdjkfycWqN3c88FFYH/8HCD0U5cxBLeSAir8b8zpxB5d5Xv7pr7HkugFppwPCs++eymEpk/BcaJNYF5WyLa5cGd4WJRErUB2u5Efsy53te9yDVeSiDzN2qfU/0m6aEcCZc1dHKkGOeaS1FaZtiqdOOBgKbhrfN9x7PQ7Z01nveLQ0Wrygr0X4CnKdjbNBGg7NaM/S8RizKn0FcOqQaKs3Sx7fZmQdHQwCxpJ51e1Gmm5FjizE+xlwNuwgNkhIEReemJdTOwv/+wJjJse1vOm/iyMpJsFslKod+8qqGgzJuEU7JG/nq2pM8PKATj+3JW31ZREQkYc5EovzphAqKQbtQfjEs8jORsiUV+sU4m27pfDUHlYfxOLWOnsxcXuEbBnu6nUV7AJqlodI67vpbtrLlDtNl4FYVzC12Z9FMpIwi7jkUksAzn9lDZaFTgSvUpmLB2U9zMwk3miU13Re+dnClPMgBKRJRoc2tQeEFnpYeGUg+B6BnO2PILSzCLND/AAuOVCkzHr90Q9DraYYBp3TLOqL2OCSIDDnMkkXYuu5TMVFYk/SjCrFOxOPEy1ZR4oZH0YMbqLV/LUaiziMlr9hK8Eu608sOZh71Cq7KCRYDbL0kflHdKwdzRkJQaj7JC5NW97xn0RyWKMskUigZy1EKueoaaC7pdvxmmOPi6MDAQ6rz7rmh4Q7xpjgWDfv7S8Z4jJFFSac0oIlpzdz54yjYRIZ0bhoiSpQ2cQ0ZUXs87UswZrPb0cDbmZGvatlOYozNWu4Q7iRc8IXDE4zRcASPz7Eg/eS5XZuFftneyfFv/u58aOdr9+n/zoEecj12maKdKyX2H3rD9IZ9keitRUEbAB7WnToWO4HEHmR1mWF6CsYgpNxygSBxs0i48Mw4ItmCubSNSWuRDq35j+2j26F5b1ltteZgBVtbFt7nvSdSSFT6yytiTM32OZq27ryKQBGkT1U5zGILWUIXmMOV+QlzafNDpU2sPwWz/45/LSIlaa3xHJp8lowYO9NEIhFsup/MM1oMyAyCa7FtHfBuOeHHO3wgPDPP5kWD9D5wSsrB3zxGfv9cFDdIzSUkHq4cg5WUZ/WlDz5mjjetVwSYDqnSrDkOO6I+HQiXzjNc3qf93yDdyr70qOSE9UxvJgCh0OAOWn14Jagbj3UqLNFJ7ujkAmk4pP0l1q/OyoSwIaYcE1iugTFNX4PHJvzLZI6lFXNslxk6i3AOYjv55R+lWfY0d/7TpjT/PATjteKptWaoiNge009h4bvSa/+009h4bvSaB7+I397gMoN/xG/vcBlACMks/OquKsKcakVCPJLp/HNmogfc9e7lQLgqCIadub/t3qhIVbXIx/DVNin/OYtGSLr2jnr73UkVYw+NAyZuWtn73BpW+5qnlrN1Qi3t0Hmyq9m3rNrM04w5MS6xJib2x8OfKcp13Orqy9a65R5sOuVWZqpdvCw2VYX7OCZDU2ejzc2lnbOfcRXzPzREyLSDL0bQKw1CC81GC5iK5ifCxqmyYBLOB+zJKfk2k2YnIDNIQq8vr3fsDunL4AWuaWU/m0KetFjno8engTP5sNkUQxP+RvYTj1UGoIvML3Vx4YtbVwFMuYQcRZUqyWBWlAgSJDahQc8n1kJTo6iiyNIwodVtQxUXz3OptVzIWf3PShWqxmYX6ilEtGD/cVgLbaUcJwEN2pdBiCHfwvbCeDbjvypnuglY0d/H7QgZNzwATG3+AoI2hEVmtzPHEN7wog7oqfs3qEvj7SuxJCpFTJP+jYNzPiFh+5h9S5H7yEl+gcusFuEudGYw4otRBHM7PMgJyC4kciucfQfCAAJnoe60XvY7lpGKSQcYqVbAAAA==';
@@ -186,7 +197,8 @@ window.ADORNO_ASISTENTE = (function () {
     if (typeof window.ADORNO_ASISTENTE_CONTEXTO === 'string') return window.ADORNO_ASISTENTE_CONTEXTO;
     try { if (typeof _manualSecciones === 'function') return seccionesATexto(_manualSecciones()); } catch (_) {}
     try {
-      const rol = (window.session && (session.rol || session.role)) || '';
+      const ses = (typeof session !== 'undefined' && session) || window.session || null;
+      const rol = (ses && (ses.rol || ses.role)) || '';
       if (typeof MANUAL_GERENTE !== 'undefined' && (rol === 'admin' || rol === 'gerente' || rol === 'directora')) return seccionesATexto(MANUAL_GERENTE);
       if (typeof MANUAL_EMPLEADO !== 'undefined') return seccionesATexto(MANUAL_EMPLEADO);
       if (typeof MANUAL_GERENTE !== 'undefined') return seccionesATexto(MANUAL_GERENTE);
@@ -244,6 +256,13 @@ window.ADORNO_ASISTENTE = (function () {
   .asist-in textarea{flex:1;resize:none;border:0.5px solid var(--border,#d3d1c7);border-radius:10px;padding:8px 10px;font:inherit;background:var(--bg,#fafaf9);color:inherit;min-height:38px;max-height:110px;outline:none}
   .asist-in textarea:focus{border-color:var(--accent,#d97757)}
   .asist-in .asist-env{color:var(--accent,#d97757)} .asist-in .asist-env:hover{background:rgba(217,119,87,.12)}
+  .asist-card{align-self:stretch;border:1px solid var(--accent,#d97757);border-radius:12px;padding:9px 11px;background:var(--surface,#fff);line-height:1.4}
+  .asist-bts{display:flex;gap:8px;margin-top:9px} .asist-bt{border:0;border-radius:9px;padding:7px 14px;font:inherit;font-weight:600;cursor:pointer}
+  .asist-bt.si{background:var(--accent,#d97757);color:#fff} .asist-bt.no{background:transparent;color:var(--muted,#5f5e5a);border:0.5px solid var(--border,#d3d1c7)}
+  .asist-bt:disabled{opacity:.6;cursor:default} .asist-fin{margin-top:8px;font-size:13px} .asist-fin.ok{color:#166534} .asist-fin.mal{color:#991b1b}
+  .asist-conf{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:8px 12px;border-bottom:0.5px solid var(--border,#d3d1c7);font-size:12.5px;color:var(--muted,#5f5e5a)}
+  .asist-conf[hidden]{display:none} .asist-conf select{flex:1;min-width:150px;font:inherit;padding:5px 6px;border-radius:8px;border:0.5px solid var(--border,#d3d1c7);background:var(--bg,#fafaf9);color:var(--text,#1a1a1a)}
+  .asist-conf .asist-bt{padding:5px 10px;font-weight:500} .asist-conf label{display:flex;align-items:center;gap:5px;cursor:pointer;width:100%}
   .asist-resalta{outline:3px solid var(--accent,#d97757)!important;outline-offset:2px;border-radius:8px;transition:outline-color 1.2s}
   @media (max-width:600px){.asist-panel{right:8px;left:8px;width:auto;bottom:72px;max-height:72vh}.asist-fab{right:10px;bottom:0;width:58px;height:64px}}`;
 
@@ -254,7 +273,10 @@ window.ADORNO_ASISTENTE = (function () {
     panel = document.createElement('div'); panel.className = 'asist-panel'; panel.hidden = true; panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'Clodi');
     panel.innerHTML = `
       <div class="asist-head"><span class="asist-av">${CLODI('cara')}</span><span class="asist-tit"><b>Clodi</b><span class="asist-sub">${esc(modulo())} · preguntame cómo hacer algo</span></span>
+        ${'speechSynthesis' in window ? `<button class="asist-ib" title="Voz de Clodi" data-a="conf">${ICO.voz}</button>` : ''}
         <button class="asist-ib" title="Cerrar (Esc)" data-a="cerrar">${ICO.cerrar}</button></div>
+      <div class="asist-conf" hidden><span>Voz:</span><select aria-label="Voz de Clodi"></select><button class="asist-bt no" data-a="probar">Probar</button>
+        <label><input type="checkbox" class="asist-siempre"> Leer siempre las respuestas en voz alta</label></div>
       <div class="asist-log"><div class="asist-vacio">¡Hola! Soy <b>Clodi</b>. Escribime o dictame tu pregunta, por ejemplo: <b>"¿cómo cargo un pedido?"</b> o <b>"¿dónde veo mis vacaciones?"</b>.<br>Te explico los pasos con el manual de este módulo${SR ? '' : '<br><br>(este navegador no tiene dictado por voz: escribí la pregunta)'}.</div></div>
       <div class="asist-in">
         <textarea rows="1" placeholder="Preguntale a Clodi…" aria-label="Pregunta para Clodi"></textarea>
@@ -264,7 +286,12 @@ window.ADORNO_ASISTENTE = (function () {
     document.body.appendChild(fab); document.body.appendChild(panel);
     const ta = panel.querySelector('textarea');
     panel.addEventListener('click', (e) => { const b = e.target.closest('[data-a]'); if (!b) return; const a = b.dataset.a;
-      if (a === 'cerrar') cerrar(); else if (a === 'enviar') enviar(false); else if (a === 'mic') dictar(); else if (a === 'leer') leer(b.dataset.t); });
+      if (a === 'cerrar') cerrar(); else if (a === 'enviar') enviar(false); else if (a === 'mic') dictar(); else if (a === 'leer') leer(b.dataset.t);
+      else if (a === 'conf') { const c = panel.querySelector('.asist-conf'); c.hidden = !c.hidden; if (!c.hidden) llenarVoces(); }
+      else if (a === 'probar') leer('Hola, soy Clodi. Contame en qué te ayudo.'); });
+    panel.querySelector('.asist-conf select').addEventListener('change', (e) => LS.set('clodi-voz', e.target.value));
+    const chk = panel.querySelector('.asist-siempre'); chk.checked = siempreVoz(); chk.addEventListener('change', () => LS.set('clodi-siempre-voz', chk.checked ? '1' : '0'));
+    try { speechSynthesis.addEventListener('voiceschanged', llenarVoces); } catch (_) {}
     ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(false); } });
     ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = Math.min(110, ta.scrollHeight) + 'px'; });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && panel && !panel.hidden) cerrar(); });
@@ -284,14 +311,22 @@ window.ADORNO_ASISTENTE = (function () {
     rec.onend = () => { grabando = false; btn.classList.remove('on'); ta.placeholder = 'Preguntale a Clodi…'; if ((final || ta.value).trim()) enviar(true); };
     try { rec.start(); } catch (_) { grabando = false; }
   }
-  function voz() {  // Clodi habla con una voz femenina en castellano si el equipo tiene alguna (Edge: "Elena" es-AR)
-    try {
-      const vs = speechSynthesis.getVoices().filter((v) => /^es/i.test(v.lang)); if (!vs.length) return null;
-      const fem = /elena|sabina|helena|laura|elvira|dalia|paloma|paulina|m[oó]nica|luc[ií]a|camila|valentina|female|mujer|google espa/i;
-      const pais = ['es-AR', 'es-419', 'es-US', 'es-MX', 'es-ES'];
-      const pts = (v) => (fem.test(v.name) ? 10 : 0) + (v.localService ? 0 : 1) + (pais.includes(v.lang) ? 5 - pais.indexOf(v.lang) : 0);
-      return vs.sort((a, b) => pts(b) - pts(a))[0];
-    } catch (_) { return null; }
+  // (28-oct, JP: "una voz que sea la más parecida a la de Claudia") mujer, argentina primero. Cada equipo tiene voces distintas:
+  // se usa la primera de esta lista que exista; la persona puede elegir otra en el panel (queda guardada en ese equipo).
+  const PREFERIDAS = ['elena', 'dalia', 'paloma', 'sabina', 'paulina', 'google español de estados unidos', 'elvira', 'helena', 'laura', 'mónica', 'monica', 'google español'];   // latinoamericanas antes que las de España
+  function vocesEs() { try { return speechSynthesis.getVoices().filter((v) => /^es/i.test(v.lang)); } catch (_) { return []; } }
+  function voz() {
+    const vs = vocesEs(); if (!vs.length) return null;
+    const elegida = LS.get('clodi-voz'); const e = elegida && vs.find((v) => v.name === elegida); if (e) return e;
+    // palabra entera: "helena" no es "elena"
+    const pts = (v) => { const n = v.name.toLowerCase(); const i = PREFERIDAS.findIndex((p) => new RegExp('(^|[^a-záéíóúñ])' + p + '($|[^a-záéíóúñ])').test(n)); return (i < 0 ? 0 : 100 - i * 5) + (v.lang === 'es-AR' ? 30 : 0) + (v.localService ? 0 : 2); };
+    return vs.slice().sort((x, y) => pts(y) - pts(x))[0];
+  }
+  function llenarVoces() {
+    const sel = panel && panel.querySelector('.asist-conf select'); if (!sel) return;
+    const vs = vocesEs(), v0 = voz();
+    sel.innerHTML = vs.length ? vs.map((v) => `<option value="${esc(v.name)}"${v0 && v.name === v0.name ? ' selected' : ''}>${esc(v.name.replace(/^(Microsoft|Google) /, '').replace(/ Online \(Natural\)/, ''))}</option>`).join('')
+      : '<option>(este equipo no tiene voces en castellano)</option>';
   }
   function boca(on) { document.querySelectorAll('.asist-av .clodi, .asist-fab .clodi').forEach((c) => c.classList.toggle('habla', on)); }
   function leer(t) { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); const v = voz(); if (v) u.voice = v; u.lang = (v && v.lang) || 'es-AR'; u.rate = 1.02;
@@ -306,6 +341,24 @@ window.ADORNO_ASISTENTE = (function () {
     else { d.className = 'asist-fila'; d.innerHTML = `<span class="asist-av">${CLODI('cara')}</span><div class="asist-a"></div>`; d.lastChild.innerHTML = esc(texto.respuesta) + (texto.pestana ? `<br><i>→ pestaña <b>${esc(texto.pestana)}</b></i>` : '') + ('speechSynthesis' in window ? ` <button class="asist-ib" title="Escuchar la respuesta" data-a="leer" data-t="${esc(texto.respuesta)}">${ICO.voz}</button>` : ''); }
     l.appendChild(d); l.scrollTop = l.scrollHeight; return d;
   }
+  async function prepararAccion(acc, porVoz) {   // completa el formulario del módulo; se envía SOLO con el botón Enviar
+    const def = acciones().find((x) => x.nombre === acc.nombre);
+    if (!def) { log('err', 'Eso no lo puedo preparar en esta pantalla.'); return; }
+    let r; try { r = await def.preparar(acc.parametros || {}); } catch (e) { r = { ok: false, error: e.message || String(e) }; }
+    if (!r || !r.ok) { log('err', 'No pude prepararlo: ' + ((r && r.error) || 'error desconocido')); return; }
+    const l = panel.querySelector('.asist-log'), card = document.createElement('div');
+    card.className = 'asist-card';
+    card.innerHTML = `<div>Te lo dejé preparado: <b>${esc(r.resumen || '')}</b>.<br>Revisalo y, si está bien, tocá <b>Enviar</b>.</div><div class="asist-bts"><button class="asist-bt si">Enviar</button><button class="asist-bt no">Cancelar</button></div>`;
+    l.appendChild(card); l.scrollTop = l.scrollHeight;
+    const [si, no] = card.querySelectorAll('button');
+    const fin = (ok, txt) => { const bts = card.querySelector('.asist-bts'); if (bts) bts.remove(); const d = document.createElement('div'); d.className = 'asist-fin ' + (ok ? 'ok' : 'mal'); d.textContent = txt; card.appendChild(d); l.scrollTop = l.scrollHeight; if (porVoz || siempreVoz()) leer(txt); };
+    si.onclick = async () => {
+      si.disabled = no.disabled = true; si.textContent = 'Enviando…';
+      let res; try { res = await def.confirmar(acc.parametros || {}); } catch (e) { res = { ok: false, error: e.message || String(e) }; }
+      if (res && res.ok) fin(true, res.mensaje || 'Listo, quedó enviado.'); else fin(false, 'No se envió: ' + ((res && res.error) || 'error desconocido'));
+    };
+    no.onclick = () => fin(false, 'No envié nada. El formulario quedó completado por si querés cambiar algo y mandarlo vos.');
+  }
   async function enviar(porVoz) {
     if (ocupado) return;
     const ta = panel.querySelector('textarea'); const q = ta.value.trim(); if (!q) return;
@@ -316,13 +369,15 @@ window.ADORNO_ASISTENTE = (function () {
       const ctx = contexto();
       if (!ctx) throw new Error('Este módulo todavía no tiene manual cargado para Clodi.');
       const r = await fetch(URL + '/functions/v1/asistente', { method: 'POST', headers: { apikey: KEY, Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ modulo: modulo(), pregunta: q, contexto: ctx, pestanas: pestanas().map((p) => p.lb), por_voz: !!porVoz }) });
+        body: JSON.stringify({ modulo: modulo(), pregunta: q, contexto: ctx, pestanas: pestanas().map((p) => p.lb), por_voz: !!porVoz,
+          acciones: acciones().map((x) => ({ nombre: x.nombre, descripcion: x.descripcion || '', parametros: x.parametros || { type: 'object', properties: {} } })) }) });
       const j = await r.json().catch(() => ({}));
       w.remove();
       if (!r.ok || !j.ok) throw new Error(j.error || ('Error ' + r.status));
       hist.push({ q, a: j.respuesta }); log('a', j);
-      if (j.pestana) irA(j.pestana);
-      if (porVoz) leer(j.respuesta);
+      if (j.pestana && !j.accion) irA(j.pestana);
+      if (porVoz || siempreVoz()) leer(j.respuesta);
+      if (j.accion) await prepararAccion(j.accion, porVoz);
     } catch (e) { w.remove(); log('err', e.message || String(e)); }
     finally { ocupado = false; ta.focus(); }
   }
