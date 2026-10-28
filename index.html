@@ -311,19 +311,28 @@ window.ADORNO_ASISTENTE = (function () {
   }
   // (28-oct, JP: "una voz que sea la más parecida a la de Claudia") mujer, argentina primero. Cada equipo tiene voces distintas:
   // se usa la primera de esta lista que exista; la persona puede elegir otra en el panel (queda guardada en ese equipo).
-  // (28-oct, JP eligió en la galería de voces: Microsoft Helena, España; velocidad 1.1, tono 1.0). Si el equipo no la tiene
-  // (celulares), sigue con otras voces de mujer de España y después las latinoamericanas.
+  // (28-oct) Voz elegida por JP con la galería (hub/voces.html), una por sistema, todas a velocidad 1.1:
+  //   PC (Windows): Microsoft Helena (España), tono 1.0 · iPhone: Paulina (México), tono 0.7 · Android: español de Estados Unidos, tono 1.1.
+  // Si el equipo no tiene la elegida, sigue con PREFERIDAS (mujer de España primero, después latinoamericanas).
   const PREFERIDAS = ['helena', 'laura', 'elvira', 'mónica', 'monica', 'google español', 'elena', 'dalia', 'paloma', 'sabina', 'paulina', 'google español de estados unidos'];
-  const VELOCIDAD = 1.1, TONO = 1.0;   // (28-oct, JP) bajó de 1.3 a 1.1
+  const AJUSTES = { pc: { velocidad: 1.1, tono: 1.0 }, ios: { velocidad: 1.1, tono: 0.7 }, android: { velocidad: 1.1, tono: 1.1 } };
+  function plataforma() {
+    const ua = navigator.userAgent || '';
+    if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && 'ontouchend' in document)) return 'ios';
+    return /Android/.test(ua) ? 'android' : 'pc';
+  }
   function vocesEs() { try { return speechSynthesis.getVoices().filter((v) => /^es/i.test(v.lang)); } catch (_) { return []; } }
   function voz() {
     const vs = vocesEs(); if (!vs.length) return null;
+    const pl = plataforma();
+    if (pl === 'ios') { const v = vs.find((x) => /paulina/i.test(x.name)) || vs.find((x) => /m[oó]nica/i.test(x.name)); if (v) return v; }
+    if (pl === 'android') { const us = vs.filter((x) => /^es[-_]us$/i.test(x.lang)); if (us.length) return us.find((x) => x.localService) || us[0]; }
     // palabra entera: "helena" no es "elena"
     const pts = (v) => { const n = v.name.toLowerCase(); const i = PREFERIDAS.findIndex((p) => new RegExp('(^|[^a-záéíóúñ])' + p + '($|[^a-záéíóúñ])').test(n)); return (i < 0 ? 0 : 100 - i * 5) + (v.lang === 'es-AR' ? 30 : 0) + (v.localService ? 0 : 2); };
     return vs.slice().sort((x, y) => pts(y) - pts(x))[0];
   }
   function boca(on) { document.querySelectorAll('.asist-av .clodi, .asist-fab .clodi').forEach((c) => c.classList.toggle('habla', on)); }
-  function leer(t) { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); const v = voz(); if (v) u.voice = v; u.lang = (v && v.lang) || 'es-ES'; u.rate = VELOCIDAD; u.pitch = TONO;
+  function leer(t) { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); const v = voz(); if (v) u.voice = v; u.lang = (v && v.lang) || 'es-ES'; const aj = AJUSTES[plataforma()]; u.rate = aj.velocidad; u.pitch = aj.tono;
     u.onstart = () => boca(true); u.onend = u.onerror = () => boca(false); speechSynthesis.speak(u); } catch (_) { boca(false); } }
 
   function log(tipo, texto) {
@@ -377,7 +386,9 @@ window.ADORNO_ASISTENTE = (function () {
     finally { ocupado = false; ta.focus(); }
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', armar); else armar();
-  return { abrir, cerrar, preguntar: (q) => { abrir(); panel.querySelector('textarea').value = q; enviar(false); } };
+  return { abrir, cerrar, preguntar: (q) => { abrir(); panel.querySelector('textarea').value = q; enviar(false); },
+    // para soporte: qué voz y ajustes usa Clodi en este equipo
+    vozElegida: () => { const v = voz(); return { plataforma: plataforma(), voz: v ? v.name : null, idioma: v ? v.lang : null, ...AJUSTES[plataforma()] }; } };
 })();
 /* ADORNO_ASISTENTE:FIN */
 window.ADORNO_SSO = (function () {
