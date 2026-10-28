@@ -162,7 +162,11 @@ window.ADORNO_ASISTENTE = (function () {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
   let panel = null, hist = [], ocupado = false, rec = null, grabando = false;
   const LS = { get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (_) {} } };
-  const siempreVoz = () => LS.get('clodi-siempre-voz') === '1';
+  const siempreVoz = () => true;   // (28-oct, JP) Clodi siempre responde en voz alta; la voz no se elige (no hay selector)
+  let vozLista = false;   // iPhone/Safari: la voz se habilita con un toque; se "despierta" con el primer toque en el panel
+  function despertarVoz() { if (vozLista) return; vozLista = true; try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (_) {} }
+  // El dictado entiende "Claudia" cuando le dicen "Clodi": al principio de lo DICTADO se corrige (lo escrito no se toca)
+  const corregirNombre = (t) => String(t || '').replace(/^\s*(?:(?:hey|ey|ei|eh|oye|hola)[\s,]+)?(?:claudia|clodi|clody|clodie|cloudy|klodi|glodi|lodi|clo di)\b[\s,.:;!]*/i, 'Clodi, ');
   function acciones() {   // acciones del módulo disponibles para quien está usando la pantalla
     const lista = Array.isArray(window.ADORNO_ACCIONES) ? window.ADORNO_ACCIONES : [];
     return lista.filter((a) => { try { return a && a.nombre && typeof a.preparar === 'function' && typeof a.confirmar === 'function' && (!a.disponible || a.disponible()); } catch (_) { return false; } });
@@ -233,11 +237,13 @@ window.ADORNO_ASISTENTE = (function () {
   .asist-av{flex:none}
   .asist-head .asist-av{width:36px;height:36px} .asist-fila{display:flex;align-items:flex-end;gap:7px;align-self:flex-start;max-width:96%} .asist-fila .asist-av{width:26px;height:26px} .asist-fila .asist-a{max-width:none}
   .clodi{transform-origin:50% 100%}
+  .asist-fab .clodi{animation:clodi-vive 7s ease-in-out infinite} .asist-head .clodi{animation:clodi-vive 7s ease-in-out infinite 1.5s}
+  @keyframes clodi-vive{0%,100%{transform:translateY(0) rotate(0) scale(1)}15%{transform:translateY(-1.5%) rotate(-2deg) scale(1.015)}30%{transform:translateY(0) rotate(0) scale(1)}45%{transform:translateY(-1.5%) rotate(2deg) scale(1.015)}60%{transform:translateY(0) rotate(0) scale(1)}80%{transform:translateY(0) rotate(0)}84%{transform:translateY(-9%) rotate(-3deg)}88%{transform:translateY(0) rotate(0)}91%{transform:translateY(-4%) rotate(2deg)}94%{transform:translateY(0) rotate(0)}}
   .clodi.habla{animation:clodi-habla .32s ease-in-out infinite alternate}
   @keyframes clodi-habla{from{transform:translateY(0) scale(1)}to{transform:translateY(-3%) scale(1.03)}}
   .clodi.piensa{animation:clodi-piensa 1.1s ease-in-out infinite}
   @keyframes clodi-piensa{0%,100%{transform:translateY(0)}50%{transform:translateY(-6%)}}
-  @media (prefers-reduced-motion:reduce){.clodi.habla,.clodi.piensa{animation:none}}
+  @media (prefers-reduced-motion:reduce){.clodi,.clodi.habla,.clodi.piensa{animation:none!important}}
   .asist-fab:hover{transform:scale(1.06)} .asist-fab[hidden]{display:none}
   .asist-panel{position:fixed;right:18px;bottom:80px;z-index:9001;width:min(380px,calc(100vw - 36px));max-height:min(70vh,560px);display:flex;flex-direction:column;background:var(--surface,#fff);color:var(--text,#1a1a1a);border:0.5px solid var(--border,#d3d1c7);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.18);font-family:inherit;font-size:14px}
   .asist-panel[hidden]{display:none}
@@ -260,11 +266,9 @@ window.ADORNO_ASISTENTE = (function () {
   .asist-bts{display:flex;gap:8px;margin-top:9px} .asist-bt{border:0;border-radius:9px;padding:7px 14px;font:inherit;font-weight:600;cursor:pointer}
   .asist-bt.si{background:var(--accent,#d97757);color:#fff} .asist-bt.no{background:transparent;color:var(--muted,#5f5e5a);border:0.5px solid var(--border,#d3d1c7)}
   .asist-bt:disabled{opacity:.6;cursor:default} .asist-fin{margin-top:8px;font-size:13px} .asist-fin.ok{color:#166534} .asist-fin.mal{color:#991b1b}
-  .asist-conf{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:8px 12px;border-bottom:0.5px solid var(--border,#d3d1c7);font-size:12.5px;color:var(--muted,#5f5e5a)}
-  .asist-conf[hidden]{display:none} .asist-conf select{flex:1;min-width:150px;font:inherit;padding:5px 6px;border-radius:8px;border:0.5px solid var(--border,#d3d1c7);background:var(--bg,#fafaf9);color:var(--text,#1a1a1a)}
-  .asist-conf .asist-bt{padding:5px 10px;font-weight:500} .asist-conf label{display:flex;align-items:center;gap:5px;cursor:pointer;width:100%}
   .asist-resalta{outline:3px solid var(--accent,#d97757)!important;outline-offset:2px;border-radius:8px;transition:outline-color 1.2s}
-  @media (max-width:600px){.asist-panel{right:8px;left:8px;width:auto;bottom:72px;max-height:72vh}.asist-fab{right:10px;bottom:0;width:58px;height:64px}}`;
+  @media (max-width:600px){.asist-panel{right:calc(8px + env(safe-area-inset-right,0px));left:calc(8px + env(safe-area-inset-left,0px));width:auto;bottom:calc(72px + env(safe-area-inset-bottom,0px));max-height:70vh;max-height:70dvh}.asist-fab{right:calc(10px + env(safe-area-inset-right,0px));bottom:0;width:58px;height:64px}}
+  @media (max-width:600px),(pointer:coarse){.asist-in textarea{font-size:16px}}`;
 
   function armar() {
     if (panel) return;
@@ -273,10 +277,7 @@ window.ADORNO_ASISTENTE = (function () {
     panel = document.createElement('div'); panel.className = 'asist-panel'; panel.hidden = true; panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'Clodi');
     panel.innerHTML = `
       <div class="asist-head"><span class="asist-av">${CLODI('cara')}</span><span class="asist-tit"><b>Clodi</b><span class="asist-sub">${esc(modulo())} · preguntame cómo hacer algo</span></span>
-        ${'speechSynthesis' in window ? `<button class="asist-ib" title="Voz de Clodi" data-a="conf">${ICO.voz}</button>` : ''}
         <button class="asist-ib" title="Cerrar (Esc)" data-a="cerrar">${ICO.cerrar}</button></div>
-      <div class="asist-conf" hidden><span>Voz:</span><select aria-label="Voz de Clodi"></select><button class="asist-bt no" data-a="probar">Probar</button>
-        <label><input type="checkbox" class="asist-siempre"> Leer siempre las respuestas en voz alta</label></div>
       <div class="asist-log"><div class="asist-vacio">¡Hola! Soy <b>Clodi</b>. Escribime o dictame tu pregunta, por ejemplo: <b>"¿cómo cargo un pedido?"</b> o <b>"¿dónde veo mis vacaciones?"</b>.<br>Te explico los pasos con el manual de este módulo${SR ? '' : '<br><br>(este navegador no tiene dictado por voz: escribí la pregunta)'}.</div></div>
       <div class="asist-in">
         <textarea rows="1" placeholder="Preguntale a Clodi…" aria-label="Pregunta para Clodi"></textarea>
@@ -287,11 +288,8 @@ window.ADORNO_ASISTENTE = (function () {
     const ta = panel.querySelector('textarea');
     panel.addEventListener('click', (e) => { const b = e.target.closest('[data-a]'); if (!b) return; const a = b.dataset.a;
       if (a === 'cerrar') cerrar(); else if (a === 'enviar') enviar(false); else if (a === 'mic') dictar(); else if (a === 'leer') leer(b.dataset.t);
-      else if (a === 'conf') { const c = panel.querySelector('.asist-conf'); c.hidden = !c.hidden; if (!c.hidden) llenarVoces(); }
-      else if (a === 'probar') leer('Hola, soy Clodi. Contame en qué te ayudo.'); });
-    panel.querySelector('.asist-conf select').addEventListener('change', (e) => LS.set('clodi-voz', e.target.value));
-    const chk = panel.querySelector('.asist-siempre'); chk.checked = siempreVoz(); chk.addEventListener('change', () => LS.set('clodi-siempre-voz', chk.checked ? '1' : '0'));
-    try { speechSynthesis.addEventListener('voiceschanged', llenarVoces); } catch (_) {}
+      });
+    panel.addEventListener('pointerdown', despertarVoz);
     ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(false); } });
     ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = Math.min(110, ta.scrollHeight) + 'px'; });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && panel && !panel.hidden) cerrar(); });
@@ -313,23 +311,16 @@ window.ADORNO_ASISTENTE = (function () {
   }
   // (28-oct, JP: "una voz que sea la más parecida a la de Claudia") mujer, argentina primero. Cada equipo tiene voces distintas:
   // se usa la primera de esta lista que exista; la persona puede elegir otra en el panel (queda guardada en ese equipo).
-  // (28-oct, JP eligió en la galería de voces: Microsoft Helena, España, velocidad 1.3, tono 1.0). Si el equipo no la tiene
+  // (28-oct, JP eligió en la galería de voces: Microsoft Helena, España; velocidad 1.1, tono 1.0). Si el equipo no la tiene
   // (celulares), sigue con otras voces de mujer de España y después las latinoamericanas.
   const PREFERIDAS = ['helena', 'laura', 'elvira', 'mónica', 'monica', 'google español', 'elena', 'dalia', 'paloma', 'sabina', 'paulina', 'google español de estados unidos'];
-  const VELOCIDAD = 1.3, TONO = 1.0;
+  const VELOCIDAD = 1.1, TONO = 1.0;   // (28-oct, JP) bajó de 1.3 a 1.1
   function vocesEs() { try { return speechSynthesis.getVoices().filter((v) => /^es/i.test(v.lang)); } catch (_) { return []; } }
   function voz() {
     const vs = vocesEs(); if (!vs.length) return null;
-    const elegida = LS.get('clodi-voz'); const e = elegida && vs.find((v) => v.name === elegida); if (e) return e;
     // palabra entera: "helena" no es "elena"
     const pts = (v) => { const n = v.name.toLowerCase(); const i = PREFERIDAS.findIndex((p) => new RegExp('(^|[^a-záéíóúñ])' + p + '($|[^a-záéíóúñ])').test(n)); return (i < 0 ? 0 : 100 - i * 5) + (v.lang === 'es-AR' ? 30 : 0) + (v.localService ? 0 : 2); };
     return vs.slice().sort((x, y) => pts(y) - pts(x))[0];
-  }
-  function llenarVoces() {
-    const sel = panel && panel.querySelector('.asist-conf select'); if (!sel) return;
-    const vs = vocesEs(), v0 = voz();
-    sel.innerHTML = vs.length ? vs.map((v) => `<option value="${esc(v.name)}"${v0 && v.name === v0.name ? ' selected' : ''}>${esc(v.name.replace(/^(Microsoft|Google) /, '').replace(/ Online \(Natural\)/, ''))}</option>`).join('')
-      : '<option>(este equipo no tiene voces en castellano)</option>';
   }
   function boca(on) { document.querySelectorAll('.asist-av .clodi, .asist-fab .clodi').forEach((c) => c.classList.toggle('habla', on)); }
   function leer(t) { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); const v = voz(); if (v) u.voice = v; u.lang = (v && v.lang) || 'es-ES'; u.rate = VELOCIDAD; u.pitch = TONO;
@@ -364,7 +355,8 @@ window.ADORNO_ASISTENTE = (function () {
   }
   async function enviar(porVoz) {
     if (ocupado) return;
-    const ta = panel.querySelector('textarea'); const q = ta.value.trim(); if (!q) return;
+    const ta = panel.querySelector('textarea'); const q = (porVoz ? corregirNombre(ta.value) : ta.value).trim(); if (!q) return;
+    despertarVoz();
     ta.value = ''; ta.style.height = 'auto'; log('q', q); const w = log('wait'); ocupado = true;
     try {
       const tk = await token();
