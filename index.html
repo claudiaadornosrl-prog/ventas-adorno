@@ -232,7 +232,7 @@ window.ADORNO_ASISTENTE = (function () {
   const CSS = `
   .asist-fab{position:fixed;right:16px;bottom:0;z-index:9000;width:64px;height:70px;padding:0;border:0;background:transparent;cursor:pointer;filter:drop-shadow(0 3px 7px rgba(0,0,0,.3));transform-origin:50% 100%;transition:transform .15s}
   .asist-fab:focus-visible{outline:2px solid var(--accent,#d97757);outline-offset:3px;border-radius:12px}
-  .asist-fab img{display:block;width:100%;height:100%;object-fit:contain;object-position:50% 100%;user-select:none}
+  .asist-fab img{display:block;width:100%;height:100%;object-fit:contain;object-position:50% 100%;user-select:none} .asist-fab .clodi-cara{display:none}
   .asist-av img{display:block;width:100%;height:100%;object-fit:contain;user-select:none}
   .asist-av{flex:none}
   .asist-head .asist-av{width:36px;height:36px} .asist-fila{display:flex;align-items:flex-end;gap:7px;align-self:flex-start;max-width:96%} .asist-fila .asist-av{width:26px;height:26px} .asist-fila .asist-a{max-width:none}
@@ -243,7 +243,7 @@ window.ADORNO_ASISTENTE = (function () {
   @keyframes clodi-habla{from{transform:translateY(0) scale(1)}to{transform:translateY(-3%) scale(1.03)}}
   .clodi.piensa{animation:clodi-piensa 1.1s ease-in-out infinite}
   @keyframes clodi-piensa{0%,100%{transform:translateY(0)}50%{transform:translateY(-6%)}}
-  @media (prefers-reduced-motion:reduce){.clodi,.clodi.habla,.clodi.piensa{animation:none!important}}
+  @media (prefers-reduced-motion:reduce){.clodi,.clodi.habla,.clodi.piensa,.asist-fab{animation:none!important}}
   .asist-fab:hover{transform:scale(1.06)} .asist-fab[hidden]{display:none}
   .asist-panel{position:fixed;right:18px;bottom:80px;z-index:9001;width:min(380px,calc(100vw - 36px));max-height:min(70vh,560px);display:flex;flex-direction:column;background:var(--surface,#fff);color:var(--text,#1a1a1a);border:0.5px solid var(--border,#d3d1c7);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.18);font-family:inherit;font-size:14px}
   .asist-panel[hidden]{display:none}
@@ -267,13 +267,16 @@ window.ADORNO_ASISTENTE = (function () {
   .asist-bt.si{background:var(--accent,#d97757);color:#fff} .asist-bt.no{background:transparent;color:var(--muted,#5f5e5a);border:0.5px solid var(--border,#d3d1c7)}
   .asist-bt:disabled{opacity:.6;cursor:default} .asist-fin{margin-top:8px;font-size:13px} .asist-fin.ok{color:#166534} .asist-fin.mal{color:#991b1b}
   .asist-resalta{outline:3px solid var(--accent,#d97757)!important;outline-offset:2px;border-radius:8px;transition:outline-color 1.2s}
-  @media (max-width:600px){.asist-panel{right:calc(8px + env(safe-area-inset-right,0px));left:calc(8px + env(safe-area-inset-left,0px));width:auto;bottom:calc(72px + env(safe-area-inset-bottom,0px));max-height:70vh;max-height:70dvh}.asist-fab{right:calc(10px + env(safe-area-inset-right,0px));bottom:0;width:58px;height:64px}}
+  @media (max-width:600px){.asist-panel{right:calc(8px + env(safe-area-inset-right,0px));left:calc(8px + env(safe-area-inset-left,0px));width:auto;bottom:calc(92px + env(safe-area-inset-bottom,0px));max-height:66vh;max-height:66dvh}}
+  /* (28-oct, JP) en celular y tablet: cara redonda flotante, despegada del borde (en iPhone la barra de Safari se achica abajo y tapaba el busto) */
+  @media (max-width:600px),(hover:none) and (pointer:coarse){.asist-fab{right:calc(14px + env(safe-area-inset-right,0px));bottom:calc(22px + env(safe-area-inset-bottom,0px));width:58px;height:58px;border-radius:50%;overflow:hidden;background:#fff;border:2.5px solid #fff;filter:none;transform-origin:50% 50%;box-shadow:0 0 0 2px var(--accent,#d97757),0 6px 16px rgba(0,0,0,.25);animation:clodi-flota 5s ease-in-out infinite}.asist-fab .clodi-busto{display:none}.asist-fab .clodi-cara{display:block;object-fit:cover;object-position:50% 15%;animation:none}.asist-fab .clodi-cara.habla{animation:clodi-habla .32s ease-in-out infinite alternate}.asist-fab:hover{transform:none}.asist-panel:not([hidden]) ~ .asist-fab{animation:none}}
+  @keyframes clodi-flota{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
   @media (max-width:600px),(pointer:coarse){.asist-in textarea{font-size:16px}}`;
 
   function armar() {
     if (panel) return;
     const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
-    const fab = document.createElement('button'); fab.className = 'asist-fab'; fab.title = 'Clodi: preguntale cómo hacer algo (escribiendo o por voz)'; fab.setAttribute('aria-label', 'Abrir Clodi'); fab.innerHTML = CLODI('busto'); fab.onclick = () => abrir();
+    const fab = document.createElement('button'); fab.className = 'asist-fab'; fab.title = 'Clodi: preguntale cómo hacer algo (escribiendo o por voz)'; fab.setAttribute('aria-label', 'Abrir Clodi'); fab.innerHTML = CLODI('busto').replace('class="clodi"', 'class="clodi clodi-busto"') + CLODI('cara').replace('class="clodi"', 'class="clodi clodi-cara"'); fab.onclick = () => abrir();
     panel = document.createElement('div'); panel.className = 'asist-panel'; panel.hidden = true; panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'Clodi');
     panel.innerHTML = `
       <div class="asist-head"><span class="asist-av">${CLODI('cara')}</span><span class="asist-tit"><b>Clodi</b><span class="asist-sub">${esc(modulo())} · preguntame cómo hacer algo</span></span>
