@@ -313,7 +313,10 @@ window.ADORNO_ASISTENTE = (function () {
   }
   // (28-oct, JP: "una voz que sea la más parecida a la de Claudia") mujer, argentina primero. Cada equipo tiene voces distintas:
   // se usa la primera de esta lista que exista; la persona puede elegir otra en el panel (queda guardada en ese equipo).
-  const PREFERIDAS = ['elena', 'dalia', 'paloma', 'sabina', 'paulina', 'google español de estados unidos', 'elvira', 'helena', 'laura', 'mónica', 'monica', 'google español'];   // latinoamericanas antes que las de España
+  // (28-oct, JP eligió en la galería de voces: Microsoft Helena, España, velocidad 1.3, tono 1.0). Si el equipo no la tiene
+  // (celulares), sigue con otras voces de mujer de España y después las latinoamericanas.
+  const PREFERIDAS = ['helena', 'laura', 'elvira', 'mónica', 'monica', 'google español', 'elena', 'dalia', 'paloma', 'sabina', 'paulina', 'google español de estados unidos'];
+  const VELOCIDAD = 1.3, TONO = 1.0;
   function vocesEs() { try { return speechSynthesis.getVoices().filter((v) => /^es/i.test(v.lang)); } catch (_) { return []; } }
   function voz() {
     const vs = vocesEs(); if (!vs.length) return null;
@@ -329,7 +332,7 @@ window.ADORNO_ASISTENTE = (function () {
       : '<option>(este equipo no tiene voces en castellano)</option>';
   }
   function boca(on) { document.querySelectorAll('.asist-av .clodi, .asist-fab .clodi').forEach((c) => c.classList.toggle('habla', on)); }
-  function leer(t) { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); const v = voz(); if (v) u.voice = v; u.lang = (v && v.lang) || 'es-AR'; u.rate = 1.02;
+  function leer(t) { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); const v = voz(); if (v) u.voice = v; u.lang = (v && v.lang) || 'es-ES'; u.rate = VELOCIDAD; u.pitch = TONO;
     u.onstart = () => boca(true); u.onend = u.onerror = () => boca(false); speechSynthesis.speak(u); } catch (_) { boca(false); } }
 
   function log(tipo, texto) {
