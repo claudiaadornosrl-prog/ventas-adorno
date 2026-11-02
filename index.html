@@ -1266,6 +1266,27 @@ function enterApp() {
 // ═══════════════════════════════════════════════════════════════════════
 let _mesListoCerrar = null;  // {local, año, mes} para que el botón sepa qué cerrar
 
+/** (1-nov, JP) ¿El mes de este local ya está sincronizado completo?
+ *  Antes se exigía la fila del ÚLTIMO DÍA CALENDARIO. Oficina no trabaja fines de semana ni feriados, así que un
+ *  mes que termina en sábado (oct-2026) nunca la tiene: el aviso de "falta el sync" no se iba y el mes nunca
+ *  aparecía como "listo para cerrar". Ahora alcanza con una de dos:
+ *   (a) existe la fila del último día del mes, o
+ *   (b) un sync del mes ENTERO (dragonfish_jobs tipo 'mes') terminó bien DESPUÉS de que el mes se acabó. */
+async function _mesSincronizado(localId, año, mes) {
+  const mm = String(mes).padStart(2, '0');
+  const primerDia = `${año}-${mm}-01`;
+  const fechaUlt = `${año}-${mm}-${String(new Date(año, mes, 0).getDate()).padStart(2, '0')}`;
+  const { data: vd } = await sb.from('ventas_diarias')
+    .select('id').eq('local', localId).eq('fecha', fechaUlt).maybeSingle();
+  if (vd) return true;
+  const sig = new Date(año, mes, 1);   // primer día del mes siguiente
+  const finMes = `${sig.getFullYear()}-${String(sig.getMonth() + 1).padStart(2, '0')}-01T00:00:00-03:00`;
+  const { data: jobs } = await sb.from('dragonfish_jobs')
+    .select('id').eq('local', localId).eq('tipo', 'mes').eq('estado', 'completado')
+    .lte('fecha_desde', primerDia).gte('fecha_hasta', fechaUlt).gte('completado_at', finMes).limit(1);
+  return !!(jobs && jobs.length);
+}
+
 async function chequearMesesListosParaCerrar() {
   try {
     const localesACheckear = session.isAdmin
@@ -1293,10 +1314,8 @@ async function chequearMesesListosParaCerrar() {
         .select('id').eq('local', c.localId)
         .eq('año', c.año).eq('mes', c.mes).maybeSingle();
       if (cerr) continue;
-      // ¿Tiene datos del último día del mes?
-      const { data: vd } = await sb.from('ventas_diarias')
-        .select('id').eq('local', c.localId).eq('fecha', c.fechaUlt).maybeSingle();
-      if (vd) listos.push(c);
+      // ¿Está sincronizado completo? (último día cargado, o sync del mes entero hecho después de fin de mes)
+      if (await _mesSincronizado(c.localId, c.año, c.mes)) listos.push(c);
     }
 
     if (!listos.length) {
@@ -1363,10 +1382,8 @@ async function chequearSyncFinDeMes() {
       const { data: cerr } = await sb.from('meses_cerrados_ventas')
         .select('id').eq('local', localId).eq('año', añoAnt).eq('mes', mesAnt).maybeSingle();
       if (cerr) continue;
-      // ¿Tiene el último día?
-      const { data: vd } = await sb.from('ventas_diarias')
-        .select('id').eq('local', localId).eq('fecha', fechaUlt).maybeSingle();
-      if (vd) continue;  // ya está, no hay que sincronizar
+      // ¿Ya está sincronizado? (último día cargado, o sync del mes entero hecho después de fin de mes)
+      if (await _mesSincronizado(localId, añoAnt, mesAnt)) continue;
       // Falta sync de fin de mes
       _syncFinMesPendiente = { localId, año: añoAnt, mes: mesAnt, fechaUlt };
       const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -3583,7 +3600,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=30"></script>
+<script src="manual.js?v=31"></script>
 <script src="reporte.js?v=17"></script>
 <script>
 // (24-ago) Blindaje iOS: re-suscripcion automatica de push. iOS suelta la
