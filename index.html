@@ -503,6 +503,7 @@ window.ADORNO_SSO = (function () {
   })();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.min.js" integrity="sha384-UagCvVPT5XXA0Hx+nJYUAGBFseHT9zBgpJMSebsAxl9lciTwbT+39j5VfRjdP5Tp" crossorigin="anonymous"></script>
+<script src="/hub/seguridad.js?v=1"></script>
 <style>
 /* Tipografia institucional: URW Gothic (clon libre de Avant Garde),
    servida desde fonts/ del propio repo. */
@@ -840,9 +841,17 @@ const sb = window.supabase.createClient(SUPA_URL, SUPA_KEY, {
   var inOrig = sb.auth.signInWithPassword.bind(sb.auth);
   sb.auth.signInWithPassword = async function (cred) {
     var r = await inOrig(cred);
-    if (!r.error && r.data && r.data.user) ADORNO_SSO.recordar(mod, r.data.user.email);
+    if (!r.error && r.data && r.data.user) {
+      // (3-nov-2026, hardening) si la cuenta tiene el código del celular, se pide antes de dejar entrar
+      if (window.ADORNO_MFA && !(await ADORNO_MFA.pedirCodigo(sb))) {
+        await outOrig({ scope: 'local' });
+        return { data: { user: null, session: null }, error: { message: 'Hace falta el código del celular para entrar.' } };
+      }
+      ADORNO_SSO.recordar(mod, r.data.user.email);
+    }
     return r;
   };
+  if (window.ADORNO_MFA) ADORNO_MFA.alCargar(sb);   // sesión guardada de antes de activar el código del celular
   var outOrig = sb.auth.signOut.bind(sb.auth);
   sb.auth.signOut = async function () {
     ADORNO_SSO.olvidarModulos();
@@ -3600,7 +3609,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=31"></script>
+<script src="manual.js?v=32"></script>
 <script src="reporte.js?v=17"></script>
 <script>
 // (24-ago) Blindaje iOS: re-suscripcion automatica de push. iOS suelta la
