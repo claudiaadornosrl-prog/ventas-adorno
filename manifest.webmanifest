@@ -9,13 +9,13 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "icon-192-pastilla.png",
+      "src": "icon-192-moneda.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icon-512-pastilla.png",
+      "src": "icon-512-moneda.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
