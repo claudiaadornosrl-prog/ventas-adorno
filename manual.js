@@ -44,6 +44,7 @@ function _manualSecciones() {
       desc: 'La planilla diaria de ventas del local. Reemplaza la planilla Excel de siempre.',
       pasos: [
         'Cada fila es un día; las columnas son los medios de pago: Efectivo, Tarjeta, QR (Mercado Pago), Vales, y para Oficina también Transferencia y CC.',
+        'Cada cuenta ve y carga solo lo suyo (11-nov): la cuenta de Alcorta solo Alcorta, la de Unicenter solo Unicenter y las de Oficina solo Oficina. Lo controla la base, no solo la pantalla. El consolidado de los locales es solo para administración.',
         'Si el mes elegido no tiene días cargados, arriba de la grilla aparece un aviso con el motivo: mes futuro, mes en curso sin ventas todavía, mes viejo del que solo se conoce el total mensual, o mes en que el local no operaba.',
         'Los números los carga solo el sistema desde Dragonfish — no hace falta tipear nada. Si un día quedó incompleto, tocá "Resincronizar mes" en el menú ⋮ (solo actualiza días NO cerrados).',
         'La columna Online en los locales es el efectivo de la segunda base — si hay que corregir a mano, SIEMPRE se corrige en esa columna.',
@@ -64,6 +65,9 @@ function _manualSecciones() {
       desc: 'El cierre definitivo del día. Se hace DESPUÉS del cierre de caja completo en Dragonfish.',
       pasos: [
         'Primero cerrá la caja en Dragonfish (Z completo), después cerrá el día acá — si no, el día queda congelado con datos viejos.',
+        'Quién cierra (11-nov): al tocar el candado rojo se abre la cámara. Mirala de frente adentro del óvalo: en uno o dos segundos aparece "Te reconocí: tu nombre" y tocás "Cerrar el día". Si no sos vos, "No soy yo" vuelve a mirar. La cara es la misma que se registra en el POS (Ajustes → "Quién emite"); acá no se registra y no se guarda ninguna foto.',
+        'Si la cámara no anda o no te reconoce en 10 segundos, aparece "Elegir a mano quién cierra": tocás tu nombre en la lista de la gente del local y después "Cerrar el día". Ese cierre queda marcado como elegido a mano (el tilde se ve en color ámbar).',
+        'En la planilla, el tilde del día cerrado muestra el nombre de quien cerró (pasá el mouse para ver si fue con la cámara o a mano, y la hora), y el aviso de cierre que le llega al admin también lo dice. Desde la cuenta de admin se cierra sin cámara.',
         'Al cerrar el día, el sistema cruza automáticamente los pagos de Mercado Pago del día ANTERIOR (ya definitivos).',
         'Si te quedó un día pasado sin cerrar, también lo podés cerrar — el candado rojo aparece igual. El ojo abre el detalle de los turnos; el candado abierto (admin) reabre el día; la llave violeta le pide la reapertura al admin.',
       ],

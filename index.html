@@ -605,6 +605,23 @@ body { margin: 0; font-family: 'URW Gothic', -apple-system, BlinkMacSystemFont, 
 .abtn.principal svg.ico { width: 22px; height: 22px; stroke-width: 2.2; }
 .abtn.principal:hover { background: #fee2e2; }
 .abtn.violeta { color: #7c3aed; } .abtn.violeta:hover { background: #ede9fe; }
+/* (11-nov) Cerrar el día con la cara */
+.cc-wrap { position: fixed; inset: 0; background: rgba(15,23,42,.55); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.cc-box { background: #fff; border-radius: 26px; max-width: 440px; width: 100%; max-height: 92vh; overflow: auto; padding: 22px 22px 18px; }
+.cc-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 6px; }
+.cc-head h3 { margin: 0; font-size: 17px; }
+.cc-x { background: none; border: none; cursor: pointer; font-size: 18px; color: #64748b; }
+.cc-aviso { font-size: 12.5px; color: #475569; line-height: 1.45; margin-bottom: 12px; }
+.cc-cam { position: relative; border-radius: 22px; overflow: hidden; background: #0f172a; aspect-ratio: 4 / 3; }
+.cc-cam video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); display: block; }
+.cc-marco { position: absolute; inset: 12% 25%; border: 3px solid rgba(255,255,255,.7); border-radius: 50%; transition: border-color .2s; }
+.cc-cam.ok .cc-marco { border-color: #22c55e; }
+.cc-estado { text-align: center; font-size: 14px; color: #334155; margin: 12px 0 2px; min-height: 20px; line-height: 1.4; }
+.cc-acciones { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 10px; }
+.cc-btn { border: none; border-radius: 999px; padding: 10px 20px; font-size: 14px; font-weight: 600; cursor: pointer; background: #f1f5f9; color: #334155; font-family: inherit; }
+.cc-btn.principal { background: var(--primary); color: #fff; }
+.cc-btn.link { background: none; color: #64748b; text-decoration: underline; padding: 6px 10px; font-weight: 500; }
+.cc-equipo { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 4px; }
 .abtn.alerta { color: #d97706; } .abtn.alerta:hover { background: #fef3c7; }
 .abtn.peligro { color: #dc2626; } .abtn.peligro:hover { background: #fee2e2; }
 .abtn:disabled { opacity: .35; cursor: default; background: transparent; }
@@ -2198,9 +2215,15 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
       const badgeColor = conDiscrep > 0 ? '#fee2e2' : (diaCerrado ? '#e0e7ff' : '#dcfce7');
       const badgeTxt   = conDiscrep > 0 ? '#991b1b' : (diaCerrado ? '#3730a3' : '#166534');
       const badgeIcon  = diaCerrado ? '✓ ' : '';
-      const badge = nTurnos > 0
-        ? `<span title="${nTurnos} turno${nTurnos>1?'s':''}${conDiscrep>0?' — con diferencia en el arqueo':''}" style="background:${badgeColor};color:${badgeTxt};padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">${badgeIcon}${nTurnos}${conDiscrep>0?' ⚠':''}</span>`
-        : (diaCerrado ? `<span style="background:#e0e7ff;color:#3730a3;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">✓ cerrado</span>` : '');
+      // (11-nov) Día cerrado: el tilde lleva el nombre de quien cerró; elegida a mano (sin cámara) = ámbar.
+      const quien = _quienCerro(v);
+      const bgB = (quien?.manual && !(conDiscrep > 0)) ? '#fef3c7' : badgeColor;
+      const txB = (quien?.manual && !(conDiscrep > 0)) ? '#92400e' : badgeTxt;
+      const tituloB = `${nTurnos > 0 ? `${nTurnos} turno${nTurnos>1?'s':''}` : 'Día cerrado'}${conDiscrep>0?' — con diferencia en el arqueo':''}${quien ? ' · ' + quien.titulo : ''}`;
+      const textoB = quien?.corto ? `✓ ${quien.corto}` : (nTurnos > 0 ? `${badgeIcon}${nTurnos}` : '✓ cerrado');
+      const badge = (nTurnos > 0 || diaCerrado)
+        ? `<span title="${escHtml(tituloB)}" style="background:${bgB};color:${txB};padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">${escHtml(textoB)}${conDiscrep>0?' ⚠':''}</span>`
+        : '';
       // Botón "Cerrar turno" disponible si es HOY y el día NO está cerrado.
       // Antes requeríamos venta cargada, pero eso bloqueaba a Oficina cuando
       // todavía no había corrido el sync horario. El pre-sync forzado dentro
@@ -3001,6 +3024,163 @@ function notificarDiferenciaArqueo(dataTurno, fecha, localId, etiqueta) {
   /* eslint-enable no-unreachable */
 }
 
+// ── (11-nov-2026, JP) Cerrar el día con la cara ────────────────────────────────────────────────────────────────
+// Mismas caras que registra el POS (Ajustes › «Quién emite»). La cámara arma una lectura de 128 números con face-api
+// (la foto nunca se guarda ni se manda) y la BASE dice quién es (ventas_cierre_identificar, umbral 0.48 como el POS).
+// Dos lecturas seguidas de la misma persona = reconocida. Sin cámara, o si no reconoce en 10 s, se puede elegir a
+// mano (queda marcado «elegida a mano»). La base solo cierra con ese pase (cerrar_dia p_identificacion), de un uso
+// y 30 min; el admin cierra sin cámara.
+const CARA = { lib: null, stream: null, corriendo: false };
+const CARA_CDN = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13';
+const CARA_SRI = 'sha384-5SEinnOIOK1Nl6bzEIWwfXWMg4EaJhN2bXKgrjYC0Bq+fYNZHwhD3ntM92lTHnfL';
+function caraLib() {
+  if (!CARA.lib) CARA.lib = new Promise((ok, mal) => {
+    const sc = document.createElement('script');
+    sc.src = CARA_CDN + '/dist/face-api.js'; sc.integrity = CARA_SRI; sc.crossOrigin = 'anonymous';
+    sc.onload = async () => {
+      try {
+        const m = CARA_CDN + '/model';
+        await Promise.all([faceapi.nets.tinyFaceDetector.loadFromUri(m), faceapi.nets.faceLandmark68TinyNet.loadFromUri(m), faceapi.nets.faceRecognitionNet.loadFromUri(m)]);
+        ok(true);
+      } catch (e) { CARA.lib = null; mal(e); }
+    };
+    sc.onerror = () => { CARA.lib = null; mal(new Error('no se pudo bajar el reconocimiento de caras (¿sin internet?)')); };
+    document.head.appendChild(sc);
+  });
+  return CARA.lib;
+}
+async function caraCam(video) {
+  CARA.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+  video.srcObject = CARA.stream; await video.play();
+}
+function caraApagar() { CARA.corriendo = false; try { CARA.stream?.getTracks().forEach(t => t.stop()); } catch (_) {} CARA.stream = null; }
+async function caraLeer(video) {
+  const d = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 })).withFaceLandmarks(true).withFaceDescriptor();
+  return d ? Array.from(d.descriptor) : null;
+}
+/** 'ADORNO, ANDREA' → 'Andrea Adorno' (así vienen los nombres del legajo). */
+function nombrePersona(n) {
+  const s = String(n || '').trim(); if (!s) return '';
+  const cap = t => t.toLowerCase().replace(/(^|[\s'-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
+  const [ap, no] = s.split(',').map(x => x.trim());
+  return no ? cap(no + ' ' + ap) : cap(s);
+}
+/** Para el tilde del día cerrado: nombre corto, texto del title y si se eligió a mano. */
+function _quienCerro(v) {
+  if (!v?.controlado) return null;
+  const hora = v.controlado_at ? new Date(v.controlado_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+  if (!v.controlado_nombre) {
+    const desde = String(v.controlado_por || '').replace(/^local:(.*)$/, (m, l) => 'la cuenta de ' + (NOMBRE_LOCAL[l] || l)).replace(/^admin:/, '') || 'la cuenta del local';
+    return { corto: '', titulo: `Cerrado${hora ? ' el ' + hora : ''} desde ${desde}`, manual: false };
+  }
+  const nom = nombrePersona(v.controlado_nombre);
+  const como = { cara: 'reconocida con la cámara', manual: 'elegida a mano, sin la cámara', admin: 'desde la cuenta de admin' }[v.controlado_modo] || '';
+  return { corto: nom.split(' ')[0], titulo: `Cerró ${nom}${como ? ' (' + como + ')' : ''}${hora ? ' · ' + hora : ''}`, manual: v.controlado_modo === 'manual' };
+}
+
+/** Ventana «¿Quién cierra?»: devuelve el pase { id, empleado_id, nombre, modo } o null si la cierran. */
+function quienCierra(fecha, localId, avisoHtml) {
+  return new Promise((resolve) => {
+    document.getElementById('modal-cierre-cara')?.remove();
+    const wrap = document.createElement('div');
+    wrap.id = 'modal-cierre-cara'; wrap.className = 'cc-wrap';
+    wrap.innerHTML = `
+      <div class="cc-box" role="dialog" aria-modal="true">
+        <div class="cc-head"><h3>Cerrar el día ${fecha.slice(8, 10)}/${fecha.slice(5, 7)} · ${escHtml(NOMBRE_LOCAL[localId] || localId)}</h3>
+          <button class="cc-x" title="Cerrar" aria-label="Cerrar">✕</button></div>
+        <div class="cc-aviso">${avisoHtml}</div>
+        <div class="cc-cam"><video playsinline muted></video><div class="cc-marco"></div></div>
+        <div class="cc-estado">Preparando la cámara…</div>
+        <div class="cc-acciones"></div>
+      </div>`;
+    document.body.appendChild(wrap);
+    const $ = (q) => wrap.querySelector(q);
+    const video = $('video'), cam = $('.cc-cam'), acc = $('.cc-acciones');
+    const estado = (html) => { $('.cc-estado').innerHTML = html; };
+    const dormir = (ms) => new Promise(r => setTimeout(r, ms));
+    let fin = false, tMano = null, hayMano = false;
+    const terminar = (res) => {
+      if (fin) return; fin = true; caraApagar(); clearTimeout(tMano);
+      document.removeEventListener('keydown', esc); wrap.remove(); resolve(res);
+    };
+    const esc = (e) => { if (e.key === 'Escape') terminar(null); };
+    document.addEventListener('keydown', esc);
+    $('.cc-x').onclick = () => terminar(null);
+
+    const boton = (txt, clase, fn) => { const b = document.createElement('button'); b.className = 'cc-btn ' + clase; b.textContent = txt; b.onclick = fn; acc.appendChild(b); return b; };
+    const mostrarMano = () => { if (hayMano || fin) return; hayMano = true; boton('Elegir a mano quién cierra', 'link', elegirAMano); };
+
+    const confirmarPase = (p, nota) => {
+      caraApagar(); clearTimeout(tMano);
+      cam.classList.toggle('ok', p.modo === 'cara'); cam.style.display = p.modo === 'cara' ? '' : 'none';
+      estado(`${p.modo === 'cara' ? 'Te reconocí' : 'Cierra'}: <b>${escHtml(nombrePersona(p.nombre))}</b>${nota ? `<div style="font-size:12px;color:#92400e;margin-top:4px;">${nota}</div>` : ''}`);
+      acc.innerHTML = ''; hayMano = false;
+      boton('Cerrar el día', 'principal', () => terminar(p));
+      boton(p.modo === 'cara' ? 'No soy yo' : 'Volver a la cámara', '', () => { acc.innerHTML = ''; hayMano = false; arrancar(); });
+    };
+
+    async function elegirAMano() {
+      caraApagar(); clearTimeout(tMano); cam.style.display = 'none'; acc.innerHTML = ''; hayMano = true;
+      estado('Cargando la gente del local…');
+      const { data, error } = await sb.rpc('ventas_equipo_cierre', { p_local: localId });
+      if (fin) return;
+      if (error) { estado('No pude traer la lista: ' + escHtml(error.message)); return; }
+      if (!data || !data.length) { estado('No hay personas activas cargadas en este local.'); return; }
+      estado('¿Quién cierra el día?');
+      const eq = document.createElement('div'); eq.className = 'cc-equipo';
+      data.forEach(pp => {
+        const b = document.createElement('button'); b.className = 'cc-btn'; b.textContent = nombrePersona(pp.nombre);
+        b.onclick = async () => {
+          eq.querySelectorAll('button').forEach(x => { x.disabled = true; });
+          const r = await sb.rpc('ventas_cierre_manual', { p_local: localId, p_fecha: fecha, p_empleado_id: pp.empleado_id });
+          if (fin) return;
+          if (r.error) { estado('No se pudo: ' + escHtml(r.error.message)); eq.querySelectorAll('button').forEach(x => { x.disabled = false; }); return; }
+          confirmarPase({ ...r.data, modo: 'manual' }, 'Elegida a mano: en la planilla queda marcado que se cerró sin la cámara.');
+        };
+        eq.appendChild(b);
+      });
+      acc.appendChild(eq);
+      boton('Volver a la cámara', 'link', () => { acc.innerHTML = ''; hayMano = false; arrancar(); });
+    }
+
+    async function arrancar() {
+      if (fin) return;
+      cam.style.display = ''; cam.classList.remove('ok'); estado('Preparando la cámara…');
+      clearTimeout(tMano); tMano = setTimeout(mostrarMano, 10000);
+      try {
+        await caraLib();
+        if (fin) return;
+        await caraCam(video);
+      } catch (e) {
+        if (fin) return;
+        const motivo = e?.name === 'NotAllowedError' ? 'no se dio permiso para usar la cámara'
+                     : e?.name === 'NotFoundError' ? 'esta computadora no tiene cámara'
+                     : (e?.message || String(e));
+        estado('No se pudo usar la cámara: ' + escHtml(motivo) + '.');
+        mostrarMano(); return;
+      }
+      if (fin) { caraApagar(); return; }
+      estado('Mirá a la cámara…');
+      CARA.corriendo = true;
+      let previa = null;
+      while (CARA.corriendo && !fin) {
+        let d = null;
+        try { d = await caraLeer(video); } catch (_) { d = null; }
+        if (!CARA.corriendo || fin) break;
+        if (!d) { previa = null; estado('Mirá a la cámara…'); await dormir(250); continue; }
+        const { data, error } = await sb.rpc('ventas_cierre_identificar', { p_local: localId, p_fecha: fecha, p_descriptor: d });
+        if (!CARA.corriendo || fin) break;
+        if (error) { estado('Error al reconocer: ' + escHtml(error.message)); mostrarMano(); caraApagar(); break; }
+        if (!data) { previa = null; estado('No te reconozco. ¿Tenés la cara registrada en el POS?'); await dormir(400); continue; }
+        if (previa && previa.empleado_id === data.empleado_id) { confirmarPase({ ...data, modo: 'cara' }); break; }
+        previa = data; estado(`¿${escHtml(nombrePersona(data.nombre))}? Quedate quieta un segundo…`);
+        await dormir(150);
+      }
+    }
+    arrancar();
+  });
+}
+
 /** Cierra el DÍA completo:
  *   - Si hay ventas pendientes (no cerradas en turno), crea automáticamente
  *     un turno final con todo lo restante.
@@ -3015,7 +3195,17 @@ async function cerrarDiaAhora(fecha, localId) {
             + `Si hay ventas pendientes, se cierra el turno final automáticamente.\n`
             + `Además se verifica el arqueo MP del día ANTERIOR (ya definitivo).\n\n`
             + `⚠ Después de cerrar el día, NO se podrán abrir más turnos.`;
-  if (!confirm(msg)) return;
+  // (11-nov) La cuenta del local se identifica con la cámara antes de cerrar; el admin confirma como siempre.
+  let ident = null;
+  if (session?.isAdmin) {
+    if (!confirm(msg)) return;
+  } else {
+    const aviso = (yaCerrados > 0 ? `Hay ${yaCerrados} turno${yaCerrados>1?'s':''} ya cerrado${yaCerrados>1?'s':''}. ` : '')
+      + 'Si hay ventas pendientes, se cierra el turno final automáticamente y se verifica el arqueo de Mercado Pago del día anterior. '
+      + '<b>Después de cerrar el día no se pueden abrir más turnos.</b>';
+    ident = await quienCierra(fecha, localId, aviso);
+    if (!ident) return;
+  }
 
   const cerradoPor = session?.isAdmin
     ? `admin:${session?.email || '?'}`
@@ -3047,9 +3237,10 @@ async function cerrarDiaAhora(fecha, localId) {
       p_fecha: fecha,
       p_cerrado_por: cerradoPor,
       p_notas: null,
+      p_identificacion: ident?.id || null,
     });
     if (error) throw error;
-    toast(`Día cerrado`);
+    toast(data?.cerro ? `Día cerrado por ${nombrePersona(data.cerro)}` : `Día cerrado`);
     // (3-ago) El push de cierre a JP/Claudia ahora lo dispara un TRIGGER en la
     // base (trg_ventas_cierre_dia): funciona aunque el local tenga la app vieja.
     // Si se creó un turno final, mostrar su detalle
@@ -3609,7 +3800,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=33"></script>
+<script src="manual.js?v=34"></script>
 <script src="reporte.js?v=17"></script>
 <script>
 // (24-ago) Blindaje iOS: re-suscripcion automatica de push. iOS suelta la
