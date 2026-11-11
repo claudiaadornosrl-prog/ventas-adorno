@@ -891,12 +891,15 @@ function _repToggle(cls, row) {
       const abrir = esEnc ? abrirReporteEncargada : abrirReporteVentas;
       b.onclick = () => abrir();
       // (22-oct, JP) va en el banner, solo el ícono (como en los otros módulos), a la izquierda del kebab
-      const hub = document.querySelector('#app-screen .header a.hbtn');   // (22-oct, JP) pegado a la derecha del botón del Hub
+      // (11-nov, banner común) a la derecha, antes de la rayita (| Hub · Salir), al lado del menú ⋮
+      const der = document.querySelector('#app-screen .ab-der');
+      const hub = der || document.querySelector('#app-screen .header a.hbtn');   // (22-oct, JP) pegado a la derecha del botón del Hub
       if (hub) {
         b.className = 'hbtn';
         b.setAttribute('aria-label', 'Reporte de ventas');
         b.innerHTML = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="20" x2="20" y2="20"/><rect x="6" y="11" width="3" height="7"/><rect x="11" y="6" width="3" height="12"/><rect x="16" y="3" width="3" height="15"/></svg>';
-        hub.insertAdjacentElement('afterend', b);
+        if (der) { b.innerHTML += '<span class="lb">Reporte</span>'; der.insertBefore(b, der.querySelector('.hsep')); }
+        else hub.insertAdjacentElement('afterend', b);
       } else {
         // Header inesperado: mejor el kebab que perder el acceso al reporte.
         const kebab = document.getElementById('kebab-menu');

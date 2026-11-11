@@ -28,6 +28,8 @@ function _manualSecciones() {
   const esAdmin = (typeof session !== 'undefined') && session?.isAdmin;
 
   const base = [
+    { icon: 'menu', titulo: 'La barra de arriba', desc: 'Es igual en todos los módulos: mismo lugar para cada cosa y el color de la moneda del módulo (el mismo del Hub).',
+      pasos: ['A la izquierda, la moneda y el nombre del módulo. En la computadora, tocando el nombre (Ventas ▾) se abre la lista para pasar a otro módulo; al final de esa lista está «Volver al Hub».', 'Al lado: el local, el mes que estás mirando (se cambia ahí mismo), si está Abierto o Cerrado y los totales del mes.', 'A la derecha: el Reporte (ícono de barritas), el menú ⋮ (Notificaciones, Resincronizar mes, Solicitudes, Reaperturas, Cerrar o Reabrir mes) y Salir.', 'En el celular los totales no se ven en la barra (están en la pantalla); a la vista quedan el menú ⋮, 🏠 Hub (volver al Hub) y Salir.', '¿Dudas? Preguntale a Clodi (el botón de abajo a la derecha): sabe todo lo que dice este manual.'] },
     {
       icon: 'lock', titulo: 'Entrar una sola vez',
       desc: 'La sesión se comparte entre todos los módulos del sistema.',
