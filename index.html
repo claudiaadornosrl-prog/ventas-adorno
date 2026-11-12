@@ -553,6 +553,10 @@ body { margin: 0; font-family: 'URW Gothic', -apple-system, BlinkMacSystemFont, 
 .logo-local{display:inline-block;width:auto;max-width:100%;object-fit:contain;vertical-align:middle}
 .local-opt .icon .logo-local{max-width:92%}
 .local-opt .name { font-size: 12px; font-weight: 700; }
+/* (12-nov-2026) Oficina tiene dos cuentas: se elige con estas pastillas */
+.ofi-cuenta { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 10px 0 2px; }
+.ofi-cuenta button { border: 1px solid var(--border); background: #fff; color: var(--text); border-radius: 999px; padding: 7px 14px; font-size: 13px; font-family: inherit; cursor: pointer; }
+.ofi-cuenta button.sel { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
 .btn-primary { background: var(--primary); color: white; border: none; padding: 12px; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; width: 100%; }
 .btn-primary:hover { background: var(--primary-dark); }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -776,6 +780,11 @@ th.th-der + th.th-der { border-left: none; }
         <div class="icon"><img class="logo-local" src="https://jfwtiagteuwmyvblgwms.supabase.co/storage/v1/object/public/marca/logo-local-ca-v3.svg" alt="Oficina" title="Oficina" style="height:44px"></div>
       </div>
     </div>
+    <!-- (12-nov-2026, JP) Oficina tiene dos cuentas iguales: se elige cuál -->
+    <div class="ofi-cuenta" id="ofi-cuenta" style="display:none;">
+      <button type="button" data-email="claudiaadorno@claudiaadorno.com" title="Cuenta claudiaadorno@claudiaadorno.com (compu de Analía)" onclick="elegirCuentaOficina(this)">Analía</button>
+      <button type="button" data-email="administracion@claudiaadorno.com" title="Cuenta administracion@claudiaadorno.com (compu de Marisa)" onclick="elegirCuentaOficina(this)">Marisa</button>
+    </div>
     <label>Contraseña</label>
     <input type="password" id="login-pass" placeholder="Contraseña del local" onkeydown="if(event.key==='Enter')doLogin()">
     <div class="login-error" id="login-error"></div>
@@ -905,8 +914,13 @@ const LOCAL_EMAILS = {
   alcorta:   'alcorta@claudiaadorno.com',
   unicenter: 'unicenter@claudiaadorno.com',
   // (6-ago) Oficina usa la cuenta de Anita: administracion@ cambió de clave
+  // (12-nov-2026) Oficina tiene DOS cuentas (OFICINA_EMAILS); en el login se elige cuál.
   oficina:   'claudiaadorno@claudiaadorno.com',
 };
+// (12-nov-2026, JP) Las dos cuentas genéricas de Oficina, iguales (rol directora en la base, sin legajo):
+// claudiaadorno@ (compu de Analía Rivera) y administracion@ (compu de Marisa Contreras). Ven y cargan los
+// 3 locales (ventas_es_directora() en la base); lo que es de admin sigue siendo solo de admin.
+const OFICINA_EMAILS = ['claudiaadorno@claudiaadorno.com', 'administracion@claudiaadorno.com'];
 const ADMIN_EMAIL = 'juanpsimonelli@gmail.com';
 // Admins del módulo (coincide con ventas_is_admin() en la base).
 // claudiaadorno@ NO va acá: es de Rivera y es la cuenta genérica de Oficina.
@@ -923,7 +937,9 @@ function logoLocal(loc, h) { const u = LOGO_LOCAL[loc]; return u ? `<img class="
 const _LOCALES_FIN = {
 };
 
-let session = null;  // { email, local_id|null, isAdmin }
+let session = null;  // { email, local_id|null, isAdmin, oficina? }  (oficina: cuenta de Oficina, ve los 3 locales)
+/** (12-nov-2026) ¿La sesión ve y carga los 3 locales? Admin y las cuentas de Oficina. Lo de admin sigue con session.isAdmin. */
+const veTodo = () => !!(session && (session.isAdmin || session.oficina));
 
 // (11-nov-2026, JP) Las notificaciones se activan desde el Hub (campanita, interruptor Ventas):
 // Ventas ya no tiene botón ni suscripción propia. El service worker sigue mostrando los push.
@@ -1043,12 +1059,33 @@ function toast(msg, err) {
 function selectLocal(el) {
   document.querySelectorAll('.local-opt').forEach(e => e.classList.remove('selected'));
   el.classList.add('selected');
+  _mostrarCuentaOficina();
+  checkLoginReady();
+}
+// (12-nov-2026) Oficina: cuál de las dos cuentas. La compu recuerda la última que entró.
+let _cuentaOficina = null;
+function _mostrarCuentaOficina() {
+  const box = document.getElementById('ofi-cuenta');
+  if (!box) return;
+  const es = document.querySelector('.local-opt.selected')?.dataset.local === 'oficina';
+  box.style.display = es ? '' : 'none';
+  if (es && !_cuentaOficina) {
+    let g = null; try { g = localStorage.getItem('ventas_cuenta_oficina'); } catch (e) {}
+    const b = OFICINA_EMAILS.includes(g) ? [...box.querySelectorAll('button')].find(x => x.dataset.email === g) : null;
+    if (b) elegirCuentaOficina(b, true);
+  }
+}
+function elegirCuentaOficina(btn, sinFoco) {
+  document.querySelectorAll('#ofi-cuenta button').forEach(x => x.classList.toggle('sel', x === btn));
+  _cuentaOficina = btn.dataset.email;
+  if (!sinFoco) document.getElementById('login-pass').focus();
   checkLoginReady();
 }
 function checkLoginReady() {
   const sel = document.querySelector('.local-opt.selected');
   const pass = document.getElementById('login-pass').value.trim();
-  document.getElementById('login-btn').disabled = !(sel && pass);
+  const faltaCuenta = sel?.dataset.local === 'oficina' && !_cuentaOficina;
+  document.getElementById('login-btn').disabled = !(sel && pass && !faltaCuenta);
 }
 document.getElementById('login-pass').addEventListener('input', checkLoginReady);
 
@@ -1070,6 +1107,7 @@ document.getElementById('login-pass').addEventListener('input', checkLoginReady)
   // Mostrar nombre del local en el título
   const subEl = document.querySelector('.login-card .sub');
   if (subEl) subEl.textContent = LOCALES[URL_LOCAL].nombre + ' · ingresá la contraseña';
+  _mostrarCuentaOficina();
   checkLoginReady();
 })();
 
@@ -1083,14 +1121,18 @@ async function doLogin() {
     document.getElementById('login-error').textContent = 'Esta URL es exclusiva de ' + LOCALES[URL_LOCAL].nombre;
     return;
   }
-  const email = LOCAL_EMAILS[local];
+  const oficina = local === 'oficina';
+  const email = oficina ? _cuentaOficina : LOCAL_EMAILS[local];
   const errEl = document.getElementById('login-error');
   errEl.textContent = '';
+  if (!email) { errEl.textContent = 'Elegí cuál de las dos cuentas de Oficina.'; return; }
   document.getElementById('login-btn').disabled = true;
   try {
     const { error } = await sb.auth.signInWithPassword({ email, password: pass });
     if (error) throw error;
-    session = { email, local_id: local, isAdmin: false };
+    session = oficina ? { email, local_id: null, isAdmin: false, oficina: true }
+                      : { email, local_id: local, isAdmin: false };
+    if (oficina) { try { localStorage.setItem('ventas_cuenta_oficina', email); } catch (e) {} }
     enterApp();
   } catch (e) {
     errEl.textContent = e.message || 'No se pudo entrar';
@@ -1140,6 +1182,8 @@ function enterApp() {
   // Header
   if (session.isAdmin) {
     document.getElementById('hdr-local').textContent = session?.email?.startsWith('clau@') ? 'Admin (Clau)' : 'Admin (JP)';
+  } else if (session.oficina) {
+    document.getElementById('hdr-local').textContent = 'Oficina';
   } else {
     document.getElementById('hdr-local').textContent = (LOCALES[session.local_id]?.nombre || session.local_id);
   }
@@ -1150,7 +1194,7 @@ function enterApp() {
   const selLocal = document.getElementById('sel-local');
   const añoActual = new Date().getFullYear();
   // Admin: serie histórica completa (2014+, para el tab Análisis). Locales: 3 años.
-  const _añoDesde = session.isAdmin ? 2014 : añoActual - 1;
+  const _añoDesde = veTodo() ? 2014 : añoActual - 1;
   const _años = []; for (let a = añoActual + 1; a >= _añoDesde; a--) _años.push(a);
   selAño.innerHTML = _años.map(a => `<option value="${a}"${a===añoActual?' selected':''}>${a}</option>`).join('');
   const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -1164,11 +1208,12 @@ function enterApp() {
   document.getElementById('sel-periodo').innerHTML = _ops.join('');
   _sincronizarPeriodo();
   // Selector de local solo para admin: queda oculto (22-oct, JP: las tarjetas de arriba eligen el local)
-  if (session.isAdmin) {
+  if (veTodo()) {   // (12-nov) también Oficina
     selLocal.innerHTML = '<option value="todos">Todos</option>' +
       Object.entries(LOCALES).map(([id, l]) => `<option value="${id}">${l.nombre}</option>`).join('');
-  } else {
-    // Vendedoras: esconder "+ Cargar venta del día" (solo admin carga manual completo)
+  }
+  if (!session.isAdmin) {
+    // Vendedoras y Oficina: esconder "+ Cargar venta del día" (solo admin carga manual completo)
     const btnDia = document.getElementById('btn-cargar-dia');
     if (btnDia) btnDia.style.display = 'none';
   }
@@ -1209,7 +1254,7 @@ async function _mesSincronizado(localId, año, mes) {
 
 async function chequearMesesListosParaCerrar() {
   try {
-    const localesACheckear = session.isAdmin
+    const localesACheckear = veTodo()
       ? Object.keys(LOCALES)
       : [session.local_id];
 
@@ -1293,7 +1338,7 @@ async function chequearSyncFinDeMes() {
     const ultDia = new Date(añoAnt, mesAnt, 0).getDate();
     const fechaUlt = `${añoAnt}-${String(mesAnt).padStart(2,'0')}-${String(ultDia).padStart(2,'0')}`;
 
-    const localesACheckear = session.isAdmin
+    const localesACheckear = veTodo()
       ? Object.keys(LOCALES)
       : [session.local_id];
 
@@ -1307,7 +1352,7 @@ async function chequearSyncFinDeMes() {
       // Falta sync de fin de mes
       _syncFinMesPendiente = { localId, año: añoAnt, mes: mesAnt, fechaUlt };
       const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-      const txt = session.isAdmin
+      const txt = veTodo()
         ? `Falta el sync de fin de mes para ${meses[mesAnt-1]} ${añoAnt} de ${LOCALES[localId].nombre}`
         : `Tenés que hacer el sync de fin de mes de ${meses[mesAnt-1]} ${añoAnt} antes de que JP cierre el mes`;
       document.getElementById('alerta-sync-finmes-text').textContent = txt;
@@ -1438,7 +1483,7 @@ async function cargar() {
   _sincronizarPeriodo();
   const año = parseInt(document.getElementById('sel-año').value);
   const mes = parseInt(document.getElementById('sel-mes').value);
-  const localSel = session.isAdmin ? document.getElementById('sel-local').value : session.local_id;
+  const localSel = veTodo() ? document.getElementById('sel-local').value : session.local_id;
   asegurarEstiloLocal([localSel]);
   document.body.setAttribute('data-local', localSel || '');   // (21-oct) color del local en la vista por local
   const _sy = document.getElementById('hdr-sync'); if (_sy) _sy.style.display = '';
@@ -1452,7 +1497,7 @@ async function cargar() {
   const hasta = hastaDate.toISOString().split('T')[0];
   try {
     let qv = sb.from('ventas_diarias_view').select('*').gte('fecha', desde).lte('fecha', hasta).order('fecha');
-    if (!session.isAdmin && localSel && localSel !== 'todos') qv = qv.eq('local', localSel);
+    if (!veTodo() && localSel && localSel !== 'todos') qv = qv.eq('local', localSel);
     const vacio = Promise.resolve({ data: [] });
     const [rCerr, rV, resAp, resPe, resTu] = await Promise.all([
       localUnico ? sb.from('meses_cerrados_ventas').select('id, cerrado_por, cerrado_at').eq('local', localUnico).eq('año', año).eq('mes', mes).maybeSingle() : Promise.resolve({ data: null }),
@@ -1467,11 +1512,11 @@ async function cargar() {
     const data = localUnico ? todas.filter(v => v.local === localUnico) : todas;
     const aplicadas = resAp.data || [], pendientes = resPe.data || [], turnos = resTu.data || [];
 
-    if (session.isAdmin && localSel === 'todos') {
+    if (veTodo() && localSel === 'todos') {
       renderAdminConsolidado(data, año, mes);
     } else {
       let tarjetas = '';
-      if (session.isAdmin) {   // tarjetas de los 3 locales también adentro de un local
+      if (veTodo()) {   // tarjetas de los 3 locales también adentro de un local
         const tot = { alcorta: 0, unicenter: 0, oficina: 0 };
         todas.forEach(v => { if (v.local in tot) tot[v.local] += +v.total || 0; });
         tarjetas = kpiRowHtml(tot, localSel);
@@ -1512,13 +1557,15 @@ const fmtPctDelta = (act, prev) => {
   return `<span style="color:${col};font-weight:600;">${flecha} ${Math.abs(d).toFixed(1)}%</span>`;
 };
 
+// (12-nov-2026) Adentro del Reporte se lee con el usuario personal que lo abrió (_repDb de reporte.js).
+const _dbAnalisis = () => (typeof _repDb === 'function' ? _repDb() : sb);
 async function renderAnalisis(año, mes, localSel, destino) {
   const cont = destino || document.getElementById('contenido');
   cont.innerHTML = '<div class="empty"><div class="spinner"></div></div>';
 
   const [rMes, rIpc] = await Promise.all([
-    sb.from('ventas_analisis_mensual').select('*'),
-    sb.from('rrhh_ipc_argentina').select('mes, variacion_pct').order('mes'),
+    _dbAnalisis().from('ventas_analisis_mensual').select('*'),
+    _dbAnalisis().from('rrhh_ipc_argentina').select('mes, variacion_pct').order('mes'),
   ]);
   const filas = rMes.data || [];
   const ipc = rIpc.data || [];
@@ -1794,7 +1841,7 @@ async function renderAnalisis(año, mes, localSel, destino) {
 
   // ── DÍA DE LA SEMANA (solo años con detalle diario) ──
   try {
-    let qd = sb.from('ventas_analisis_dia_semana').select('*').eq('anio', año);
+    let qd = _dbAnalisis().from('ventas_analisis_dia_semana').select('*').eq('anio', año);
     if (localSel !== 'todos') qd = qd.eq('local', localSel);
     const { data: dowRows } = await qd;
     if (dowRows && dowRows.length) {
@@ -2317,7 +2364,7 @@ function renderAdminConsolidado(ventas, año, mes) {
 // ─── Modal de carga/edición de un día ────────────────────────────────
 function abrirCarga() {
   const fecha = hoyISO();
-  const localId = session.isAdmin ? document.getElementById('sel-local').value : session.local_id;
+  const localId = veTodo() ? document.getElementById('sel-local').value : session.local_id;
   if (session.isAdmin && (!localId || localId === 'todos')) {
     toast('Como admin, primero seleccioná un local específico para cargar', true);
     return;
@@ -2327,7 +2374,7 @@ function abrirCarga() {
 
 function abrirEditar(fecha, localId, v) {
   if (typeof v === 'string') { try { v = JSON.parse(v); } catch { v = null; } }
-  if (session.isAdmin && (!localId || localId === 'todos')) {
+  if (veTodo() && (!localId || localId === 'todos')) {
     toast('Elegí un local específico antes', true);
     return;
   }
@@ -2600,8 +2647,8 @@ async function guardarVenta(fecha, localId, vId) {
 // modo: '3d' (últimos 3 días, rápido) o 'mes' (mes completo, admin)
 async function abrirCargaDragonfish(modo) {
   modo = modo || '3d';
-  const localId = session.isAdmin ? document.getElementById('sel-local').value : session.local_id;
-  if (session.isAdmin && (!localId || localId === 'todos')) {
+  const localId = veTodo() ? document.getElementById('sel-local').value : session.local_id;
+  if (veTodo() && (!localId || localId === 'todos')) {
     toast('Elegí un local específico antes', true);
     return;
   }
@@ -2725,7 +2772,7 @@ function _actualizarBotonesCierre(cerradoRow, localUnico) {
 async function cerrarMesActual() {
   const año = parseInt(document.getElementById('sel-año').value);
   const mes = parseInt(document.getElementById('sel-mes').value);
-  const localId = session.isAdmin ? document.getElementById('sel-local').value : session.local_id;
+  const localId = veTodo() ? document.getElementById('sel-local').value : session.local_id;
   if (!localId || localId === 'todos') { toast('Elegí un local específico', true); return; }
   const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const label = `${meses[mes-1]} ${año}`;
@@ -2755,7 +2802,7 @@ async function esperarJob(jobId, timeoutSec) {
 async function reabrirMesActual() {
   const año = parseInt(document.getElementById('sel-año').value);
   const mes = parseInt(document.getElementById('sel-mes').value);
-  const localId = session.isAdmin ? document.getElementById('sel-local').value : session.local_id;
+  const localId = veTodo() ? document.getElementById('sel-local').value : session.local_id;
   if (!localId || localId === 'todos') return;
   const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   if (!confirm(`¿Reabrir ${meses[mes-1]} ${año} de ${LOCALES[localId].nombre}?`)) return;
@@ -2780,8 +2827,9 @@ async function reabrirMesActual() {
     // (7-ago) ADMIN_EMAILS: JP y Clau — antes solo reconocía a JP y la sesión
     // de Clau quedaba rota (sin local, header "null", grilla mezclada).
     const isAdmin = ADMIN_EMAILS.includes(email);
+    const oficina = !isAdmin && OFICINA_EMAILS.includes(email);   // (12-nov) las dos cuentas de Oficina
     let local_id = null;
-    if (!isAdmin) {
+    if (!isAdmin && !oficina) {
       for (const [id, em] of Object.entries(LOCAL_EMAILS)) {
         if (em.toLowerCase() === email) { local_id = id; break; }
       }
@@ -2790,10 +2838,10 @@ async function reabrirMesActual() {
     }
     // Si la URL fija un local y la sesión persistida es de otro (o de admin),
     // cerrar sesión y forzar login del local correcto.
-    if (URL_LOCAL && (isAdmin || local_id !== URL_LOCAL)) {
+    if (URL_LOCAL && (isAdmin || (oficina ? URL_LOCAL !== 'oficina' : local_id !== URL_LOCAL))) {
       return;  /* no signOut: la sesión es compartida entre módulos del navegador (SSO); cerrarla acá deslogueaba los demás */
     }
-    session = { email, local_id, isAdmin };
+    session = { email, local_id, isAdmin, oficina };
     enterApp();
   }
 })();
@@ -2809,7 +2857,7 @@ async function reabrirMesActual() {
 // apagada), NO se puede cerrar: los números estarían congelados a mitad
 // del día (pasó el 3-ago en Unicenter y el 5-ago en Alcorta). Solo el
 // admin puede forzar el cierre, con confirmación explícita.
-async function _confirmarCierreSinSync(err) {
+async function _confirmarCierreSinSync(err, localId) {
   const detalle = (err && err.message) ? `\n\nDetalle técnico: ${err.message}` : '';
   if (session?.isAdmin) {
     return confirm('⚠ NO se pudo sincronizar con Dragonfish.\n\n'
@@ -2825,8 +2873,8 @@ async function _confirmarCierreSinSync(err) {
     sb.functions.invoke('enviar-push', { body: {
       empleado_id: 3, app: 'ventas',
       title: '🛑 Cierre bloqueado sin sync',
-      body: `${(session?.local_id || '?').toUpperCase()}: se intentó cerrar y el pre-sync de Dragonfish no respondió. Revisar el daemon del local.`,
-      tag: 'cierre-sin-sync-' + (session?.local_id || 'x'),
+      body: `${(localId || session?.local_id || '?').toUpperCase()}: se intentó cerrar y el pre-sync de Dragonfish no respondió. Revisar el daemon del local.`,
+      tag: 'cierre-sin-sync-' + (localId || session?.local_id || 'x'),
     }});
   } catch (_) {}
   return false;
@@ -2841,7 +2889,7 @@ async function cerrarTurnoAhora(fecha, localId) {
 
   const cerradoPor = session?.isAdmin
     ? `admin:${session?.email || '?'}`
-    : `local:${localId}`;
+    : (session?.oficina ? `oficina:${session.email}` : `local:${localId}`);
 
   // PRE-SYNC 1/2: forzar sync de Dragonfish para el DÍA actual antes de cerrar.
   // Esto trae las últimas ventas que estaban en proceso/sin sincronizar.
@@ -2863,7 +2911,7 @@ async function cerrarTurnoAhora(fecha, localId) {
     if (!okSync) throw new Error('el sync del local no respondió (daemon caído o compu apagada)');
   } catch (e) {
     console.warn('pre-sync Dragonfish falló:', e);
-    if (!(await _confirmarCierreSinSync(e))) return;
+    if (!(await _confirmarCierreSinSync(e, localId))) return;
   }
 
   // (jul 2026) El cruce MP se sacó del cierre de turno por el lag de
@@ -3104,7 +3152,7 @@ async function cerrarDiaAhora(fecha, localId) {
 
   const cerradoPor = session?.isAdmin
     ? `admin:${session?.email || '?'}`
-    : `local:${localId}`;
+    : (session?.oficina ? `oficina:${session.email}` : `local:${localId}`);
 
   // PRE-SYNC Dragonfish del día actual
   toast('🐉 Sincronizando ventas del día...');
@@ -3123,7 +3171,7 @@ async function cerrarDiaAhora(fecha, localId) {
     if (!okSync) throw new Error('el sync del local no respondió (daemon caído o compu apagada)');
   } catch (e) {
     console.warn('pre-sync Dragonfish falló:', e);
-    if (!(await _confirmarCierreSinSync(e))) return;
+    if (!(await _confirmarCierreSinSync(e, localId))) return;
   }
 
   try {
@@ -3695,7 +3743,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=37"></script>
-<script src="reporte.js?v=19"></script>
+<script src="manual.js?v=38"></script>
+<script src="reporte.js?v=20"></script>
 </body>
 </html>

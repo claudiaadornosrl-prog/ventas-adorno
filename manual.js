@@ -38,6 +38,7 @@ function _manualSecciones() {
         'Con eso tildado, entrás a todos los módulos de ese equipo sin volver a escribir la clave.',
         'Código del celular (doble factor): si sos admin o directora y lo activaste en el Hub (panel de sesión, "Código del celular al entrar"), en cada computadora te pide, después de la clave, el código de 6 números de la app de autenticación del celular (Google o Microsoft Authenticator), y después una vez cada 30 días. En el celular registrado con "Entrar con la cara en este equipo" no hace falta ni clave ni código: te pide la cara (o la huella) al abrir. Si cambiás o perdés el celular, avisale a JP para darlo de baja.',
         'En las computadoras de los locales, que usan varias personas, NO se tilda: cada módulo sigue pidiendo usuario y contraseña por separado.',
+        'Oficina tiene dos cuentas (12-nov): en la pantalla de entrada de Ventas, al tocar Oficina aparecen dos pastillas, Analía (claudiaadorno@) y Marisa (administracion@). Tocás la de tu compu y ponés su contraseña; la compu recuerda la última que entró.',
         'La sesión se cierra desde el Hub (👤 → Salir) y se cierra en todos los módulos. La computadora sigue marcada como de confianza hasta que lo apagues desde el Hub.',
       ],
     },
@@ -47,7 +48,7 @@ function _manualSecciones() {
       pasos: [
         'Cada fila es un día; las columnas son los medios de pago: Efectivo, Tarjeta, QR (Mercado Pago), Vales, y para Oficina también Transferencia y CC.',
         'Los importes se ven con el signo $ (11-nov): en la planilla, en los totales, en los turnos y en los avisos. La cantidad de tickets va sin signo, porque no es plata.',
-        'Cada cuenta ve y carga solo lo suyo (11-nov): la cuenta de Alcorta solo Alcorta, la de Unicenter solo Unicenter y las de Oficina solo Oficina. Lo controla la base, no solo la pantalla. El consolidado de los locales es solo para administración.',
+        'Cada cuenta ve y carga lo suyo: la cuenta de Alcorta solo Alcorta y la de Unicenter solo Unicenter. Las dos cuentas de Oficina (claudiaadorno@ y administracion@, desde el 12-nov) ven y cargan los 3 locales: arriba eligen el local con las tarjetas o miran el consolidado. Lo de administración (cerrar o reabrir el mes, aprobar pedidos, reabrir días y corregir números directo) sigue siendo solo de admin. Lo controla la base, no solo la pantalla.',
         'Si el mes elegido no tiene días cargados, arriba de la grilla aparece un aviso con el motivo: mes futuro, mes en curso sin ventas todavía, mes viejo del que solo se conoce el total mensual, o mes en que el local no operaba.',
         'Los números los carga solo el sistema desde Dragonfish — no hace falta tipear nada. Si un día quedó incompleto, tocá "Resincronizar mes" en el menú ⋮ (solo actualiza días NO cerrados).',
         'La columna Online en los locales es el efectivo de la segunda base — si hay que corregir a mano, SIEMPRE se corrige en esa columna.',
@@ -71,6 +72,7 @@ function _manualSecciones() {
         'Quién cierra (11-nov): al tocar el candado rojo se abre la cámara. Mirala de frente adentro del óvalo: en uno o dos segundos aparece "Te reconocí: tu nombre" y tocás "Cerrar el día". Si no sos vos, "No soy yo" vuelve a mirar. La cara es la misma que se registra en el POS (Ajustes → "Quién emite"); acá no se registra y no se guarda ninguna foto.',
         'Si la cámara no anda o no te reconoce en 10 segundos, aparece "Elegir a mano quién cierra": tocás tu nombre en la lista de la gente del local y después "Cerrar el día". Ese cierre queda marcado como elegido a mano (el tilde se ve en color ámbar).',
         'En la planilla, el tilde del día cerrado muestra el nombre de quien cerró (pasá el mouse para ver si fue con la cámara o a mano, y la hora), y el aviso de cierre que le llega al admin también lo dice. Desde la cuenta de admin se cierra sin cámara.',
+        'Desde Oficina (12-nov) también se puede cerrar el día de cualquier local: la cámara reconoce a quien cierra y, si se elige a mano, la lista trae a la gente de ese local y a la de la oficina.',
         'Al cerrar el día, el sistema cruza automáticamente los pagos de Mercado Pago del día ANTERIOR (ya definitivos).',
         'Si te quedó un día pasado sin cerrar, también lo podés cerrar — el candado rojo aparece igual. El ojo abre el detalle de los turnos; el candado abierto (admin) reabre el día; la llave violeta le pide la reapertura al admin.',
       ],
@@ -108,11 +110,12 @@ function _manualSecciones() {
 
   if (!esAdmin) {
     base.push({
-      icon: 'chart', titulo: 'Reporte del local (encargadas)',
-      desc: 'El reporte de ventas de tu local, solo para la encargada.',
+      icon: 'chart', titulo: 'Reporte (con tu usuario personal)',
+      desc: 'El reporte de ventas. Se abre con el usuario personal de quien tiene permiso: la cuenta del local o de la oficina no alcanza.',
       pasos: [
-        'Menú ⋮ → "Reporte del local (encargada)". Pide TU mail y TU clave personal (los mismos de Colaboradores): la cuenta del local no alcanza, así las vendedoras no lo ven.',
-        'Vas a ver solo tu local: KPIs contra el período anterior y el año pasado, día más fuerte y más flojo, categorías, top artículos, proveedores y clientes, medios de pago y mapa de calor por hora.',
+        'Arriba a la derecha, el ícono de barras (Reporte). Pide TU mail y TU clave personal (los mismos de Colaboradores) y, si tu cuenta tiene el código del celular, también el código. Con la cuenta del local o de la oficina no se abre: así no lo ve cualquiera que use la compu.',
+        'Quién puede (12-nov): administración, las encargadas (Andrea y Soraya) y quien tenga el permiso que da JP (hoy Marisa y Analía, con sus usuarios personales). La encargada ve solo su local; administración y quien tiene el permiso ven los 3 locales, el consolidado, "Últimos 5 años" y "Evolución del año".',
+        'La encargada ve su local: KPIs contra el período anterior y el año pasado, día más fuerte y más flojo, categorías, top artículos, proveedores y clientes, medios de pago y mapa de calor por hora.',
         'Arriba elegís el período: Semanal, Mensual, Trimestral o Anual. El botón "$ nominal" pasa los importes a pesos de hoy con el IPC, para comparar períodos separados en el tiempo.',
         'Al cerrar el reporte (✕ o Escape) se cierra tu sesión: no queda abierta en la computadora del local. Si lo dejás abierto 15 minutos sin tocar, se cierra solo. No te cierra la sesión de Colaboradores en el celular.',
       ],
@@ -138,7 +141,7 @@ function _manualSecciones() {
         'Las tarjetas Venta por origen y Venta por material salen de dos campos del alta de Dragonfish que el reporte no usaba: Familia (que la empresa usa como país de origen) y Material. Se muestran tal como están cargados: si ves un rubro o un país mal escrito en la lista de orígenes, eso es un dato para corregir en el alta.',
         'El artículo PRUEBA (el comodín de $1 que se usa para cobrar fletes y extras) queda AFUERA de todo el reporte: no es venta de productos y rompía unidades, categorías y tops. Si en el período hubo cargas con PRUEBA, un aviso dice cuánto se excluyó. La planilla de ventas diarias sí lo incluye, porque es plata cobrada.',
         'Si aparece la tarjeta Artículos sin categoría, son artículos que no tienen Grupo cargado en Dragonfish y por eso no caen en ningún rubro del cuadro de Categorías. Cargándoselo allá desaparecen del reporte siguiente solos.',
-        'Las encargadas (Andrea y Soraya) también lo ven, solo de su local y sin "Últimos 5 años": desde el menú ⋮ del local, entrando con su usuario personal. La base las filtra: con la cuenta del local (alcorta@/unicenter@) no se ve nada.',
+        'Las encargadas (Andrea y Soraya) también lo ven, solo de su local y sin "Últimos 5 años": desde el ícono de barras del local, entrando con su usuario personal. La base las filtra: con la cuenta del local (alcorta@/unicenter@) no se ve nada. (12-nov) Desde las cuentas de Oficina también se abre con usuario personal (se valida con hub_puede_ver): administración y quien tenga el permiso "reporte_ventas" en el Hub (Marisa y Analía) ven todo; la cuenta genérica sola no ve nada.',
         '"Últimos 5 años" es otra vista: venta por año, los años superpuestos mes a mes para ver la estacionalidad, la comparación por local, y qué categorías ganaron o perdieron participación. Arranca en 2023 porque el Dragonfish no conserva completa la historia anterior de los locales, y el reporte lo dice en vez de dibujar una tendencia que no es.',
         '"Cerrar mes" congela el mes completo; "Reabrir mes" lo habilita de nuevo.',
         'Los primeros días de cada mes aparecen dos avisos arriba: "Falta el sync de fin de mes" (con el botón Sincronizar ahora, que le pide al sistema del local que vuelva a traer el mes entero) y "listo para cerrar". Un mes cuenta como sincronizado si tiene cargado su último día o si se sincronizó entero después de que terminó: así Oficina, que no abre fines de semana, no queda trabada cuando el mes termina en sábado o domingo. Si el sistema del local está apagado, el pedido queda en espera hasta que se prenda.',
