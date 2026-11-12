@@ -94,7 +94,8 @@ function _manualSecciones() {
       pasos: [
         'Si un importe está mal en un día cerrado, tocá la celda y "Enviar pedido" — le llega la solicitud de corrección al admin.',
         'Si necesitás reabrir un día entero, usá "Reaperturas" del menú ⋮.',
-        'El admin aprueba o rechaza; te enterás por notificación.',
+        'Apenas lo pedís, a JP y a Clau les llega un aviso al celular con el local, el día, el importe y quién lo pidió (12-nov; antes ese aviso no salía). Lo mismo cuando se completa el sync de fin de mes de un mes que todavía no se cerró.',
+        'El admin aprueba o rechaza. Cómo quedó lo ves en la planilla: la celda corregida queda amarilla (pasando el mouse se ve el antes y el después) y en ⋮ → Reaperturas ves el estado de tus pedidos.',
       ],
     },
     {

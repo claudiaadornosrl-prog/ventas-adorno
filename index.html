@@ -977,22 +977,9 @@ function abtn(onclick, title, icon, extra = '') {
   return `<button class="abtn ${extra}" onclick="event.stopPropagation();${onclick}" title="${title}" aria-label="${title}">${ico(icon)}</button>`;
 }
 
-// Helper: enviar push al admin avisando una solicitud de corrección
-async function notificarAdminCorreccion(localId, fecha, campo, valorActual, propuesto, motivo) {
-  try {
-    const labels = { efectivo:'efectivo', tarjeta:'tarjeta', qr:'QR', vales:'vales',
-      online:'online', fc_oficina:'Fc Oficina', cant_transacciones:'cant. transacciones' };
-    await sb.functions.invoke('ventas-enviar-push', {
-      body: {
-        para_admins: true,
-        title: '📩 Nueva solicitud de corrección',
-        body: `${LOCALES[localId]?.nombre || localId} · ${fecha} · ${labels[campo] || campo}: ${valorActual} → ${propuesto}`,
-        url: location.origin + location.pathname,
-        tag: 'ventas-correccion',
-      }
-    });
-  } catch (e) { console.warn('push:', e); }
-}
+// (12-nov-2026) Los avisos al admin de pedido de corrección, pedido de reapertura y sync de fin de mes los manda
+// la BASE (triggers trg_vc_aviso_admin, trg_vr_aviso_admin, trg_dj_aviso_finmes → enviar-push a JP y Clau).
+// Antes se mandaban desde acá a una Edge Function que no existe: fallaban en silencio.
 
 // ═══════════════════════════════════════════════════════════════════════
 // URL FILTER — cada local tiene su shortcut: ?local=alcorta|unicenter|oficina
@@ -1386,10 +1373,7 @@ async function hacerSyncFinDeMes() {
     const ok = await esperarJob(job.id, 240);  // hasta 4 minutos
     if (ok) {
       toast(`✓ ${label} sincronizado completo`);
-      // Avisar al admin con push (fire and forget) si la vendedora completó el sync
-      if (!session.isAdmin) {
-        notificarAdminCierreListo(localId, año, mes);
-      }
+      // (12-nov) el aviso al admin lo manda la base cuando el trabajo queda completado (trg_dj_aviso_finmes)
       cargar();
       chequearSyncFinDeMes();
       chequearMesesListosParaCerrar();
@@ -1397,20 +1381,6 @@ async function hacerSyncFinDeMes() {
   } catch (e) { toast('Error: ' + e.message, true); }
 }
 
-async function notificarAdminCierreListo(localId, año, mes) {
-  const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  try {
-    await sb.functions.invoke('ventas-enviar-push', {
-      body: {
-        para_admins: true,
-        title: '✅ Sync de fin de mes completo',
-        body: `${meses[mes-1]} ${año} de ${LOCALES[localId]?.nombre} está sincronizado. Listo para cerrar.`,
-        url: location.origin + location.pathname,
-        tag: 'ventas-finmes-listo',
-      }
-    });
-  } catch (e) { console.warn('push fin de mes:', e); }
-}
 
 function cerrarMesDesdeAlerta() {
   if (!_mesListoCerrar) return;
@@ -2509,8 +2479,7 @@ async function enviarSolicitudCorreccion(fecha, localId, campo, valorActual) {
       motivo, solicitado_por: session.email,
     });
     if (error) throw error;
-    // Avisar al admin con push (no esperamos, fire-and-forget)
-    notificarAdminCorreccion(localId, fecha, campo, valorActual, propuesto, motivo);
+    // (12-nov) el aviso al admin lo manda la base al insertar el pedido (trg_vc_aviso_admin)
     cerrarModal();
     toast('✓ Solicitud enviada. JP la va a revisar.');
     cargar();
@@ -3743,7 +3712,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=38"></script>
+<script src="manual.js?v=39"></script>
 <script src="reporte.js?v=20"></script>
 </body>
 </html>
