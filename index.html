@@ -813,7 +813,6 @@ th.th-der + th.th-der { border-left: none; }
     <div class="kebab-wrap">
       <button class="hbtn" id="kebab-btn" onclick="toggleKebab(event)" title="Más opciones" aria-label="Más opciones"><span class="kebab-dot" id="kebab-dot"></span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
       <div class="kebab-menu" id="kebab-menu">
-        <button id="btn-notifs" onclick="cerrarKebab();toggleNotificaciones()" title="Activar notificaciones"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/><line x1="2" y1="2" x2="22" y2="22"/></svg><span>Notificaciones</span></button>
         <button id="btn-dragonfish-mes" onclick="cerrarKebab();abrirCargaDragonfish('mes')" title="Re-sincroniza desde Dragonfish los días NO cerrados del mes seleccionado. Los días cerrados no se tocan."><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"/></svg><span>Resincronizar mes</span></button>
         <button id="btn-solicitudes" onclick="cerrarKebab();abrirGestionSolicitudes()" style="display:none;" title="Solicitudes de corrección pendientes de las vendedoras"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.8 1.1z"/></svg><span>Solicitudes</span></button>
         <button id="btn-reaperturas" onclick="cerrarKebab();abrirBandejaReaperturas()" title="Solicitudes de reapertura de día"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M10.85 12.15 19 4"/><path d="m18 5 2 2"/><path d="m15 8 2 2"/></svg><span>Reaperturas</span></button>
@@ -926,94 +925,8 @@ const _LOCALES_FIN = {
 
 let session = null;  // { email, local_id|null, isAdmin }
 
-// ════════════════════════════════════════════════════════════
-// Web Push Notifications (misma VAPID public key que RRHH)
-// ════════════════════════════════════════════════════════════
-const VAPID_PUBLIC_KEY = 'BIYqIamefFB0ZmTt31sm4ubbKcq0hGHRoG4StSLO26HPpjYL58n6uvHaQmTYTqtW1Tr4qp_bEs6TrvMxlROmqp8';
-
-  // (22-oct-2026, migración a São Paulo) si la suscripción del navegador es de la clave VAPID vieja, se descarta para re-suscribir con la nueva
-  async function _getSubFresca(reg) {
-    const sub = await reg.pushManager.getSubscription();
-    if (!sub) return null;
-    try {
-      const k = sub.options && sub.options.applicationServerKey;
-      if (k) {
-        const s = btoa(String.fromCharCode(...new Uint8Array(k))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-        if (s !== VAPID_PUBLIC_KEY) { await sub.unsubscribe().catch(() => {}); return null; }
-      }
-    } catch (_) {}
-    return sub;
-  }
-
-const pushManager = (() => {
-  const soportado = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
-  function urlB64ToUint8(b64) {
-    const pad = '='.repeat((4 - (b64.length % 4)) % 4);
-    const s = (b64 + pad).replace(/-/g, '+').replace(/_/g, '/');
-    const raw = atob(s);
-    const out = new Uint8Array(raw.length);
-    for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
-    return out;
-  }
-  async function estado() {
-    if (!soportado()) return 'no-soportado';
-    if (Notification.permission === 'denied') return 'bloqueado';
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await _getSubFresca(reg);
-    if (sub) return 'activo';
-    return 'inactivo';
-  }
-  async function activar() {
-    if (!soportado()) throw new Error('Tu navegador no soporta notificaciones.');
-    const perm = await Notification.requestPermission();
-    if (perm !== 'granted') throw new Error('Permiso denegado.');
-    const reg = await navigator.serviceWorker.ready;
-    let sub = await _getSubFresca(reg);
-    if (!sub) {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlB64ToUint8(VAPID_PUBLIC_KEY),
-      });
-    }
-    const raw = sub.toJSON();
-    // (4-ago) Guardamos en la tabla UNIFICADA rrhh_push_subscriptions con
-    // app='ventas' — es la única que lee la Edge Function enviar-push.
-    // La tabla vieja ventas_push_subscriptions queda deprecada.
-    const cu = await _identidadPush();
-    const payload = {
-      endpoint: raw.endpoint,
-      p256dh: raw.keys.p256dh,
-      auth: raw.keys.auth,
-      app: 'ventas',
-      activa: true,
-      user_agent: (navigator.userAgent || '').slice(0, 200),
-      last_seen_at: new Date().toISOString(),
-    };
-    if (cu.empleado_id) payload.empleado_id = cu.empleado_id;
-    else if (cu.local_gerencia) payload.local_generico = cu.local_gerencia;
-    else throw new Error('No pude identificar tu usuario para las notificaciones.');
-    const { error } = await sb.from('rrhh_push_subscriptions').upsert(payload, { onConflict: 'endpoint,app' });
-    if (error) throw error;
-    return 'activo';
-  }
-  async function _identidadPush() {
-    try {
-      const { data } = await sb.rpc('rrhh_current_user');
-      const u = Array.isArray(data) ? data[0] : data;
-      return { empleado_id: u?.empleado_id || null, local_gerencia: u?.local_gerencia || null };
-    } catch (_) { return { empleado_id: null, local_gerencia: session?.local_id || null }; }
-  }
-  async function desactivar() {
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await _getSubFresca(reg);
-    if (sub) {
-      try { await sb.from('rrhh_push_subscriptions').delete().eq('endpoint', sub.endpoint); } catch(_) {}
-      await sub.unsubscribe();
-    }
-    return 'inactivo';
-  }
-  return { soportado, estado, activar, desactivar };
-})();
+// (11-nov-2026, JP) Las notificaciones se activan desde el Hub (campanita, interruptor Ventas):
+// Ventas ya no tiene botón ni suscripción propia. El service worker sigue mostrando los push.
 
 function toggleKebab(ev) {
   ev.stopPropagation();
@@ -1041,40 +954,11 @@ const ICO = {
   search:  '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
   check:   '<polyline points="20 6 9 17 4 12"/>',
   inbox:   '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.8 1.1z"/>',
-  bell:    '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
-  bellOff: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/><line x1="2" y1="2" x2="22" y2="22"/>',
 };
 function ico(n) { return `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${ICO[n] || ''}</svg>`; }
 /** Botón de acción sin recuadro: solo ícono + title. extra = 'principal' | 'violeta' | 'alerta' | 'peligro' */
 function abtn(onclick, title, icon, extra = '') {
   return `<button class="abtn ${extra}" onclick="event.stopPropagation();${onclick}" title="${title}" aria-label="${title}">${ico(icon)}</button>`;
-}
-
-async function toggleNotificaciones() {
-  const btn = document.getElementById('btn-notifs');
-  try {
-    const est = await pushManager.estado();
-    if (est === 'activo') {
-      if (!confirm('¿Desactivar notificaciones push?')) return;
-      await pushManager.desactivar();
-      toast('🔕 Notificaciones desactivadas');
-    } else if (est === 'no-soportado') {
-      alert('Tu navegador no soporta notificaciones push.');
-    } else if (est === 'bloqueado') {
-      alert('Las notificaciones están bloqueadas. Permitilas desde la configuración del browser.');
-    } else {
-      await pushManager.activar();
-      toast('🔔 Notificaciones activadas');
-    }
-    actualizarBtnNotifs();
-  } catch (e) { toast('Error: ' + e.message, true); }
-}
-async function actualizarBtnNotifs() {
-  const btn = document.getElementById('btn-notifs');
-  if (!btn) return;
-  const est = await pushManager.estado();
-  btn.innerHTML = est === 'activo' ? ico('bell') + '<span>Notificaciones ON</span>' : ico('bellOff') + '<span>Notificaciones</span>';
-  btn.title = est === 'activo' ? 'Notificaciones activadas (click para desactivar)' : 'Activar notificaciones';
 }
 
 // Helper: enviar push al admin avisando una solicitud de corrección
@@ -1112,7 +996,10 @@ const URL_LOCAL = (() => {
   return null;
 })();
 
-const fmt$ = n => (n || 0).toLocaleString('es-AR', { maximumFractionDigits: 0 });
+// (11-nov-2026, JP) los importes llevan el signo $ (espacio que no corta); las cantidades
+// (tickets, transacciones) van con fmtN, sin signo.
+const fmtN = n => (Number(n) || 0).toLocaleString('es-AR', { maximumFractionDigits: 0 });
+const fmt$ = n => { const v = Math.round(Number(n) || 0); return (v < 0 ? '-$\u00a0' : '$\u00a0') + fmtN(Math.abs(v)); };
 // (2-sep, pedido JP) importes con separador de miles TAMBIÉN al cargar
 const nmParse = v => {
   v = String(v ?? '').trim().replace(/\$|\s/g, '');
@@ -1291,8 +1178,6 @@ function enterApp() {
   chequearMesesListosParaCerrar();
   // Chequear si hay sync de fin de mes pendiente
   chequearSyncFinDeMes();
-  // Actualizar estado del botón de notificaciones
-  actualizarBtnNotifs();
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1534,7 +1419,7 @@ async function _explicarMesVacio(año, mes, localUnico) {
     if (hist.length) {
       tono = '#fffbeb'; borde = '#f59e0b'; color = '#78350f';
       titulo = `${nombreMes}: se conoce el total del mes, pero no el día a día`;
-      const partes = hist.map(h => `${(NOMBRE_LOCAL?.[h.local] || h.local)}: $ ${fmt$(+h.total)}${h.transacciones ? ` (${fmt$(+h.transacciones)} tickets)` : ''}`);
+      const partes = hist.map(h => `${(NOMBRE_LOCAL?.[h.local] || h.local)}: ${fmt$(+h.total)}${h.transacciones ? ` (${fmtN(+h.transacciones)} tickets)` : ''}`);
       detalle = `${partes.join(' · ')}. Viene de la planilla histórica, que para este mes no cerraba contra sus días y por eso no se importaron. El Reporte lo cuenta igual.`;
     } else {
       titulo = `No hay registro de ventas de ${quien} en ${nombreMes}`;
@@ -2158,14 +2043,15 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
       let style = '';
       let title = '';
       let badge = '';
+      const fmtC = campo === 'cant_transacciones' ? fmtN : fmt$;
       if (ap) {
         style = 'background:#fef3c7;';   // amarillo claro
-        title = `Corregido manualmente: ${fmt$(ap.valor_anterior)} → ${fmt$(ap.valor_propuesto)}\nMotivo: ${ap.motivo}\nPor: ${ap.solicitado_por||'?'} · Aprobó: ${ap.resuelto_por||'?'}`;
+        title = `Corregido manualmente: ${fmtC(ap.valor_anterior)} → ${fmtC(ap.valor_propuesto)}\nMotivo: ${ap.motivo}\nPor: ${ap.solicitado_por||'?'} · Aprobó: ${ap.resuelto_por||'?'}`;
       }
       if (pe) {
         style += 'border:2px solid #f59e0b;';
         badge = ' ✎';
-        title = (title?title+'\n\n':'') + `Solicitud pendiente: ${fmt$(pe.valor_anterior)} → ${fmt$(pe.valor_propuesto)}\nMotivo: ${pe.motivo}\nPor: ${pe.solicitado_por}`;
+        title = (title?title+'\n\n':'') + `Solicitud pendiente: ${fmtC(pe.valor_anterior)} → ${fmtC(pe.valor_propuesto)}\nMotivo: ${pe.motivo}\nPor: ${pe.solicitado_por}`;
       }
       // Determinar acción al click según rol y campo
       let onclick;
@@ -2282,8 +2168,8 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
 
   const _kt = document.getElementById('hdr-kpi-total');
   const _kp = document.getElementById('hdr-kpi-prom');
-  if (_kt) { _kt.style.display = ''; _kt.innerHTML = `Total <b>$${fmt$(totTotal)}</b>`; _kt.title = `${diasConVenta} días con venta · ${totCant} transacciones · ticket promedio $${fmt$(ticketProm)}`; }
-  if (_kp) { _kp.style.display = ''; _kp.innerHTML = `Prom/día <b>$${fmt$(promDiario)}</b>`; }
+  if (_kt) { _kt.style.display = ''; _kt.innerHTML = `Total <b>${fmt$(totTotal)}</b>`; _kt.title = `${diasConVenta} días con venta · ${totCant} transacciones · ticket promedio ${fmt$(ticketProm)}`; }
+  if (_kp) { _kp.style.display = ''; _kp.innerHTML = `Prom/día <b>${fmt$(promDiario)}</b>`; }
 
   cont.innerHTML = `
     <div class="table-wrap">
@@ -2541,7 +2427,7 @@ function abrirSolicitudCorreccion(fecha, localId, campo, valorActual) {
         <p style="margin:0 0 14px;font-size:12px;color:var(--muted);">${LOCALES[localId]?.nombre} · ${fmtFecha(fecha)} · ${CAMPO_LABEL[campo]||campo}</p>
         <div style="background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:13px;">
           <div style="color:var(--muted);font-size:11px;">Valor actual del sistema:</div>
-          <div style="font-weight:700;font-size:16px;">${campo==='cant_transacciones' ? valorActual : '$ '+fmt$(valorActual)}</div>
+          <div style="font-weight:700;font-size:16px;">${campo==='cant_transacciones' ? valorActual : fmt$(valorActual)}</div>
         </div>
         <label style="font-size:12px;font-weight:600;color:var(--muted);">Valor correcto que propones</label>
         <input id="f-correcto" type="text" inputmode="decimal" placeholder="${nmShow(valorActual)||'0'}" onfocus="wireImporte(this)" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;margin:6px 0 12px;">
@@ -2618,8 +2504,8 @@ async function abrirGestionSolicitudes() {
         <span style="font-size:11px;color:var(--muted);">${new Date(s.solicitado_at).toLocaleString('es-AR')}</span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px;margin-bottom:8px;">
-        <div><span style="color:var(--muted);">Actual:</span> <strong>${s.campo==='cant_transacciones'?s.valor_anterior:'$ '+fmt$(s.valor_anterior)}</strong></div>
-        <div><span style="color:var(--muted);">Propone:</span> <strong style="color:var(--primary);">${s.campo==='cant_transacciones'?s.valor_propuesto:'$ '+fmt$(s.valor_propuesto)}</strong></div>
+        <div><span style="color:var(--muted);">Actual:</span> <strong>${s.campo==='cant_transacciones'?s.valor_anterior:fmt$(s.valor_anterior)}</strong></div>
+        <div><span style="color:var(--muted);">Propone:</span> <strong style="color:var(--primary);">${s.campo==='cant_transacciones'?s.valor_propuesto:fmt$(s.valor_propuesto)}</strong></div>
       </div>
       <div style="background:#f9fafb;padding:8px 10px;border-radius:6px;font-size:13px;margin-bottom:8px;">${escHtml(s.motivo)}</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Por: ${escHtml(s.solicitado_por)}</div>
@@ -3385,7 +3271,7 @@ async function abrirControlCerrados() {
     const colorDelta = delta > 0 ? '#16a34a' : (delta < 0 ? '#dc2626' : '#64748b');
     const corrida = new Date(r.corrida_at).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
     const filas = Object.entries(r.diffs || {}).map(([k, d]) => {
-      const f = _CTRL_CANT.has(k) ? (x => String(Math.round(+x || 0))) : (x => (+x < 0 ? '−$ ' : '$ ') + fmt$(Math.abs(+x || 0)));
+      const f = _CTRL_CANT.has(k) ? (x => String(Math.round(+x || 0))) : (x => fmt$(+x || 0));
       const dl = +d.delta || 0;
       return `<tr><td style="padding:3px 8px;">${_CTRL_COLS[k] || k}</td>
         <td class="r-num" style="padding:3px 8px;text-align:right;">${f(d.guardado)}</td>
@@ -3406,7 +3292,7 @@ async function abrirControlCerrados() {
             <div style="font-size:11px;color:#64748b;">Detectado el ${corrida}${visto ? ` · visto ${new Date(r.revisado_at).toLocaleDateString('es-AR')}` : ''}</div>
           </div>
           <div style="display:flex;align-items:center;gap:10px;">
-            <span style="font-weight:700;font-size:15px;color:${colorDelta};">${delta > 0 ? '+$ ' : (delta < 0 ? '−$ ' : '$ ')}${fmt$(Math.abs(delta))}</span>
+            <span style="font-weight:700;font-size:15px;color:${colorDelta};">${delta > 0 ? '+' : ''}${fmt$(delta)}</span>
             ${acciones}
           </div>
         </div>
@@ -3809,36 +3695,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=36"></script>
-<script src="reporte.js?v=18"></script>
-<script>
-// (24-ago) Blindaje iOS: re-suscripcion automatica de push. iOS suelta la
-// suscripcion silenciosamente cada tanto; si el permiso sigue concedido y
-// esta usuaria YA tenia la campanita activa en ESTA app (hay fila propia,
-// no del hub), se renueva sola al abrir. Si la apago a proposito (fila
-// borrada), no se toca. Regla viva: mantener igual en las 4 apps + hub.
-(async function _autoResubPush() {
-  try {
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
-    if (typeof pushManager === 'undefined' || !pushManager.soportado()) return;
-    const { data: { session: _s } } = await sb.auth.getSession();
-    if (!_s) return;
-    let _emp = null, _gen = null;
-    try {
-      const { data: u } = await sb.rpc('rrhh_current_user');
-      const _u = Array.isArray(u) ? u[0] : u;
-      _emp = _u?.empleado_id ?? null;
-      if (!_emp) _gen = _u?.local_gerencia ?? null;
-    } catch (_) {}
-    if (!_emp && !_gen) return;
-    let q = sb.from('rrhh_push_subscriptions').select('id')
-      .eq('app', 'ventas').or('plataforma.is.null,plataforma.neq.hub').limit(1);
-    q = _emp ? q.eq('empleado_id', _emp) : q.eq('local_generico', _gen);
-    const { data: filas } = await q;
-    if (!filas || !filas.length) return;
-    await pushManager.activar();
-  } catch (_) {}
-})();
-</script>
+<script src="manual.js?v=37"></script>
+<script src="reporte.js?v=19"></script>
 </body>
 </html>

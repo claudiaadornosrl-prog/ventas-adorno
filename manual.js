@@ -29,7 +29,7 @@ function _manualSecciones() {
 
   const base = [
     { icon: 'menu', titulo: 'La barra de arriba', desc: 'Es igual en todos los módulos: mismo lugar para cada cosa y el color de la moneda del módulo (el mismo del Hub).',
-      pasos: ['A la izquierda, la moneda y el nombre del módulo. En la computadora, tocando el nombre (Ventas ▾) se abre la lista para pasar a otro módulo; al final de esa lista está «Volver al Hub».', 'Al lado: el local, el mes que estás mirando (se cambia ahí mismo), si está Abierto o Cerrado y los totales del mes.', 'A la derecha: el Reporte (ícono de barritas) y el menú ⋮ (Notificaciones, Resincronizar mes, Solicitudes, Reaperturas, Cerrar o Reabrir mes).', 'En el celular los totales no se ven en la barra (están en la pantalla); a la vista quedan el menú ⋮ y 🏠 Hub (volver al Hub).', 'Para cerrar la sesión: volvé al Hub y tocá 👤 (arriba) → Salir; se cierra en todos los módulos. En los módulos no hay botón de Salir.', '¿Dudas? Preguntale a Clodi (el botón de abajo a la derecha): sabe todo lo que dice este manual.'] },
+      pasos: ['A la izquierda, la moneda y el nombre del módulo. En la computadora, tocando el nombre (Ventas ▾) se abre la lista para pasar a otro módulo; al final de esa lista está «Volver al Hub».', 'Al lado: el local, el mes que estás mirando (se cambia ahí mismo), si está Abierto o Cerrado y los totales del mes.', 'A la derecha: el Reporte (ícono de barritas) y el menú ⋮ (Resincronizar mes, Solicitudes, Reaperturas, Cerrar o Reabrir mes). Las notificaciones se activan desde el Hub.', 'En el celular los totales no se ven en la barra (están en la pantalla); a la vista quedan el menú ⋮ y 🏠 Hub (volver al Hub).', 'Para cerrar la sesión: volvé al Hub y tocá 👤 (arriba) → Salir; se cierra en todos los módulos. En los módulos no hay botón de Salir.', '¿Dudas? Preguntale a Clodi (el botón de abajo a la derecha): sabe todo lo que dice este manual.'] },
     {
       icon: 'lock', titulo: 'Entrar una sola vez',
       desc: 'La sesión se comparte entre todos los módulos del sistema.',
@@ -46,6 +46,7 @@ function _manualSecciones() {
       desc: 'La planilla diaria de ventas del local. Reemplaza la planilla Excel de siempre.',
       pasos: [
         'Cada fila es un día; las columnas son los medios de pago: Efectivo, Tarjeta, QR (Mercado Pago), Vales, y para Oficina también Transferencia y CC.',
+        'Los importes se ven con el signo $ (11-nov): en la planilla, en los totales, en los turnos y en los avisos. La cantidad de tickets va sin signo, porque no es plata.',
         'Cada cuenta ve y carga solo lo suyo (11-nov): la cuenta de Alcorta solo Alcorta, la de Unicenter solo Unicenter y las de Oficina solo Oficina. Lo controla la base, no solo la pantalla. El consolidado de los locales es solo para administración.',
         'Si el mes elegido no tiene días cargados, arriba de la grilla aparece un aviso con el motivo: mes futuro, mes en curso sin ventas todavía, mes viejo del que solo se conoce el total mensual, o mes en que el local no operaba.',
         'Los números los carga solo el sistema desde Dragonfish — no hace falta tipear nada. Si un día quedó incompleto, tocá "Resincronizar mes" en el menú ⋮ (solo actualiza días NO cerrados).',
@@ -98,7 +99,7 @@ function _manualSecciones() {
       icon: 'menu', titulo: 'Menú de opciones',
       desc: 'Arriba a la derecha, el botón ⋮ agrupa las herramientas extra.',
       pasos: [
-        'Notificaciones: activalas para recibir alertas de cierres y diferencias de MP. En iPhone solo funcionan si la app está instalada en la pantalla de inicio. Si el teléfono las "apaga solo" (maña de iOS), la app las reactiva automáticamente al abrirla.',
+        'Notificaciones (11-nov): ya no están en este menú, van por el Hub. En el Hub tocá la campanita 🔔 de arriba y prendé el interruptor de Ventas para recibir las alertas de cierres y de diferencias de MP. En iPhone solo funcionan si el Hub está instalado en la pantalla de inicio.',
         'Resincronizar mes: vuelve a traer de Dragonfish los días no cerrados.',
         '⬇ Instalar la app: para tenerla como aplicación en el celu.',
       ],

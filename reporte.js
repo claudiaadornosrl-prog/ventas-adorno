@@ -805,7 +805,9 @@ function _repToggle(cls, row) {
     #reporte-overlay .r-head select#r-local{font-weight:700;color:var(--lc);}
     #reporte-overlay .r-box{background:#f8fafc;border-radius:14px;max-width:900px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);padding-bottom:4px;}
     #reporte-overlay .r-head{position:sticky;top:0;background:var(--lc);color:#fff;padding:10px 14px;border-radius:14px 14px 0 0;display:flex;align-items:center;gap:8px;z-index:2;flex-wrap:wrap;}
-    #reporte-overlay .r-head select{border:none;border-radius:7px;padding:6px 8px;font-size:13px;}
+    /* (11-nov-2026, JP) los desplegables y botones del Reporte con la letra de la marca (URW Gothic, la de Avant Garde) y en pastilla */
+    #reporte-overlay select,#reporte-overlay button,#reporte-overlay input{font-family:inherit;}
+    #reporte-overlay .r-head select{border:none;border-radius:999px;padding:6px 12px;font-size:13px;}
     #reporte-overlay .r-close{background:rgba(255,255,255,.18);border:none;color:#fff;font-size:15px;border-radius:8px;padding:5px 10px;cursor:pointer;}
     #reporte-overlay .r-loading{padding:50px;text-align:center;color:#64748b;}
     #reporte-overlay .r-reco{margin:12px 12px 0;background:var(--lc-bg);border-left:4px solid var(--lc);border-radius:10px;padding:12px 16px;font-size:13.5px;line-height:1.6;color:#1e293b;}
