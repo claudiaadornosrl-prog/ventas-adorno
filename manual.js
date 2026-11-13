@@ -40,6 +40,18 @@ function _manualSecciones() {
         'En las computadoras de los locales, que usan varias personas, NO se tilda: cada módulo sigue pidiendo usuario y contraseña por separado.',
         'Oficina tiene dos cuentas (12-nov): en la pantalla de entrada de Ventas, al tocar Oficina aparecen dos pastillas, Analía (claudiaadorno@) y Marisa (administracion@). Tocás la de tu compu y ponés su contraseña; la compu recuerda la última que entró.',
         'La sesión se cierra desde el Hub (👤 → Salir) y se cierra en todos los módulos. La computadora sigue marcada como de confianza hasta que lo apagues desde el Hub.',
+        'También se puede entrar a Ventas con el usuario personal (13-nov): en la pantalla de entrada, "Entrar con tu usuario personal". Lo que ves y lo que podés hacer lo deciden tus permisos del Hub (si tu perfil no ve la planilla, ves solo el Reporte).',
+      ],
+    },
+    {
+      icon: 'lock', titulo: 'Permisos (desde el Hub)',
+      desc: 'Lo que cada usuario ve y puede hacer en Ventas lo maneja JP en el Hub → ícono de persona → Permisos, función por función (13-nov).',
+      pasos: [
+        'Cada función puede estar Habilitada (se usa normal), Pide permiso (aparece, pero al usarla tiene que autorizar alguien con permiso) u Oculta (no aparece).',
+        'Las funciones de Ventas: ver la planilla, cerrar un turno, cerrar el día, cargar la Factura Oficina, justificar una diferencia con Mercado Pago, resincronizar desde el Dragonfish, cambiar a mano cualquier importe, pedir una corrección, pedir una reapertura, aprobar correcciones, reabrir días y cerrar o reabrir el mes, ver los días cerrados que cambiaron, ver el Reporte, ver el interanual y los últimos 5 años, ver los otros locales y operar en otros locales.',
+        '"Pide permiso": aparece la ventana "Pide permiso" y alguien que tenga esa función Habilitada (y, si es de un local, ese local entre los suyos) escribe SU mail y SU clave personal; si su cuenta tiene el código del celular, también el código. No queda abierto en la computadora. La autorización sirve para esa sola operación y por 10 minutos. Las cuentas de los locales y de la oficina nunca autorizan. Mientras las caras estén apagadas, se autoriza solo con usuario y clave.',
+        'Locales: cada persona tiene uno o varios locales en el Hub. Con uno, trabaja en ese; con varios, arriba se elige en cuál está trabajando. Ver o cargar en los otros locales son funciones aparte ("ver los otros locales" y "operar en otros locales").',
+        'Lo controla también la base: aunque alguien intente saltearse la pantalla, la base no deja cerrar, pedir ni cambiar nada sin el permiso (o la autorización).',
       ],
     },
     {
@@ -48,12 +60,12 @@ function _manualSecciones() {
       pasos: [
         'Cada fila es un día; las columnas son los medios de pago: Efectivo, Tarjeta, QR (Mercado Pago), Vales, y para Oficina también Transferencia y CC.',
         'Los importes se ven con el signo $ (11-nov): en la planilla, en los totales, en los turnos y en los avisos. La cantidad de tickets va sin signo, porque no es plata.',
-        'Cada cuenta ve y carga lo suyo: la cuenta de Alcorta solo Alcorta y la de Unicenter solo Unicenter. Las dos cuentas de Oficina (claudiaadorno@ y administracion@, desde el 12-nov) ven y cargan los 3 locales: arriba eligen el local con las tarjetas o miran el consolidado. Lo de administración (cerrar o reabrir el mes, aprobar pedidos, reabrir días y corregir números directo) sigue siendo solo de admin. Lo controla la base, no solo la pantalla.',
+        'Qué locales ve cada uno sale de sus permisos del Hub (13-nov): la cuenta de Alcorta ve Alcorta y la de Unicenter, Unicenter. Las dos cuentas de Oficina (claudiaadorno@ y administracion@) ven y cargan los 3 locales: arriba eligen el local con las tarjetas o miran el consolidado. Cerrar o reabrir el mes, aprobar pedidos, reabrir días y cambiar importes a mano son funciones aparte (hoy, solo administración). Lo controla la base, no solo la pantalla.',
         'Si el mes elegido no tiene días cargados, arriba de la grilla aparece un aviso con el motivo: mes futuro, mes en curso sin ventas todavía, mes viejo del que solo se conoce el total mensual, o mes en que el local no operaba.',
         'Los números los carga solo el sistema desde Dragonfish — no hace falta tipear nada. Si un día quedó incompleto, tocá "Resincronizar mes" en el menú ⋮ (solo actualiza días NO cerrados).',
-        'Nadie de los locales ni de Oficina cambia un importe directo (13-nov): ni desde la pantalla ni por otro lado, porque la base no las deja escribir la planilla. Los números los graba el sistema: el sync de Dragonfish, el cierre del turno y el cierre del día. Si un número está mal, tocás la celda y pedís la corrección; la aprueba el admin.',
+        'Nadie cambia un importe directo salvo quien tenga "Cambiar a mano cualquier importe" en el Hub (hoy, administración): la base no deja escribir la planilla de otra forma. Los números los graba el sistema: el sync de Dragonfish, el cierre del turno y el cierre del día. Si un número está mal, tocás la celda y pedís la corrección; la aprueba quien tenga "Aprobar correcciones".',
         'La columna Online en los locales es el efectivo de la segunda base — si hay que corregir a mano, SIEMPRE se corrige en esa columna.',
-        'FC Oficina son facturas emitidas en Oficina pero que corresponden a una venta del local — las carga el sistema solo. Si está mal, se pide la corrección como cualquier otra celda (desde el 13-nov ya no se edita directo).',
+        'FC Oficina son facturas emitidas en Oficina pero que corresponden a una venta del local — las carga el sistema solo. Quien tenga "Cargar la Factura Oficina del día" toca la celda en un día abierto y la carga (pasa por la base, que controla el permiso). En un día cerrado se pide la corrección como cualquier otra celda.',
       ],
     },
     {
@@ -70,11 +82,12 @@ function _manualSecciones() {
       desc: 'El cierre definitivo del día. Se hace DESPUÉS del cierre de caja completo en Dragonfish.',
       pasos: [
         'Primero cerrá la caja en Dragonfish (Z completo), después cerrá el día acá — si no, el día queda congelado con datos viejos.',
+        'Si en el Hub "Cerrar el día" (o "Cerrar un turno") de tu cuenta está en "Pide permiso", al tocar el candado (o el reloj) primero aparece "Pide permiso": autoriza alguien con permiso con su usuario y clave, y recién ahí seguís con "¿Quién cierra?". Tenés 10 minutos para terminar.',
         'Quién cierra (11-nov): al tocar el candado rojo se abre la cámara. Mirala de frente adentro del óvalo: en uno o dos segundos aparece "Te reconocí: tu nombre" y tocás "Cerrar el día". Si no sos vos, "No soy yo" vuelve a mirar. La cara es la misma que se registra en el POS (Ajustes → "Quién emite"); acá no se registra y no se guarda ninguna foto.',
         'Si la cámara no anda o no te reconoce en 10 segundos, aparece "Elegir a mano quién cierra": tocás tu nombre en la lista de la gente del local y después "Cerrar el día". Ese cierre queda marcado como elegido a mano (el tilde se ve en color ámbar).',
         'Reconocimiento por cara apagado (13-nov, hasta nuevo aviso): mientras esté apagado desde el Hub, no se abre la cámara. Aparece directo la lista para elegir a mano quién cierra (con "Elegir a otra persona" si te equivocaste) y el cierre queda marcado como elegido a mano, en ámbar. Cuando se vuelva a prender, la cámara vuelve sola.',
         'En la planilla, el tilde del día cerrado muestra el nombre de quien cerró (pasá el mouse para ver si fue con la cámara o a mano, y la hora), y el aviso de cierre que le llega al admin también lo dice. Desde la cuenta de admin se cierra sin cámara.',
-        'Desde Oficina (12-nov) también se puede cerrar el día de cualquier local: la cámara reconoce a quien cierra y, si se elige a mano, la lista trae a la gente de ese local y a la de la oficina.',
+        'Desde Oficina (12-nov) también se puede cerrar el día de cualquier local: la cámara reconoce a quien cierra y, si se elige a mano, la lista trae a la gente de ese local y a la de tus locales (para Oficina, la de la oficina).',
         'Al cerrar el día, el sistema cruza automáticamente los pagos de Mercado Pago del día ANTERIOR (ya definitivos).',
         'Si te quedó un día pasado sin cerrar, también lo podés cerrar — el candado rojo aparece igual. El ojo abre el detalle de los turnos; el candado abierto (admin) reabre el día; la llave violeta le pide la reapertura al admin.',
       ],
@@ -85,7 +98,7 @@ function _manualSecciones() {
       pasos: [
         '✓ verde: el cruce dio perfecto, no hay nada que hacer.',
         '⚠ naranja: hay una diferencia sin revisar — te va a llegar una notificación. Tocá el ⚠ para ver el detalle.',
-        'En el detalle, el botón "Revisar y salvar" te deja marcar la diferencia como JUSTIFICADA (sabés el motivo y lo escribís — obligatorio) o como ERROR.',
+        'En el detalle, el botón "Revisar y salvar" te deja marcar la diferencia como JUSTIFICADA (sabés el motivo y lo escribís — obligatorio) o como ERROR. Aparece si tenés "Justificar una diferencia con Mercado Pago"; si pide permiso, al guardar autoriza alguien con su usuario.',
         '✔ violeta: diferencia justificada. ✖ rojo: marcada como error. Todo queda registrado con quién y cuándo lo revisó.',
         'Si el sistema recruza el día y la diferencia cambia, la revisión se borra sola y hay que volver a revisar.',
       ],
@@ -94,7 +107,7 @@ function _manualSecciones() {
       icon: 'inbox', titulo: 'Solicitudes y reaperturas',
       desc: 'Para corregir un dato de un día ya cerrado, no se toca directo: se pide.',
       pasos: [
-        'Si un importe está mal, tocá la celda (cualquiera, también Fc Oficina) y "Enviar pedido" — le llega la solicitud de corrección al admin.',
+        'Si un importe está mal, tocá la celda y "Enviar pedido" — le llega la solicitud de corrección al admin. Si en el Hub "Pedir que corrijan un importe" (o "Pedir que reabran un día cerrado") pide permiso, al enviar autoriza alguien con su usuario.',
         'Si necesitás reabrir un día entero, usá "Reaperturas" del menú ⋮.',
         'Apenas lo pedís, a JP y a Clau les llega un aviso al celular con el local, el día, el importe y quién lo pidió (12-nov; antes ese aviso no salía). Lo mismo cuando se completa el sync de fin de mes de un mes que todavía no se cerró.',
         'El admin aprueba o rechaza. Cómo quedó lo ves en la planilla: la celda corregida queda amarilla (pasando el mouse se ve el antes y el después) y en ⋮ → Reaperturas ves el estado de tus pedidos.',
@@ -113,11 +126,11 @@ function _manualSecciones() {
 
   if (!esAdmin) {
     base.push({
-      icon: 'chart', titulo: 'Reporte (con tu usuario personal)',
-      desc: 'El reporte de ventas. Se abre con el usuario personal de quien tiene permiso: la cuenta del local o de la oficina no alcanza.',
+      icon: 'chart', titulo: 'Reporte',
+      desc: 'El reporte de ventas. Depende de "Ver el Reporte" en el Hub: habilitado se abre directo; si pide permiso, entra con su usuario quien tenga permiso.',
       pasos: [
-        'Arriba a la derecha, el ícono de barras (Reporte). Pide TU mail y TU clave personal (los mismos de Colaboradores) y, si tu cuenta tiene el código del celular, también el código. Con la cuenta del local o de la oficina no se abre: así no lo ve cualquiera que use la compu.',
-        'Quién puede (12-nov): administración, las encargadas (Andrea y Soraya) y quien tenga el permiso que da JP (hoy Marisa y Analía, con sus usuarios personales). La encargada ve su local y, si JP se lo habilita, otro más para mirar (13-nov: Andrea ve Alcorta y Unicenter); se elige en el selector de local de arriba. Administración y quien tiene el permiso ven los 3 locales, el consolidado, "Últimos 5 años" y "Evolución del año". Desde el Reporte no se opera nada: es solo para mirar.',
+        'Arriba a la derecha, el ícono de barras (Reporte). En las cuentas de los locales y de la oficina pide permiso: escribe SU mail y SU clave personal (los mismos de Colaboradores) alguien con permiso y, si su cuenta tiene el código del celular, también el código. Así no lo ve cualquiera que use la compu.',
+        'Quién puede abrirlo: administración, las encargadas (Andrea y Soraya) y quien tenga el permiso del Hub para el reporte (Marisa y Analía, con sus usuarios personales). Lo que se ve lo decide la base con el usuario de quien lo abrió: la encargada ve su local y, si JP se lo habilita, otro más para mirar (Andrea ve Alcorta y Unicenter, 13-nov); administración y quien tiene el permiso ven los 3 locales y el consolidado. "Últimos 5 años" y "Evolución del año" aparecen si quien lo abrió tiene "Ver el interanual y los últimos 5 años" (o el permiso completo del reporte). Desde el Reporte no se opera nada: es solo para mirar.',
         'La encargada ve su local: KPIs contra el período anterior y el año pasado, día más fuerte y más flojo, categorías, top artículos, proveedores y clientes, medios de pago y mapa de calor por hora.',
         'Arriba elegís el período: Semanal, Mensual, Trimestral o Anual. El botón "$ nominal" pasa los importes a pesos de hoy con el IPC, para comparar períodos separados en el tiempo.',
         'Al cerrar el reporte (✕ o Escape) se cierra tu sesión: no queda abierta en la computadora del local. Si lo dejás abierto 15 minutos sin tocar, se cierra solo. No te cierra la sesión de Colaboradores en el celular.',

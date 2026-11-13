@@ -39,7 +39,8 @@ let _repCache = {};
 // Admin y quien tenga el permiso en hub_permisos (Marisa y Analía con sus personales) ven TODO
 // (ventas_reporte_todo(): policy vr_permiso_read); la encargada, solo su local. Las cuentas genéricas no
 // leen ventas_reportes directo. Más adelante esto pasa a la ventana común /hub/autorizar.js.
-let _repEnc = null;   // { local, locales, email, nombre, todo }  (todo = ve todos los locales; locales = los que ve si no)
+let _repEnc = null;   // { local, locales, email, nombre, todo, hist }  (todo = ve todos los locales; locales = los que ve si no;
+                      //   hist = 'h' | 'a' | 'o' para «Ver el interanual y los últimos 5 años»)
 let _repCli = null;   // cliente supabase del usuario personal que abrió el reporte
 const _repDb = () => _repCli || sb;
 let _repIdle = null;
@@ -201,8 +202,6 @@ async function abrirReporteVentas() {
     const locs = (_repEnc.locales && _repEnc.locales.length) ? _repEnc.locales : [_repEnc.local];
     const nom = locs.map(l => NOM[l] || l).join(' y ');
     document.getElementById('r-local').innerHTML = locs.map(l => `<option value="${_rEsc(l)}">${_rEsc(NOM[l] || l)}</option>`).join('');
-    document.querySelector('#r-tipo option[value="interanual"]')?.remove();
-    document.querySelector('#r-tipo option[value="evolucion"]')?.remove();   // (v12) usa vistas de admin
     _repSel.local = _repEnc.local;
     document.getElementById('r-local').value = _repSel.local;
     if (_repSel.tipo === 'interanual') _repSel.tipo = 'semanal';
@@ -213,6 +212,14 @@ async function abrirReporteVentas() {
     _repTocar();
   }
 
+  // (13-nov) «Ver el interanual y los últimos 5 años» del Hub: 'o' → sin esas pestañas; 'a' → al elegirlas pide permiso
+  const _hist = !_repEnc ? 'h' : (_repEnc.todo ? 'h' : (_repEnc.hist || 'o'));
+  if (_hist === 'o' || (_repEnc && !_repEnc.todo && _hist !== 'h' && _hist !== 'a')) {
+    document.querySelector('#r-tipo option[value="interanual"]')?.remove();
+    document.querySelector('#r-tipo option[value="evolucion"]')?.remove();
+    if (_repSel.tipo === 'interanual' || _repSel.tipo === 'evolucion') { _repSel.tipo = 'semanal'; document.getElementById('r-tipo').value = 'semanal'; }
+  }
+
   if (!_repPeriodos.semanal.length) {
     const { data } = await _repDb().from('ventas_reportes').select('tipo, periodo')
       .eq('local', (_repEnc && !_repEnc.todo) ? _repEnc.local : 'consolidado').order('periodo', { ascending: false }).limit(2000);
@@ -220,8 +227,19 @@ async function abrirReporteVentas() {
       if (!_repPeriodos[r.tipo].includes(r.periodo)) _repPeriodos[r.tipo].push(r.periodo);
     }
   }
-  document.getElementById('r-tipo').onchange = () => {
-    _repSel.tipo = document.getElementById('r-tipo').value;
+  document.getElementById('r-tipo').onchange = async () => {
+    const t = document.getElementById('r-tipo').value;
+    if ((t === 'interanual' || t === 'evolucion') && _hist === 'a') {
+      // pide permiso: el Reporte sigue con el usuario de quien autoriza
+      document.getElementById('r-tipo').value = _repSel.tipo;
+      const sup = await pedirSuperior({ funcion: 'ventas.reporte_historico', local: null, que: 'ver el interanual y los últimos 5 años' });
+      if (!sup) return;
+      _repSel.tipo = t;
+      cerrarReporteVentas();
+      await _repEntrarCon(sup.cli, sup.email, sup.nombre);
+      return;
+    }
+    _repSel.tipo = t;
     _repLlenarPeriodos();
   };
   document.getElementById('r-periodo').onchange = () => { _repSel.periodo = document.getElementById('r-periodo').value; _repRender(); };
@@ -287,70 +305,47 @@ function _repNombre(n) {   // 'CONTRERAS, MARISA ISABEL' → 'Marisa Isabel Cont
   const [ap, no] = t.split(',');
   return (no.trim() + ' ' + ap.trim()).toLowerCase().replace(/(^|\s)\S/g, x => x.toUpperCase());
 }
-function abrirReporteSuperior() {
-  if (document.getElementById('rep-login')) return;
-  const d = document.createElement('div');
-  d.id = 'rep-login';
-  d.innerHTML = `<div class="rl-box">
-    <button class="rl-x" onclick="cerrarRepLogin()" title="Cerrar" aria-label="Cerrar">✕</button>
-    <div style="font-size:17px;font-weight:700;margin-bottom:4px">Reporte de ventas</div>
-    <div style="font-size:12.5px;color:#64748b;margin-bottom:12px;line-height:1.45">Entrá con <b>tu usuario personal</b>
-      (el mismo mail y clave de RRHH): administración, la encargada del local o quien tenga permiso.
-      La cuenta del local o de la oficina no alcanza.<br>Al cerrar el reporte se cierra tu sesión: no queda abierta en esta computadora.</div>
-    <input id="rl-email" type="email" placeholder="tu email" autocomplete="username">
-    <input id="rl-pass" type="password" placeholder="tu contraseña" autocomplete="current-password">
-    <div id="rl-err" style="color:#dc2626;font-size:12.5px;min-height:16px;margin:4px 0"></div>
-    <div style="display:flex;justify-content:flex-end">
-      <button class="rl-b rl-ok" id="rl-ok" onclick="entrarRepSuperior()">Entrar</button>
-    </div></div>`;
-  document.body.appendChild(d);
-  document.getElementById('rl-pass').addEventListener('keydown', e => { if (e.key === 'Enter') entrarRepSuperior(); });
-  document.getElementById('rl-email').focus();
+async function abrirReporteSuperior() {
+  // (13-nov) «Pide permiso»: autoriza quien tenga «Ver el Reporte» habilitado en el Hub (o el permiso reporte_ventas)
+  const sup = await pedirSuperior({ funcion: 'ventas.reporte', local: (typeof session !== 'undefined' && session?.local_id) || null, que: 'ver el Reporte' });
+  if (!sup) return;
+  await _repEntrarCon(sup.cli, sup.email, sup.nombre);
 }
-function cerrarRepLogin() { const d = document.getElementById('rep-login'); if (d) d.remove(); }
-
-async function entrarRepSuperior() {
-  const email = (document.getElementById('rl-email').value || '').trim().toLowerCase();
-  const pass = document.getElementById('rl-pass').value || '';
-  const err = document.getElementById('rl-err');
-  const btn = document.getElementById('rl-ok');
-  err.textContent = '';
-  if (!email || !pass) { err.textContent = 'Completá el mail y la contraseña.'; return; }
-  if (typeof session !== 'undefined' && session?.email && email === String(session.email).toLowerCase()) {
-    err.textContent = 'Tiene que ser tu usuario personal, no el de esta cuenta.'; return;
-  }
-  btn.disabled = true; btn.textContent = 'Entrando…';
-  const cli = window.supabase.createClient(SUPA_URL, SUPA_KEY, {
-    auth: { persistSession: false, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'adorno-reporte-superior' }
-  });
-  const salir = async () => { try { await cli.auth.signOut({ scope: 'local' }); } catch (e) {} };
+// (13-nov) «Ver el Reporte» habilitado con la propia sesión (sin pedir permiso)
+async function abrirReportePropio() {
+  if (session?.isAdmin) { _repCli = null; _repEnc = null; return abrirReporteVentas(); }
+  const [rTodo, rLocs] = await Promise.all([sb.rpc('ventas_reporte_todo'), sb.rpc('ventas_reporte_locales')]);
+  const todo = !!rTodo.data, locales = Array.isArray(rLocs.data) ? rLocs.data : [];
+  if (!todo && !locales.length) { if (typeof toast === 'function') toast('Tu usuario no tiene locales para el Reporte', true); return; }
+  _repCli = null;
+  _repEnc = { local: todo ? null : locales[0], locales: todo ? null : locales, email: session.email, nombre: session.email, todo,
+              hist: todo ? 'h' : puedo('ventas.reporte_historico') };
+  _repResetCaches(); _repIaCache = null;
+  abrirReporteVentas();
+}
+// Arma el Reporte con la sesión de quien autorizó: lo que ve lo decide la base con SU usuario
+async function _repEntrarCon(cli, email, nombre) {
+  const salir = () => { try { cli.auth.signOut({ scope: 'local' }); } catch (e) {} };
   try {
-    const { error } = await cli.auth.signInWithPassword({ email, password: pass });
-    if (error) throw new Error('Mail o contraseña incorrectos.');
-    // código del celular, si esa cuenta lo tiene activado
-    if (window.ADORNO_MFA && ADORNO_MFA.pedirCodigo && !(await ADORNO_MFA.pedirCodigo(cli))) {
-      await salir(); throw new Error('Sin el código del celular no se puede abrir.');
-    }
-    const { data: pv, error: e1 } = await cli.rpc('hub_puede_ver', { p_que: 'reporte_ventas' });
-    if (e1) throw e1;
-    if (!pv || !pv.ok) { await salir(); throw new Error((pv && pv.motivo) || 'Ese usuario no tiene permiso para ver el reporte.'); }
-    // qué ve: todo (admin o con permiso) o sus locales (encargada: el suyo primero + los de ventas_ver_<local>)
-    const [rTodo, rLocs] = await Promise.all([cli.rpc('ventas_reporte_todo'), cli.rpc('ventas_reporte_locales')]);
+    const [rTodo, rLocs, rHist] = await Promise.all([cli.rpc('ventas_reporte_todo'), cli.rpc('ventas_reporte_locales'),
+                                                     cli.rpc('hub_puedo', { p_funcion: 'ventas.reporte_historico' })]);
     if (rTodo.error) throw rTodo.error;
     if (rLocs.error) throw rLocs.error;
     const todo = !!rTodo.data, locales = Array.isArray(rLocs.data) ? rLocs.data : [];
-    if (!todo && !locales.length) { await salir(); throw new Error('Ese usuario no tiene un local asignado para el reporte.'); }
-    _repCli = cli; _repEnc = { local: todo ? null : locales[0], locales: todo ? null : locales,
-                               email: pv.email || email, nombre: pv.nombre || email, todo };
+    if (!todo && !locales.length) { salir(); throw new Error('Ese usuario no tiene un local asignado para el reporte.'); }
+    if (_repCli && _repCli !== cli) { try { _repCli.auth.signOut({ scope: 'local' }); } catch (e) {} }
+    _repCli = cli;
+    _repEnc = { local: todo ? null : locales[0], locales: todo ? null : locales, email, nombre, todo,
+                hist: todo || rHist.data === 'h' ? 'h' : 'o' };
     _repResetCaches(); _repIaCache = null;
-    cerrarRepLogin();
-    if (typeof toast === 'function') toast(`Reporte abierto por ${_repNombre(_repEnc.nombre)}`);
+    if (typeof toast === 'function') toast(`Reporte abierto por ${_repNombre(nombre)}`);
     abrirReporteVentas();
   } catch (e) {
-    err.textContent = e.message || 'No se pudo entrar.';
-    btn.disabled = false; btn.textContent = 'Entrar';
+    if (typeof toast === 'function') toast(e.message || 'No se pudo abrir el Reporte', true);
   }
 }
+function cerrarRepLogin() { const d = document.getElementById('rep-login'); if (d) d.remove(); }
+
 document.addEventListener('keydown', e => { if (e.key !== 'Escape') return; if (document.getElementById('rep-login')) cerrarRepLogin(); else cerrarReporteVentas(); });
 
 // UPT = unidades por ticket. El dato ya venía en el payload (unidades + tickets);
@@ -911,22 +906,23 @@ function _repToggle(cls, row) {
   // El botón va en el header, pegado a "📊 Análisis" (pedido de JP: antes vivía
   // adentro del kebab y había que ir a buscarlo). Solo admin, así que espera a
   // que la sesión esté lista — igual que antes.
-  let intentos = 0;
-  const timer = setInterval(() => {
-    intentos++;
-    // (25-sep) También en Alcorta y Unicenter: ahí el botón pide el usuario de la encargada.
-    // (12-nov) Y en las dos cuentas de Oficina: pide usuario superior (hub_puede_ver).
-    const esEnc = typeof session !== 'undefined' && session && !session.isAdmin
-      && (['alcorta', 'unicenter'].includes(session.local_id) || !!session.oficina);
-    if (typeof session !== 'undefined' && (session?.isAdmin || esEnc)) {
-      clearInterval(timer);
-      if (document.getElementById('btn-reporte-ventas')) return;
+  // (13-nov) Según «Ver el Reporte» del Hub: 'h' lo abre con su sesión, 'a' pide usuario superior, 'o' no aparece.
+  // Lo llama index.html al terminar de leer los permisos (enterApp); antes se miraba solo 20 s después de cargar
+  // y si el ingreso tardaba más, el botón no aparecía.
+  window.ponerBotonReporte = function () {
+    const _p = (typeof session !== 'undefined' && session && typeof PERM !== 'undefined' && PERM && typeof puedo === 'function')
+      ? puedo('ventas.reporte') : null;
+    if (!_p) return false;
+    document.getElementById('btn-reporte-ventas')?.remove();   // cambió la sesión o el permiso
+    if (_p === 'o') return true;
+    const esEnc = _p === 'a';
+    {
       const b = document.createElement('button');
       b.id = 'btn-reporte-ventas';
       b.title = esEnc
         ? 'Reporte de ventas — entra con su usuario personal quien tenga permiso (administración, la encargada…)'
         : 'Reporte semanal/mensual: KPIs, categorías, top artículos y el análisis de la semana';
-      const abrir = esEnc ? abrirReporteSuperior : abrirReporteVentas;
+      const abrir = esEnc ? abrirReporteSuperior : abrirReportePropio;
       b.onclick = () => abrir();
       // (22-oct, JP) va en el banner, solo el ícono (como en los otros módulos), a la izquierda del kebab
       // (11-nov, banner común) a la derecha, antes de la rayita (| Hub · Salir), al lado del menú ⋮
@@ -947,6 +943,9 @@ function _repToggle(cls, row) {
         b.onclick = () => { if (typeof cerrarKebab === 'function') cerrarKebab(); abrir(); };
         kebab.insertBefore(b, kebab.firstChild);
       }
-    } else if (intentos > 40) clearInterval(timer);
-  }, 500);
+    }
+    return true;
+  };
+  let intentos = 0;
+  const timer = setInterval(() => { intentos++; if (window.ponerBotonReporte() || intentos > 40) clearInterval(timer); }, 500);
 })();

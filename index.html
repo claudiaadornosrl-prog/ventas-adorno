@@ -625,6 +625,9 @@ body { margin: 0; font-family: 'URW Gothic', -apple-system, BlinkMacSystemFont, 
 .cc-cam.ok .cc-marco { border-color: #22c55e; }
 .cc-estado { text-align: center; font-size: 14px; color: #334155; margin: 12px 0 2px; min-height: 20px; line-height: 1.4; }
 .cc-acciones { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 10px; }
+/* (13-nov) usuario superior ("Pide permiso") y Factura Oficina: casillas en pastilla */
+.sup-in { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: 999px; padding: 10px 16px; font-size: 14px; margin-bottom: 8px; font-family: inherit; }
+#sel-local.sel-trabajo { display: inline-block !important; border: none; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-family: inherit; font-weight: 600; }
 .cc-btn { border: none; border-radius: 999px; padding: 10px 20px; font-size: 14px; font-weight: 600; cursor: pointer; background: #f1f5f9; color: #334155; font-family: inherit; }
 .cc-btn.principal { background: var(--primary); color: #fff; }
 .cc-btn.link { background: none; color: #64748b; text-decoration: underline; padding: 6px 10px; font-weight: 500; }
@@ -789,10 +792,10 @@ th.th-der + th.th-der { border-left: none; }
     <input type="password" id="login-pass" placeholder="Contraseña del local" onkeydown="if(event.key==='Enter')doLogin()">
     <div class="login-error" id="login-error"></div>
     <button class="btn-primary" id="login-btn" disabled onclick="doLogin()">Entrar →</button>
-    <div class="admin-link"><a onclick="loginAdmin()">Entrar como administrador (JP)</a></div>
+    <div class="admin-link"><a onclick="loginAdmin()">Entrar con tu usuario personal</a></div>
     <!-- (13-oct, v92) formulario de admin en la pantalla: antes usaba prompt(), que algunos navegadores bloquean -->
     <div id="admin-form" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
-      <label>Email de administrador</label>
+      <label>Tu email</label>
       <input type="email" id="admin-email" placeholder="admin@..." autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('admin-pass').focus()">
       <label>Contraseña</label>
       <input type="password" id="admin-pass" placeholder="Contraseña" autocomplete="current-password" onkeydown="if(event.key==='Enter')loginAdminEnviar()">
@@ -938,8 +941,134 @@ const _LOCALES_FIN = {
 };
 
 let session = null;  // { email, local_id|null, isAdmin, oficina? }  (oficina: cuenta de Oficina, ve los 3 locales)
-/** (12-nov-2026) ¿La sesión ve y carga los 3 locales? Admin y las cuentas de Oficina. Lo de admin sigue con session.isAdmin. */
-const veTodo = () => !!(session && (session.isAdmin || session.oficina));
+// ═══════════════════════════════════════════════════════════════════════
+// (13-nov-2026, JP) PERMISOS POR FUNCIÓN DESDE EL HUB (Hub → persona → Permisos)
+// hub_puedo('ventas.x') → 'h' habilitada · 'a' pide permiso (usuario superior) · 'o' oculta.
+// hub_mis_locales() → los locales de la persona. La base exige lo mismo en lo que graba
+// (ventas_exigir / ventas_autorizar): la pantalla solo muestra, esconde o pide permiso.
+// ═══════════════════════════════════════════════════════════════════════
+const VENTAS_FUNCIONES = ['ventas.planilla', 'ventas.cerrar_turno', 'ventas.cerrar_dia', 'ventas.fc_oficina', 'ventas.dif_mp',
+  'ventas.resincronizar', 'ventas.editar_importes', 'ventas.pedir_correccion', 'ventas.pedir_reapertura', 'ventas.aprobar_correccion',
+  'ventas.reabrir_cerrar_mes', 'ventas.control_cerrados', 'ventas.reporte', 'ventas.reporte_historico', 'ventas.ver_otros_locales',
+  'ventas.operar_otros_locales'];
+const FUNC_POR_LOCAL = new Set(['ventas.planilla', 'ventas.cerrar_turno', 'ventas.cerrar_dia', 'ventas.fc_oficina', 'ventas.dif_mp',
+  'ventas.resincronizar', 'ventas.pedir_correccion', 'ventas.pedir_reapertura', 'ventas.reporte']);
+let PERM = null;          // { 'ventas.planilla': 'h' | 'a' | 'o', … }
+let MIS_LOCALES = [];     // hub_mis_locales()
+// Si el Hub no contesta (sin red), lo de siempre por tipo de cuenta: la base igual decide lo que graba.
+function _permRespaldo() {
+  const p = {}; VENTAS_FUNCIONES.forEach(f => { p[f] = 'o'; });
+  if (session?.isAdmin) { VENTAS_FUNCIONES.forEach(f => { p[f] = 'h'; }); return p; }
+  if (session?.local_id || session?.oficina) {
+    ['ventas.planilla', 'ventas.cerrar_turno', 'ventas.cerrar_dia', 'ventas.fc_oficina', 'ventas.dif_mp', 'ventas.resincronizar',
+     'ventas.pedir_correccion', 'ventas.pedir_reapertura'].forEach(f => { p[f] = 'h'; });
+    p['ventas.reporte'] = 'a';
+    if (session.oficina) { p['ventas.ver_otros_locales'] = 'h'; p['ventas.operar_otros_locales'] = 'h'; p['ventas.reporte_historico'] = 'a'; }
+  }
+  return p;
+}
+async function cargarPermisos() {
+  try {
+    const [rl, ...rs] = await Promise.all([sb.rpc('hub_mis_locales'), ...VENTAS_FUNCIONES.map(f => sb.rpc('hub_puedo', { p_funcion: f }))]);
+    const err = rl.error || rs.find(r => r.error)?.error;
+    if (err) throw err;
+    PERM = {};
+    VENTAS_FUNCIONES.forEach((f, i) => { PERM[f] = ['h', 'a', 'o'].includes(rs[i].data) ? rs[i].data : 'o'; });
+    MIS_LOCALES = (Array.isArray(rl.data) ? rl.data : []).filter(l => LOCALES[l]);
+  } catch (e) {
+    console.warn('permisos del Hub (uso los de siempre):', e);
+    PERM = _permRespaldo();
+    MIS_LOCALES = session?.isAdmin ? Object.keys(LOCALES) : (session?.oficina ? ['oficina'] : (session?.local_id ? [session.local_id] : []));
+  }
+}
+/** 'h' | 'a' | 'o' para la función (sin mirar el local). */
+function puedo(f) { return (PERM && PERM[f]) || (session?.isAdmin ? 'h' : 'o'); }
+/** Igual, en un local: si no es suyo, además hace falta «operar otros locales». */
+function puedoEn(f, local) {
+  const p = puedo(f);
+  if (p === 'o' || !local || local === 'todos' || !FUNC_POR_LOCAL.has(f) || MIS_LOCALES.includes(local)) return p;
+  const o = puedo('ventas.operar_otros_locales');
+  if (o === 'o') return 'o';
+  return (p === 'a' || o === 'a') ? 'a' : 'h';
+}
+/** ¿Ve los otros locales y el consolidado? (admin, Oficina…) */
+const veTodo = () => !!session && puedo('ventas.planilla') !== 'o' && puedo('ventas.ver_otros_locales') !== 'o';
+/** Locales para elegir arriba: todos si ve los otros; si no, los suyos. */
+const localesVisibles = () => veTodo() ? Object.keys(LOCALES) : (MIS_LOCALES.length ? MIS_LOCALES : (session?.local_id ? [session.local_id] : []));
+/** ¿Hay que elegir el local con el selector de arriba? (ve todos, o tiene más de uno) */
+const eligeLocal = () => veTodo() || localesVisibles().length > 1;
+
+// "Pide permiso": entra alguien con SU usuario en un cliente aparte (no toca la sesión de esta compu, no se guarda)
+// y la base (ventas_autorizar) verifica que tenga la función habilitada y el local entre los suyos.
+// Devuelve { id, cli, email, nombre } o null si se cerró.
+function pedirSuperior({ funcion, local, que }) {
+  return new Promise((resolve) => {
+    document.getElementById('sup-wrap')?.remove();
+    const w = document.createElement('div');
+    w.id = 'sup-wrap'; w.className = 'cc-wrap'; w.setAttribute('data-adorno-superior', '1');
+    const enLocal = local && local !== 'todos' ? ` en <b>${escHtml(NOMBRE_LOCAL[local] || local)}</b>` : '';
+    w.innerHTML = `
+      <div class="cc-box" role="dialog" aria-modal="true" style="max-width:400px;">
+        <div class="cc-head"><h3>Pide permiso</h3><button class="cc-x" title="Cerrar" aria-label="Cerrar">✕</button></div>
+        <div class="cc-aviso">Para <b>${escHtml(que)}</b>${enLocal} tiene que autorizar alguien con permiso, con <b>su usuario personal</b>
+          (el mail y la clave de Colaboradores). No queda abierto en esta computadora.</div>
+        <input class="sup-in" id="sup-email" type="email" placeholder="su email" autocomplete="off">
+        <input class="sup-in" id="sup-pass" type="password" placeholder="su contraseña" autocomplete="new-password">
+        <div class="cc-estado" id="sup-err" style="color:#dc2626;font-size:13px;"></div>
+        <div class="cc-acciones"><button class="cc-btn principal" id="sup-ok">Autorizar</button></div>
+      </div>`;
+    document.body.appendChild(w);
+    let fin = false;
+    const cerrar = (res) => { if (fin) return; fin = true; document.removeEventListener('keydown', esc); w.remove(); resolve(res); };
+    const esc = (e) => { if (e.key === 'Escape' && !document.querySelector('.amfa-fondo')) cerrar(null); };
+    document.addEventListener('keydown', esc);
+    w.querySelector('.cc-x').onclick = () => cerrar(null);
+    const err = w.querySelector('#sup-err'), btn = w.querySelector('#sup-ok');
+    const entrar = async () => {
+      const email = (w.querySelector('#sup-email').value || '').trim().toLowerCase();
+      const pass = w.querySelector('#sup-pass').value || '';
+      err.textContent = '';
+      if (!email || !pass) { err.textContent = 'Completá el mail y la contraseña.'; return; }
+      if (email === String(session?.email || '').toLowerCase()) { err.textContent = 'Tiene que ser el usuario de otra persona, con permiso.'; return; }
+      btn.disabled = true; btn.textContent = 'Verificando…';
+      const cli = window.supabase.createClient(SUPA_URL, SUPA_KEY, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'adorno-superior-ventas' } });
+      const salir = () => { try { cli.auth.signOut({ scope: 'local' }); } catch (_) {} };
+      try {
+        const r = await cli.auth.signInWithPassword({ email, password: pass });
+        if (r.error) throw new Error('Mail o contraseña incorrectos.');
+        if (window.ADORNO_MFA && ADORNO_MFA.pedirCodigo && !(await ADORNO_MFA.pedirCodigo(cli))) { salir(); throw new Error('Sin el código del celular no se puede autorizar.'); }
+        const { data: j, error } = await cli.rpc('ventas_autorizar', { p_funcion: funcion, p_local: (local && local !== 'todos') ? local : null, p_para: session?.email || '' });
+        if (error) { salir(); throw error; }
+        if (!j || !j.ok) { salir(); throw new Error((j && j.motivo) || 'Ese usuario no puede autorizarlo.'); }
+        cerrar({ id: j.id, cli, email: j.email, nombre: j.nombre });
+      } catch (e) {
+        if (fin) return;
+        err.textContent = e.message || 'No se pudo verificar.';
+        w.querySelector('#sup-pass').value = '';
+        btn.disabled = false; btn.textContent = 'Autorizar';
+      }
+    };
+    btn.onclick = entrar;
+    w.querySelector('#sup-pass').addEventListener('keydown', e => { if (e.key === 'Enter') entrar(); });
+    setTimeout(() => w.querySelector('#sup-email')?.focus(), 50);
+  });
+}
+function soltarSuperior(sup) { try { sup?.cli?.auth.signOut({ scope: 'local' }); } catch (_) {} }
+/** Antes de una operación. 'h' → sigue · 'o' → avisa y no · 'a' → pide usuario superior.
+ *  Devuelve { ok, aut, db, sup }: aut = autorización de un solo uso para la función de la base;
+ *  con { cliente: true } la operación se hace con la sesión de quien autorizó (db) y hay que soltarla después. */
+async function conPermiso(funcion, local, que, opc = {}) {
+  const p = puedoEn(funcion, local);
+  if (p === 'h') return { ok: true, aut: null, db: sb, sup: null };
+  if (p === 'o') { toast('Tu usuario no tiene permiso para ' + que, true); return { ok: false }; }
+  const sup = await pedirSuperior({ funcion, local, que });
+  if (!sup) return { ok: false };
+  toast(`Autorizó ${nombrePersona(sup.nombre)}`);
+  if (!opc.cliente) { soltarSuperior(sup); return { ok: true, aut: sup.id, db: sb, sup: null, quien: sup }; }
+  return { ok: true, aut: sup.id, db: sup.cli, sup, quien: sup };
+}
+const conAut = (params, perm) => (perm && perm.aut) ? { ...params, p_autorizacion: perm.aut } : params;
 
 // (11-nov-2026, JP) Las notificaciones se activan desde el Hub (campanita, interruptor Ventas):
 // Ventas ya no tiene botón ni suscripción propia. El service worker sigue mostrando los push.
@@ -1132,22 +1261,31 @@ function loginAdmin() {
   const f = document.getElementById('admin-form');
   const abrir = f.style.display === 'none';
   f.style.display = abrir ? '' : 'none';
-  if (abrir) { const e = document.getElementById('admin-email'); if (!e.value) e.value = ADMIN_EMAIL; document.getElementById('admin-pass').focus(); }
+  if (abrir) document.getElementById('admin-email').focus();
+}
+/** (13-nov) Qué tipo de cuenta es por el mail: admin, Oficina, cuenta de un local o usuario personal. */
+function _sesionDe(email) {
+  email = String(email || '').toLowerCase();
+  const isAdmin = ADMIN_EMAILS.includes(email);
+  const oficina = !isAdmin && OFICINA_EMAILS.includes(email);
+  let local_id = null;
+  if (!isAdmin && !oficina) for (const [id, em] of Object.entries(LOCAL_EMAILS)) { if (em.toLowerCase() === email) { local_id = id; break; } }
+  return { email, local_id, isAdmin, oficina, personal: !isAdmin && !oficina && !local_id };
 }
 async function loginAdminEnviar() {
   const errEl = document.getElementById('admin-error'); errEl.textContent = '';
   const email = (document.getElementById('admin-email').value || '').trim().toLowerCase();
   const pass = (document.getElementById('admin-pass').value || '').trim();
   if (!email || !pass) { errEl.textContent = 'Faltan el email o la contraseña.'; return; }
-  if (!ADMIN_EMAILS.includes(email)) { errEl.textContent = 'Ese email no es administrador de Ventas.'; return; }
+  // (13-nov) Entra cualquier usuario: lo que ve y hace lo deciden sus permisos del Hub.
   try {
     const { error } = await sb.auth.signInWithPassword({ email, password: pass });
     if (error) throw error;
-    session = { email, local_id: null, isAdmin: true };
+    session = _sesionDe(email);
     document.getElementById('admin-pass').value = '';
     enterApp();
   } catch (e) {
-    errEl.textContent = 'No se pudo entrar como admin: ' + (e.message || 'error');
+    errEl.textContent = 'No se pudo entrar: ' + (e.message || 'error');
   }
 }
 
@@ -1162,15 +1300,23 @@ async function logout() {
 // ═══════════════════════════════════════════════════════════════════════
 // APP
 // ═══════════════════════════════════════════════════════════════════════
-function enterApp() {
+async function enterApp() {
   document.getElementById('login-screen').classList.remove('active');
   document.getElementById('app-screen').classList.add('active');
+  // (13-nov) Permisos del Hub y locales de la persona (con uno trabaja en ese; con varios elige arriba)
+  await cargarPermisos();
+  if (!session.local_id && !session.isAdmin && MIS_LOCALES.length) {
+    let g = null; try { g = localStorage.getItem('ventas_local_trabajo'); } catch (e) {}
+    session.local_id = MIS_LOCALES.includes(g) ? g : MIS_LOCALES[0];
+  }
 
   // Header
   if (session.isAdmin) {
     document.getElementById('hdr-local').textContent = session?.email?.startsWith('clau@') ? 'Admin (Clau)' : 'Admin (JP)';
   } else if (session.oficina) {
     document.getElementById('hdr-local').textContent = 'Oficina';
+  } else if (session.personal) {
+    document.getElementById('hdr-local').textContent = (NOMBRE_LOCAL[session.local_id] ? NOMBRE_LOCAL[session.local_id] + ' · ' : '') + session.email.split('@')[0];
   } else {
     document.getElementById('hdr-local').textContent = (LOCALES[session.local_id]?.nombre || session.local_id);
   }
@@ -1195,16 +1341,27 @@ function enterApp() {
   document.getElementById('sel-periodo').innerHTML = _ops.join('');
   _sincronizarPeriodo();
   // Selector de local solo para admin: queda oculto (22-oct, JP: las tarjetas de arriba eligen el local)
-  if (veTodo()) {   // (12-nov) también Oficina
+  if (veTodo()) {   // (12-nov) también Oficina · (13-nov) quien vea los otros locales en el Hub
     selLocal.innerHTML = '<option value="todos">Todos</option>' +
       Object.entries(LOCALES).map(([id, l]) => `<option value="${id}">${l.nombre}</option>`).join('');
+    if (puedo('ventas.ver_otros_locales') === 'a' && session.local_id) selLocal.value = session.local_id;   // los otros, con permiso
+  } else if (localesVisibles().length > 1) {
+    // (13-nov) Varios locales en el Hub: elige arriba en cuál trabaja
+    selLocal.innerHTML = localesVisibles().map(id => `<option value="${id}">${LOCALES[id].nombre}</option>`).join('');
+    selLocal.value = session.local_id || localesVisibles()[0];
+    selLocal.classList.add('sel-trabajo'); selLocal.title = 'Local en el que estás trabajando';
+    document.getElementById('hdr-local').style.display = 'none';
   }
-  if (!session.isAdmin) {
-    // Vendedoras y Oficina: esconder "+ Cargar venta del día" (solo admin carga manual completo)
+  if (puedo('ventas.editar_importes') === 'o') {
+    // Sin «Cambiar a mano cualquier importe»: esconder "+ Cargar venta del día"
     const btnDia = document.getElementById('btn-cargar-dia');
     if (btnDia) btnDia.style.display = 'none';
   }
 
+  // (13-nov) Botones del menú según los permisos
+  const _ver = (id, ok) => { const b = document.getElementById(id); if (b && !ok) b.style.display = 'none'; };
+  _ver('btn-reaperturas', puedo('ventas.pedir_reapertura') !== 'o' || puedo('ventas.reabrir_cerrar_mes') !== 'o');
+  if (typeof window.ponerBotonReporte === 'function') window.ponerBotonReporte();
   cargar();
   // Chequear si hay meses listos para cerrar (en background, no bloquea)
   chequearMesesListosParaCerrar();
@@ -1241,9 +1398,7 @@ async function _mesSincronizado(localId, año, mes) {
 
 async function chequearMesesListosParaCerrar() {
   try {
-    const localesACheckear = veTodo()
-      ? Object.keys(LOCALES)
-      : [session.local_id];
+    const localesACheckear = localesVisibles();
 
     const hoy = new Date();
     // Chequear hasta 3 meses hacia atrás
@@ -1285,7 +1440,7 @@ async function chequearMesesListosParaCerrar() {
       : `${listos.length} mes(es) listos para cerrar. El más reciente: ${meses[mLpc.mes-1]} ${mLpc.año} de ${LOCALES[mLpc.localId].nombre}`;
     document.getElementById('alerta-cerrar-mes-text').textContent = txt;
     // Si no es admin, ocultar el botón "Cerrar ahora" (solo admin cierra)
-    document.getElementById('alerta-cerrar-mes-btn').style.display = session.isAdmin ? '' : 'none';
+    document.getElementById('alerta-cerrar-mes-btn').style.display = puedo('ventas.reabrir_cerrar_mes') !== 'o' ? '' : 'none';
     document.getElementById('alerta-cerrar-mes').style.display = 'flex';
   } catch (e) {
     console.warn('chequearMesesListosParaCerrar:', e);
@@ -1325,9 +1480,7 @@ async function chequearSyncFinDeMes() {
     const ultDia = new Date(añoAnt, mesAnt, 0).getDate();
     const fechaUlt = `${añoAnt}-${String(mesAnt).padStart(2,'0')}-${String(ultDia).padStart(2,'0')}`;
 
-    const localesACheckear = veTodo()
-      ? Object.keys(LOCALES)
-      : [session.local_id];
+    const localesACheckear = localesVisibles();
 
     for (const localId of localesACheckear) {
       // ¿Cerrado?
@@ -1360,6 +1513,7 @@ async function hacerSyncFinDeMes() {
   const desde = `${año}-${String(mes).padStart(2,'0')}-01`;
   const ultDia = new Date(año, mes, 0).getDate();
   const hasta = `${año}-${String(mes).padStart(2,'0')}-${String(ultDia).padStart(2,'0')}`;
+  if (!(await conPermiso('ventas.resincronizar', localId, 'hacer el sync de fin de mes')).ok) return;
   try {
     toast(`🐉 Pidiendo sync de fin de mes (${label})…`);
     const { data: job, error } = await sb.from('dragonfish_jobs').insert({
@@ -1387,7 +1541,7 @@ function cerrarMesDesdeAlerta() {
   // Posicionar selectores en el mes/local del aviso y disparar cierre
   document.getElementById('sel-año').value = _mesListoCerrar.año;
   document.getElementById('sel-mes').value = _mesListoCerrar.mes;
-  if (session.isAdmin) {
+  if (eligeLocal()) {
     document.getElementById('sel-local').value = _mesListoCerrar.localId;
   }
   cargar();
@@ -1453,7 +1607,21 @@ async function cargar() {
   _sincronizarPeriodo();
   const año = parseInt(document.getElementById('sel-año').value);
   const mes = parseInt(document.getElementById('sel-mes').value);
-  const localSel = veTodo() ? document.getElementById('sel-local').value : session.local_id;
+  // (13-nov) Sin «Ver la planilla» en el Hub: no hay grilla (puede tener el Reporte)
+  if (puedo('ventas.planilla') === 'o') {
+    document.getElementById('contenido').innerHTML = `<div class="empty"><div class="icon">🔒</div>Tu usuario no ve la planilla de Ventas.${puedo('ventas.reporte') !== 'o' ? '<br>El Reporte está arriba, en el ícono de barras.' : ''}</div>`;
+    return;
+  }
+  let localSel = eligeLocal() ? document.getElementById('sel-local').value : session.local_id;
+  // (13-nov) Ver otros locales «pide permiso»: una vez por sesión
+  if (veTodo() && puedo('ventas.ver_otros_locales') === 'a' && !window._verOtrosOk && localSel && !MIS_LOCALES.includes(localSel)) {
+    const perm = await conPermiso('ventas.ver_otros_locales', null, 'ver los otros locales');
+    if (perm.ok) window._verOtrosOk = true;
+    else { localSel = session.local_id; document.getElementById('sel-local').value = localSel; }
+  }
+  if (!veTodo() && localesVisibles().length > 1 && localSel !== session.local_id) {
+    session.local_id = localSel; try { localStorage.setItem('ventas_local_trabajo', localSel); } catch (e) {}
+  }
   asegurarEstiloLocal([localSel]);
   document.body.setAttribute('data-local', localSel || '');   // (21-oct) color del local en la vista por local
   const _sy = document.getElementById('hdr-sync'); if (_sy) _sy.style.display = '';
@@ -1497,7 +1665,8 @@ async function cargar() {
     // (24-oct, JP) La grilla no queda muda: si el período no tiene días cargados, dice por qué.
     if (!data.length) await _explicarMesVacio(año, mes, localUnico);
     // Refrescar badge de solicitudes pendientes (para admin)
-    if (session.isAdmin) { refrescarBadgeSolicitudes(); refrescarBadgeControlCerrados(); }
+    if (puedo('ventas.aprobar_correccion') !== 'o') refrescarBadgeSolicitudes();
+    refrescarBadgeControlCerrados();
     refrescarBadgeReaperturas();
   } catch (e) {
     document.getElementById('contenido').innerHTML = `<div class="empty"><div class="icon">⚠️</div>Error: ${escHtml(e.message)}</div>`;
@@ -1916,13 +2085,13 @@ window.abrirDetalleMp = async function abrirDetalleMp(fecha, localId) {
           <div style="font-weight:700;font-size:13px;color:${esJust ? '#5b21b6' : '#991b1b'};">${esJust ? '✔ Diferencia JUSTIFICADA' : '✖ Marcada como ERROR'}</div>
           <div style="font-size:12px;margin-top:3px;">${esc(v.mp_dif_motivo || 'Sin motivo')}</div>
           <div style="font-size:11px;color:var(--muted);margin-top:3px;">Por ${esc(v.mp_dif_por || '¿?')} · ${cuandoR}</div>
-          <button onclick="salvarDifMpForm('${fecha}','${localId}')" style="margin-top:6px;font-size:11px;padding:4px 10px;border:1px solid var(--border);background:white;border-radius:6px;cursor:pointer;">↩ Cambiar</button>
+          ${puedoEn('ventas.dif_mp', localId) === 'o' ? '' : `<button onclick="salvarDifMpForm('${fecha}','${localId}')" style="margin-top:6px;font-size:11px;padding:4px 10px;border:1px solid var(--border);background:white;border-radius:6px;cursor:pointer;">↩ Cambiar</button>`}
         </div>`;
       } else {
         html += `<div id="mp-salvar-wrap" style="margin-top:12px;padding:10px 12px;border-radius:8px;background:#fffbeb;border-left:4px solid #d97706;">
           <div style="font-weight:700;font-size:13px;color:#92400e;">Esta diferencia está SIN REVISAR</div>
           <div style="font-size:12px;color:#92400e;margin:3px 0 8px;">Si tiene una explicación (cobro de otro local, devolución, venta cargada distinta a propósito), justificala. Si no, marcala como error.</div>
-          <button onclick="salvarDifMpForm('${fecha}','${localId}')" style="font-size:13px;font-weight:700;padding:8px 14px;border:none;background:#d97706;color:white;border-radius:8px;cursor:pointer;">Revisar y salvar</button>
+          ${puedoEn('ventas.dif_mp', localId) === 'o' ? '<div style="font-size:12px;color:#92400e;">La revisa quien tenga permiso para justificar diferencias.</div>' : `<button onclick="salvarDifMpForm('${fecha}','${localId}')" style="font-size:13px;font-weight:700;padding:8px 14px;border:none;background:#d97706;color:white;border-radius:8px;cursor:pointer;">Revisar y salvar</button>`}
         </div>`;
       }
     }
@@ -1960,10 +2129,12 @@ window.salvarDifMp = async function salvarDifMp(fecha, localId, estado) {
   const motivo = (document.getElementById('mp-rev-motivo')?.value || '').trim();
   if (!nombre) { alert('Poné tu nombre para que quede registrado quién revisó.'); return; }
   if (estado === 'justificada' && !motivo) { alert('Para justificar la diferencia el motivo es obligatorio.'); return; }
-  localStorage.setItem('ventas_revisor_nombre', nombre);
+  try { localStorage.setItem('ventas_revisor_nombre', nombre); } catch (_) {}
+  const perm = await conPermiso('ventas.dif_mp', localId, 'justificar la diferencia con Mercado Pago');
+  if (!perm.ok) return;
   try {
-    const { error } = await sb.rpc('ventas_salvar_dif_mp', {
-      p_local: localId, p_fecha: fecha, p_estado: estado, p_motivo: motivo, p_quien: nombre });
+    const { error } = await sb.rpc('ventas_salvar_dif_mp', conAut({
+      p_local: localId, p_fecha: fecha, p_estado: estado, p_motivo: motivo, p_quien: nombre }, perm));
     if (error) throw error;
     abrirDetalleMp(fecha, localId);  // reabrir con el estado nuevo
   } catch (e) { alert('No se pudo guardar: ' + (e.message || e)); }
@@ -2072,14 +2243,17 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
       }
       // Determinar acción al click según rol y campo
       let onclick;
-      if (session.isAdmin) {
-        // Admin: click en cualquier celda abre el editar completo
+      // (13-nov) Según el Hub: «Cambiar a mano cualquier importe» abre el editar completo; «Cargar la Factura Oficina»
+      // la carga en un día abierto (función de la base); si no, «Pedir que corrijan un importe».
+      const valActual = v ? (v[campo] || 0) : 0;
+      if (puedo('ventas.editar_importes') !== 'o') {
         onclick = `event.stopPropagation(); abrirEditar('${fecha}','${localId}',${JSON.stringify(v||null).replace(/"/g,'&quot;')})`;
-      } else {
-        // Local y Oficina: pedir corrección en CUALQUIER celda (13-nov, JP: Fc Oficina tampoco se edita directo;
-        // la base ya no les deja escribir ventas_diarias, solo por las funciones de cierre)
-        const valActual = v ? (v[campo] || 0) : 0;
+      } else if (campo === 'fc_oficina' && !v?.controlado && puedoEn('ventas.fc_oficina', localId) !== 'o') {
+        onclick = `event.stopPropagation(); abrirFcOficina('${fecha}','${localId}',${valActual})`;
+      } else if (puedoEn('ventas.pedir_correccion', localId) !== 'o') {
         onclick = `event.stopPropagation(); abrirSolicitudCorreccion('${fecha}','${localId}','${campo}',${valActual})`;
+      } else {
+        onclick = '';
       }
       const display = v ? (campo === 'cant_transacciones' ? (valor || '—') : fmt$(valor)) : '—';
       // Tilde de arqueo MP: cuando el día ya se cruzó contra la cuenta MP
@@ -2102,7 +2276,7 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
           }
         }
       }
-      return `<td class="editable" style="${style}cursor:pointer;" title="${escHtml(title)}" onclick="${onclick}">${display}${badge}</td>`;
+      return `<td class="editable" style="${style}cursor:${onclick ? 'pointer' : 'default'};" title="${escHtml(title)}"${onclick ? ` onclick="${onclick}"` : ''}>${display}${badge}</td>`;
     };
 
 
@@ -2141,8 +2315,8 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
       const esPasado = fecha < hoy;
       // Cerrar turno: solo HOY. Cerrar día: HOY o días pasados que quedaron
       // sin cerrar (olvido o problema de sync) — pedido JP 4-ago.
-      const puedeCerrar = esHoy && !diaCerrado;
-      const puedeCerrarDia = (esHoy || (esPasado && v)) && !diaCerrado;
+      const puedeCerrar = esHoy && !diaCerrado && puedoEn('ventas.cerrar_turno', localId) !== 'o';
+      const puedeCerrarDia = (esHoy || (esPasado && v)) && !diaCerrado && puedoEn('ventas.cerrar_dia', localId) !== 'o';
       const botonCerrar = puedeCerrar
         ? abtn(`cerrarTurnoAhora('${fecha}','${localId}')`, 'Cerrar turno', 'clock', 'principal')
         : '';
@@ -2152,10 +2326,10 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
       const verLink = nTurnos > 0
         ? abtn(`abrirTurnos('${fecha}','${localId}')`, 'Ver detalle de turnos', 'eye')
         : '';
-      const linkReabrir = (diaCerrado && session?.isAdmin)
+      const linkReabrir = (diaCerrado && puedo('ventas.reabrir_cerrar_mes') !== 'o')
         ? abtn(`reabrirDiaAhora('${fecha}','${localId}')`, 'Reabrir día', 'unlock', 'alerta')
         : '';
-      const botonSolicitar = (diaCerrado && !session?.isAdmin)
+      const botonSolicitar = (diaCerrado && !linkReabrir && puedoEn('ventas.pedir_reapertura', localId) !== 'o')
         ? abtn(`solicitarReaperturaAhora('${fecha}','${localId}')`, 'Pedir reapertura — le llega la solicitud al admin', 'key', 'violeta')
         : '';
       celdaTurno = `<td style="text-align:center;white-space:nowrap;">${badge}${verLink}${botonCerrar}${botonCerrarDia}${linkReabrir}${botonSolicitar}</td>`;
@@ -2332,9 +2506,9 @@ function renderAdminConsolidado(ventas, año, mes) {
 // ─── Modal de carga/edición de un día ────────────────────────────────
 function abrirCarga() {
   const fecha = hoyISO();
-  const localId = veTodo() ? document.getElementById('sel-local').value : session.local_id;
-  if (session.isAdmin && (!localId || localId === 'todos')) {
-    toast('Como admin, primero seleccioná un local específico para cargar', true);
+  const localId = eligeLocal() ? document.getElementById('sel-local').value : session.local_id;
+  if (eligeLocal() && (!localId || localId === 'todos')) {
+    toast('Primero elegí un local específico para cargar', true);
     return;
   }
   abrirEditar(fecha, localId, null);
@@ -2342,7 +2516,7 @@ function abrirCarga() {
 
 function abrirEditar(fecha, localId, v) {
   if (typeof v === 'string') { try { v = JSON.parse(v); } catch { v = null; } }
-  if (veTodo() && (!localId || localId === 'todos')) {
+  if (eligeLocal() && (!localId || localId === 'todos')) {
     toast('Elegí un local específico antes', true);
     return;
   }
@@ -2383,8 +2557,39 @@ function abrirEditar(fecha, localId, v) {
 
 function cerrarModal() { document.getElementById('modal')?.remove(); }
 
-// (13-nov-2026, JP) Se fue el mini modal "Fc Oficina" de las vendedoras (escribía ventas_diarias directo):
-// ahora Fc Oficina se pide como cualquier corrección.
+// (13-nov-2026) Factura Oficina del día: la carga quien tiene «Cargar la Factura Oficina del día» en el Hub, por la
+// función ventas_cargar_fc_oficina (ya no se escribe ventas_diarias directo). Día cerrado → se pide la corrección.
+function abrirFcOficina(fecha, localId, actual) {
+  document.getElementById('fcof-wrap')?.remove();
+  const w = document.createElement('div'); w.id = 'fcof-wrap'; w.className = 'cc-wrap';
+  w.innerHTML = `
+    <div class="cc-box" role="dialog" aria-modal="true" style="max-width:380px;">
+      <div class="cc-head"><h3>Factura Oficina · ${escHtml(NOMBRE_LOCAL[localId] || localId)} · ${fecha.slice(8, 10)}/${fecha.slice(5, 7)}</h3>
+        <button class="cc-x" title="Cerrar" aria-label="Cerrar">✕</button></div>
+      <div class="cc-aviso">Facturas emitidas en Oficina que corresponden a una venta de este local, ese día.</div>
+      <input class="sup-in" id="fcof-valor" type="text" inputmode="decimal" value="${nmShow(actual)}" onfocus="wireImporte(this)" placeholder="$ 0">
+      <div class="cc-estado" id="fcof-err" style="color:#dc2626;font-size:13px;"></div>
+      <div class="cc-acciones"><button class="cc-btn principal" id="fcof-ok">Guardar</button></div>
+    </div>`;
+  document.body.appendChild(w);
+  const cerrar = () => { document.removeEventListener('keydown', esc); w.remove(); };
+  const esc = (e) => { if (e.key === 'Escape' && !document.getElementById('sup-wrap')) cerrar(); };
+  document.addEventListener('keydown', esc);
+  w.querySelector('.cc-x').onclick = cerrar;
+  w.querySelector('#fcof-ok').onclick = async () => {
+    const btn = w.querySelector('#fcof-ok'), err = w.querySelector('#fcof-err');
+    const valor = nmParse(w.querySelector('#fcof-valor').value);
+    err.textContent = '';
+    const perm = await conPermiso('ventas.fc_oficina', localId, 'cargar la Factura Oficina');
+    if (!perm.ok) return;
+    btn.disabled = true; btn.textContent = 'Guardando…';
+    const { error } = await sb.rpc('ventas_cargar_fc_oficina', conAut({ p_local: localId, p_fecha: fecha, p_valor: valor }, perm));
+    if (error) { err.textContent = error.message; btn.disabled = false; btn.textContent = 'Guardar'; return; }
+    cerrar(); toast('✓ Factura Oficina guardada'); cargar();
+  };
+  setTimeout(() => w.querySelector('#fcof-valor')?.focus(), 50);
+}
+
 
 // ─── Modal "Solicitar corrección" (para vendedoras) ──────────────────
 // 🚨 Tiene que tener TODAS las columnas que la grilla deja corregir, y las
@@ -2431,13 +2636,14 @@ async function enviarSolicitudCorreccion(fecha, localId, campo, valorActual) {
   if (errEl) { errEl.style.display='none'; errEl.textContent=''; }
   if (_propTxt === '') { errEl.textContent='Poné el valor correcto'; errEl.style.display='block'; return; }
   if (!motivo || motivo.length < 5) { errEl.textContent='Escribí un motivo (mínimo 5 caracteres)'; errEl.style.display='block'; return; }
+  const perm = await conPermiso('ventas.pedir_correccion', localId, 'pedir una corrección');
+  if (!perm.ok) return;
   if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
   try {
-    const { error } = await sb.from('ventas_correcciones').insert({
-      local: localId, fecha, campo,
-      valor_anterior: valorActual, valor_propuesto: propuesto,
-      motivo, solicitado_por: session.email,
-    });
+    // (13-nov) por la función de la base: chequea el permiso del Hub (y la autorización si «pide permiso»)
+    const { error } = await sb.rpc('ventas_pedir_correccion', conAut({
+      p_local: localId, p_fecha: fecha, p_campo: campo,
+      p_valor_anterior: valorActual, p_valor_propuesto: propuesto, p_motivo: motivo }, perm));
     if (error) throw error;
     // (12-nov) el aviso al admin lo manda la base al insertar el pedido (trg_vc_aviso_admin)
     cerrarModal();
@@ -2513,12 +2719,15 @@ async function resolverSolicitud(id, estado) {
     if (resp === null) return;  // (10-ago) Cancelar = abortar, no rechazar
     comentario = resp;
   }
+  const perm = await conPermiso('ventas.aprobar_correccion', null, 'aprobar correcciones', { cliente: true });
+  if (!perm.ok) return;
   try {
-    const { error } = await sb.from('ventas_correcciones').update({
+    const { error } = await perm.db.from('ventas_correcciones').update({
       estado,
-      resuelto_por: session.email,
+      resuelto_por: perm.quien?.email || session.email,
       comentario_admin: comentario || null,
     }).eq('id', id);
+    soltarSuperior(perm.sup);
     if (error) throw error;
     toast(estado === 'aprobada' ? '✓ Aplicado a la grilla' : '✓ Rechazado');
     cerrarModal();
@@ -2553,15 +2762,18 @@ async function guardarVenta(fecha, localId, vId) {
     origen: 'manual',
   };
   if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+  const perm = await conPermiso('ventas.editar_importes', localId, 'cambiar importes a mano', { cliente: true });
+  if (!perm.ok) return;
   if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
   try {
     let res;
     if (vId) {
-      res = await sb.from('ventas_diarias').update(data).eq('id', vId);
+      res = await perm.db.from('ventas_diarias').update(data).eq('id', vId);
     } else {
       // Upsert por (local, fecha) para no romper si ya existe
-      res = await sb.from('ventas_diarias').upsert(data, { onConflict: 'local,fecha' });
+      res = await perm.db.from('ventas_diarias').upsert(data, { onConflict: 'local,fecha' });
     }
+    soltarSuperior(perm.sup);
     if (res.error) throw res.error;
     cerrarModal();
     toast('✓ Guardado');
@@ -2576,8 +2788,8 @@ async function guardarVenta(fecha, localId, vId) {
 // modo: '3d' (últimos 3 días, rápido) o 'mes' (mes completo, admin)
 async function abrirCargaDragonfish(modo) {
   modo = modo || '3d';
-  const localId = veTodo() ? document.getElementById('sel-local').value : session.local_id;
-  if (veTodo() && (!localId || localId === 'todos')) {
+  const localId = eligeLocal() ? document.getElementById('sel-local').value : session.local_id;
+  if (eligeLocal() && (!localId || localId === 'todos')) {
     toast('Elegí un local específico antes', true);
     return;
   }
@@ -2603,6 +2815,8 @@ async function abrirCargaDragonfish(modo) {
     label = 'últimos 3 días';
   }
 
+  // (13-nov) «Resincronizar el mes desde el Dragonfish» del Hub
+  if (!(await conPermiso('ventas.resincronizar', localId, 'resincronizar desde el Dragonfish')).ok) return;
   // Verificar si el mes del rango está cerrado
   const fechaCheck = new Date(desde + 'T12:00:00');
   const { data: cerrado } = await sb.from('meses_cerrados_ventas')
@@ -2686,14 +2900,14 @@ function _actualizarBotonesCierre(cerradoRow, localUnico) {
     const por = (cerradoRow.cerrado_por || '').split('@')[0];
     statusEl.style.display = '';
     statusEl.innerHTML = `<span style="background:#dcfce7;color:#065f46;padding:3px 10px;border-radius:999px;font-weight:600;font-size:12px;white-space:nowrap;" title="Mes cerrado por ${escHtml(por)} (${cuando}). Para modificar, reabrir primero.">Cerrado</span>`;
-    if (session.isAdmin) btnReabrir.style.display = '';
+    if (puedo('ventas.reabrir_cerrar_mes') !== 'o') btnReabrir.style.display = '';
     if (btnDF) btnDF.disabled = true;
   } else {
     // Mes abierto: Resincronizar para todos, Cerrar mes solo admin (ambos en el kebab).
     statusEl.style.display = '';
     statusEl.innerHTML = `<span style="background:#fef3c7;color:#92400e;padding:3px 10px;border-radius:999px;font-weight:600;font-size:12px;white-space:nowrap;" title="Mes abierto: podés editar y sincronizar">Abierto</span>`;
-    if (btnDFmes) btnDFmes.style.display = '';
-    if (session.isAdmin) btnCerrar.style.display = '';
+    if (btnDFmes && puedoEn('ventas.resincronizar', localUnico) !== 'o') btnDFmes.style.display = '';
+    if (puedo('ventas.reabrir_cerrar_mes') !== 'o') btnCerrar.style.display = '';
   }
 }
 
@@ -2701,14 +2915,17 @@ function _actualizarBotonesCierre(cerradoRow, localUnico) {
 async function cerrarMesActual() {
   const año = parseInt(document.getElementById('sel-año').value);
   const mes = parseInt(document.getElementById('sel-mes').value);
-  const localId = veTodo() ? document.getElementById('sel-local').value : session.local_id;
+  const localId = eligeLocal() ? document.getElementById('sel-local').value : session.local_id;
   if (!localId || localId === 'todos') { toast('Elegí un local específico', true); return; }
   const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const label = `${meses[mes-1]} ${año}`;
   if (!confirm(`¿Cerrar ${label} de ${LOCALES[localId].nombre}?\n\nDespués del cierre, nadie podrá modificar las ventas ni resincronizar hasta reabrir.\n\nAsegurate de que las vendedoras hayan hecho el sync de fin de mes antes.\n\n¿Confirmás?`)) return;
 
+  const perm = await conPermiso('ventas.reabrir_cerrar_mes', null, 'cerrar el mes', { cliente: true });
+  if (!perm.ok) return;
   try {
-    const { error } = await sb.rpc('ventas_cerrar_mes', { p_local: localId, p_año: año, p_mes: mes });
+    const { error } = await perm.db.rpc('ventas_cerrar_mes', { p_local: localId, p_año: año, p_mes: mes });
+    soltarSuperior(perm.sup);
     if (error) throw error;
     toast(`🔒 ${label} cerrado`);
     cargar();
@@ -2731,12 +2948,15 @@ async function esperarJob(jobId, timeoutSec) {
 async function reabrirMesActual() {
   const año = parseInt(document.getElementById('sel-año').value);
   const mes = parseInt(document.getElementById('sel-mes').value);
-  const localId = veTodo() ? document.getElementById('sel-local').value : session.local_id;
+  const localId = eligeLocal() ? document.getElementById('sel-local').value : session.local_id;
   if (!localId || localId === 'todos') return;
   const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   if (!confirm(`¿Reabrir ${meses[mes-1]} ${año} de ${LOCALES[localId].nombre}?`)) return;
+  const perm = await conPermiso('ventas.reabrir_cerrar_mes', null, 'reabrir el mes', { cliente: true });
+  if (!perm.ok) return;
   try {
-    const { error } = await sb.rpc('ventas_reabrir_mes', { p_local: localId, p_año: año, p_mes: mes });
+    const { error } = await perm.db.rpc('ventas_reabrir_mes', { p_local: localId, p_año: año, p_mes: mes });
+    soltarSuperior(perm.sup);
     if (error) throw error;
     toast(`🔓 ${meses[mes-1]} ${año} reabierto`);
     cargar();
@@ -2755,22 +2975,15 @@ async function reabrirMesActual() {
     const email = (authSession.user.email || '').toLowerCase();
     // (7-ago) ADMIN_EMAILS: JP y Clau — antes solo reconocía a JP y la sesión
     // de Clau quedaba rota (sin local, header "null", grilla mezclada).
-    const isAdmin = ADMIN_EMAILS.includes(email);
-    const oficina = !isAdmin && OFICINA_EMAILS.includes(email);   // (12-nov) las dos cuentas de Oficina
-    let local_id = null;
-    if (!isAdmin && !oficina) {
-      for (const [id, em] of Object.entries(LOCAL_EMAILS)) {
-        if (em.toLowerCase() === email) { local_id = id; break; }
-      }
-      // Sesión que no es ni admin ni de un local conocido → login normal
-      if (!local_id) return;  /* no signOut: la sesión es compartida entre módulos del navegador (SSO); cerrarla acá deslogueaba los demás */
-    }
+    // (13-nov) Cualquier usuario: admin, Oficina, cuenta de un local o usuario personal (lo deciden sus permisos del Hub)
+    const ses = _sesionDe(email);
+    const { isAdmin, oficina, local_id } = ses;
     // Si la URL fija un local y la sesión persistida es de otro (o de admin),
     // cerrar sesión y forzar login del local correcto.
-    if (URL_LOCAL && (isAdmin || (oficina ? URL_LOCAL !== 'oficina' : local_id !== URL_LOCAL))) {
+    if (URL_LOCAL && (isAdmin || ses.personal || (oficina ? URL_LOCAL !== 'oficina' : local_id !== URL_LOCAL))) {
       return;  /* no signOut: la sesión es compartida entre módulos del navegador (SSO); cerrarla acá deslogueaba los demás */
     }
-    session = { email, local_id, isAdmin, oficina };
+    session = ses;
     enterApp();
   }
 })();
@@ -2815,10 +3028,13 @@ async function cerrarTurnoAhora(fecha, localId) {
   const msg = `¿Cerrar turno ${numero} del ${fmtFecha(fecha)} en ${localId.toUpperCase()}?\n\n`
             + `Esto guarda un snapshot con los valores actuales del día menos los turnos previos.`;
   if (!confirm(msg)) return;
+  // (13-nov) «Cerrar un turno» del Hub: si pide permiso, autoriza alguien con su usuario
+  const perm = await conPermiso('ventas.cerrar_turno', localId, 'cerrar el turno');
+  if (!perm.ok) return;
 
   const cerradoPor = session?.isAdmin
     ? `admin:${session?.email || '?'}`
-    : (session?.oficina ? `oficina:${session.email}` : `local:${localId}`);
+    : (session?.oficina ? `oficina:${session.email}` : (session?.personal ? `personal:${session.email}` : `local:${localId}`));
 
   // PRE-SYNC 1/2: forzar sync de Dragonfish para el DÍA actual antes de cerrar.
   // Esto trae las últimas ventas que estaban en proceso/sin sincronizar.
@@ -2847,12 +3063,12 @@ async function cerrarTurnoAhora(fecha, localId) {
   // indexación de MP. El arqueo real es contra el DÍA ANTERIOR: se hace al
   // cerrar el día y en el cron de las 10:00.
   try {
-    const { data, error } = await sb.rpc('cerrar_turno', {
+    const { data, error } = await sb.rpc('cerrar_turno', conAut({
       p_local: localId,
       p_fecha: fecha,
       p_cerrado_por: cerradoPor,
       p_notas: null,
-    });
+    }, perm));
     if (error) throw error;
     toast(`✓ Turno ${data.numero} cerrado`);
     mostrarResultadoTurno(data, fecha, localId);
@@ -3080,7 +3296,11 @@ async function cerrarDiaAhora(fecha, localId) {
   let ident = null;
   if (session?.isAdmin) {
     if (!confirm(msg)) return;
-  } else {
+  }
+  // (13-nov) «Cerrar el día» del Hub: si pide permiso, autoriza alguien con su usuario (10 minutos para cerrar)
+  const perm = await conPermiso('ventas.cerrar_dia', localId, 'cerrar el día');
+  if (!perm.ok) return;
+  if (!session?.isAdmin) {
     const aviso = (yaCerrados > 0 ? `Hay ${yaCerrados} turno${yaCerrados>1?'s':''} ya cerrado${yaCerrados>1?'s':''}. ` : '')
       + 'Si hay ventas pendientes, se cierra el turno final automáticamente y se verifica el arqueo de Mercado Pago del día anterior. '
       + '<b>Después de cerrar el día no se pueden abrir más turnos.</b>';
@@ -3090,7 +3310,7 @@ async function cerrarDiaAhora(fecha, localId) {
 
   const cerradoPor = session?.isAdmin
     ? `admin:${session?.email || '?'}`
-    : (session?.oficina ? `oficina:${session.email}` : `local:${localId}`);
+    : (session?.oficina ? `oficina:${session.email}` : (session?.personal ? `personal:${session.email}` : `local:${localId}`));
 
   // PRE-SYNC Dragonfish del día actual
   toast('🐉 Sincronizando ventas del día...');
@@ -3113,13 +3333,13 @@ async function cerrarDiaAhora(fecha, localId) {
   }
 
   try {
-    const { data, error } = await sb.rpc('cerrar_dia', {
+    const { data, error } = await sb.rpc('cerrar_dia', conAut({
       p_local: localId,
       p_fecha: fecha,
       p_cerrado_por: cerradoPor,
       p_notas: null,
       p_identificacion: ident?.id || null,
-    });
+    }, perm));
     if (error) throw error;
     toast(data?.cerro ? `Día cerrado por ${nombrePersona(data.cerro)}` : `Día cerrado`);
     // (3-ago) El push de cierre a JP/Claudia ahora lo dispara un TRIGGER en la
@@ -3183,12 +3403,14 @@ async function solicitarReaperturaAhora(fecha, localId) {
     if (motivo !== null) toast('El motivo debe tener al menos 5 caracteres', true);
     return;
   }
+  const perm = await conPermiso('ventas.pedir_reapertura', localId, 'pedir que reabran el día');
+  if (!perm.ok) return;
   try {
-    const { data, error } = await sb.rpc('solicitar_reapertura', {
+    const { data, error } = await sb.rpc('solicitar_reapertura', conAut({
       p_local: localId,
       p_fecha: fecha,
       p_motivo: motivo.trim(),
-    });
+    }, perm));
     if (error) throw error;
     toast('🙏 Solicitud enviada. El admin va a recibir el aviso.');
   } catch (e) {
@@ -3212,7 +3434,8 @@ const _CTRL_CANT = new Set(['cant_transacciones', 'cant_online', 'cant_fc_oficin
 async function refrescarBadgeControlCerrados() {
   const btn = document.getElementById('btn-control-cerrados');
   if (!btn) return;
-  if (!session?.isAdmin) { btn.style.display = 'none'; return; }
+  if (puedo('ventas.control_cerrados') === 'o') { btn.style.display = 'none'; return; }
+  if (puedo('ventas.control_cerrados') === 'a') { btn.style.display = ''; return; }   // el detalle, con permiso
   btn.style.display = '';
   try {
     const { count } = await sb.from('ventas_control_cerrados_log')
@@ -3223,7 +3446,13 @@ async function refrescarBadgeControlCerrados() {
   } catch (e) { /* silent */ }
 }
 
+let _ctrlPerm = null;   // (13-nov) si «pide permiso», se lee y se marca con la sesión de quien autorizó
 async function abrirControlCerrados() {
+  if (!_ctrlPerm) {
+    const perm = await conPermiso('ventas.control_cerrados', null, 'ver los días cerrados que cambiaron', { cliente: true });
+    if (!perm.ok) return;
+    _ctrlPerm = perm;
+  }
   document.getElementById('modal-control-cerrados')?.remove();
   const wrap = document.createElement('div');
   wrap.id = 'modal-control-cerrados';
@@ -3240,10 +3469,10 @@ async function abrirControlCerrados() {
   document.body.appendChild(wrap);
   const esc = (e) => { if (e.key === 'Escape') cerrarControlCerrados(); };
   document.addEventListener('keydown', esc);
-  window.cerrarControlCerrados = () => { wrap.remove(); document.removeEventListener('keydown', esc); };
+  window.cerrarControlCerrados = () => { wrap.remove(); document.removeEventListener('keydown', esc); soltarSuperior(_ctrlPerm?.sup); _ctrlPerm = null; };
 
   const desde = new Date(Date.now() - 60 * 86400000).toISOString();
-  const { data, error } = await sb.from('ventas_control_cerrados_log')
+  const { data, error } = await (_ctrlPerm?.db || sb).from('ventas_control_cerrados_log')
     .select('*').gte('corrida_at', desde)
     .order('corrida_at', { ascending: false }).limit(200);
   const body = document.getElementById('control-cerrados-body');
@@ -3295,8 +3524,8 @@ async function abrirControlCerrados() {
 }
 
 async function marcarVistoControl(id) {
-  const { error } = await sb.from('ventas_control_cerrados_log')
-    .update({ revisado_at: new Date().toISOString(), revisado_por: session?.user?.email || session?.nombre || 'admin' })
+  const { error } = await (_ctrlPerm?.db || sb).from('ventas_control_cerrados_log')
+    .update({ revisado_at: new Date().toISOString(), revisado_por: _ctrlPerm?.quien?.email || session?.email || 'admin' })
     .eq('id', id);
   if (error) { toast('No se pudo marcar: ' + error.message, true); return; }
   refrescarBadgeControlCerrados();
@@ -3308,7 +3537,7 @@ function irAlDiaControl(local, año, mes) {
   const sa = document.getElementById('sel-año'), sm = document.getElementById('sel-mes'), sl = document.getElementById('sel-local');
   if (sa) sa.value = String(año);
   if (sm) sm.value = String(mes);
-  if (sl && session?.isAdmin) sl.value = local;
+  if (sl && eligeLocal()) sl.value = local;
   cargar();
 }
 
@@ -3348,7 +3577,7 @@ async function abrirBandejaReaperturas() {
     const colorEstado = r.estado === 'pendiente' ? '#fbbf24' : (r.estado === 'aprobada' ? '#22c55e' : '#dc2626');
     const labelEstado = r.estado === 'pendiente' ? 'Pendiente' : (r.estado === 'aprobada' ? '✓ Aprobada' : '✗ Rechazada');
     const fechaHora = new Date(r.solicitado_at).toLocaleString('es-AR', { dateStyle:'short', timeStyle:'short' });
-    const acciones = (session?.isAdmin && r.estado === 'pendiente')
+    const acciones = (puedo('ventas.reabrir_cerrar_mes') !== 'o' && r.estado === 'pendiente')
       ? `<div style="display:flex;gap:6px;margin-top:10px;">
            <button onclick="resolverReaperturaAhora(${r.id}, true)" style="flex:1;background:#16a34a;color:#fff;border:none;border-radius:6px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer;">✓ Aprobar y reabrir</button>
            <button onclick="resolverReaperturaAhora(${r.id}, false)" style="flex:1;background:#dc2626;color:#fff;border:none;border-radius:6px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer;">✗ Rechazar</button>
@@ -3383,12 +3612,15 @@ async function resolverReaperturaAhora(id, aprobar) {
   const comentario = prompt(`Comentario para la vendedora (opcional):`);
   if (comentario === null) return;  // canceló
   if (!confirm(`¿Confirmás ${accion} la solicitud?${aprobar ? '\n\nEl día se va a reabrir y la próxima sincronización va a actualizar los valores.' : ''}`)) return;
+  const perm = await conPermiso('ventas.reabrir_cerrar_mes', null, 'resolver la reapertura', { cliente: true });
+  if (!perm.ok) return;
   try {
-    const { data, error } = await sb.rpc('resolver_reapertura', {
+    const { data, error } = await perm.db.rpc('resolver_reapertura', {
       p_id: id,
       p_aprobar: aprobar,
       p_comentario: comentario.trim() || null,
     });
+    soltarSuperior(perm.sup);
     if (error) throw error;
     toast(aprobar ? '✓ Aprobada · día reabierto' : '✗ Rechazada');
     abrirBandejaReaperturas();  // refrescar
@@ -3400,7 +3632,7 @@ async function resolverReaperturaAhora(id, aprobar) {
 
 /** Actualiza el badge del botón Reaperturas con contador de pendientes (solo admin). */
 async function refrescarBadgeReaperturas() {
-  if (!session?.isAdmin) {
+  if (puedo('ventas.reabrir_cerrar_mes') !== 'h') {
     document.getElementById('btn-reaperturas').innerHTML = ico('key') + '<span>Reaperturas</span>';
     return;
   }
@@ -3418,17 +3650,16 @@ async function refrescarBadgeReaperturas() {
 
 /** Reabre un día previamente cerrado. Solo admin. */
 async function reabrirDiaAhora(fecha, localId) {
-  if (!session?.isAdmin) {
-    toast('Solo admin puede reabrir un día cerrado', true);
-    return;
-  }
   if (!confirm(`¿Reabrir el día ${fmtFecha(fecha)} en ${localId.toUpperCase()}?\n\nVa a permitir cerrar nuevos turnos en ese día.`)) return;
+  const perm = await conPermiso('ventas.reabrir_cerrar_mes', null, 'reabrir el día', { cliente: true });
+  if (!perm.ok) return;
   try {
-    const { error } = await sb.rpc('reabrir_dia', {
+    const { error } = await perm.db.rpc('reabrir_dia', {
       p_local: localId,
       p_fecha: fecha,
-      p_por: session?.email || 'admin',
+      p_por: perm.quien?.email || session?.email || 'admin',
     });
+    soltarSuperior(perm.sup);
     if (error) throw error;
     toast('🔓 Día reabierto');
     cargar();  // (10-ago) fix: verPlanilla no existía
@@ -3681,7 +3912,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=41"></script>
-<script src="reporte.js?v=21"></script>
+<script src="manual.js?v=42"></script>
+<script src="reporte.js?v=22"></script>
 </body>
 </html>
