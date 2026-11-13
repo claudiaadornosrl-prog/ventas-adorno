@@ -955,6 +955,7 @@ const FUNC_POR_LOCAL = new Set(['ventas.planilla', 'ventas.cerrar_turno', 'venta
   'ventas.resincronizar', 'ventas.pedir_correccion', 'ventas.pedir_reapertura', 'ventas.reporte']);
 let PERM = null;          // { 'ventas.planilla': 'h' | 'a' | 'o', … }
 let MIS_LOCALES = [];     // hub_mis_locales()
+let VER_LOCALES = [];     // ventas_locales_visibles(): los suyos + los "solo para mirar" (hub_permisos 'ventas_ver_<local>')
 // Si el Hub no contesta (sin red), lo de siempre por tipo de cuenta: la base igual decide lo que graba.
 function _permRespaldo() {
   const p = {}; VENTAS_FUNCIONES.forEach(f => { p[f] = 'o'; });
@@ -969,9 +970,11 @@ function _permRespaldo() {
 }
 async function cargarPermisos() {
   try {
-    const [rl, ...rs] = await Promise.all([sb.rpc('hub_mis_locales'), ...VENTAS_FUNCIONES.map(f => sb.rpc('hub_puedo', { p_funcion: f }))]);
+    const [rl, rv, ...rs] = await Promise.all([sb.rpc('hub_mis_locales'), sb.rpc('ventas_locales_visibles'),
+      ...VENTAS_FUNCIONES.map(f => sb.rpc('hub_puedo', { p_funcion: f }))]);
     const err = rl.error || rs.find(r => r.error)?.error;
     if (err) throw err;
+    VER_LOCALES = (!rv.error && Array.isArray(rv.data) ? rv.data : []).filter(l => LOCALES[l]);
     PERM = {};
     VENTAS_FUNCIONES.forEach((f, i) => { PERM[f] = ['h', 'a', 'o'].includes(rs[i].data) ? rs[i].data : 'o'; });
     MIS_LOCALES = (Array.isArray(rl.data) ? rl.data : []).filter(l => LOCALES[l]);
@@ -993,8 +996,12 @@ function puedoEn(f, local) {
 }
 /** ¿Ve los otros locales y el consolidado? (admin, Oficina…) */
 const veTodo = () => !!session && puedo('ventas.planilla') !== 'o' && puedo('ventas.ver_otros_locales') !== 'o';
-/** Locales para elegir arriba: todos si ve los otros; si no, los suyos. */
-const localesVisibles = () => veTodo() ? Object.keys(LOCALES) : (MIS_LOCALES.length ? MIS_LOCALES : (session?.local_id ? [session.local_id] : []));
+/** Locales para elegir arriba: todos si ve los otros; si no, los suyos + los "solo para mirar" (13-nov, Andrea: Unicenter). */
+const localesVisibles = () => {
+  if (veTodo()) return Object.keys(LOCALES);
+  const l = [...new Set([...MIS_LOCALES, ...VER_LOCALES])];
+  return l.length ? l : (session?.local_id ? [session.local_id] : []);
+};
 /** ¿Hay que elegir el local con el selector de arriba? (ve todos, o tiene más de uno) */
 const eligeLocal = () => veTodo() || localesVisibles().length > 1;
 
@@ -1347,7 +1354,7 @@ async function enterApp() {
     if (puedo('ventas.ver_otros_locales') === 'a' && session.local_id) selLocal.value = session.local_id;   // los otros, con permiso
   } else if (localesVisibles().length > 1) {
     // (13-nov) Varios locales en el Hub: elige arriba en cuál trabaja
-    selLocal.innerHTML = localesVisibles().map(id => `<option value="${id}">${LOCALES[id].nombre}</option>`).join('');
+    selLocal.innerHTML = localesVisibles().map(id => `<option value="${id}">${LOCALES[id].nombre}${MIS_LOCALES.includes(id) ? '' : ' · solo ver'}</option>`).join('');
     selLocal.value = session.local_id || localesVisibles()[0];
     selLocal.classList.add('sel-trabajo'); selLocal.title = 'Local en el que estás trabajando';
     document.getElementById('hdr-local').style.display = 'none';
@@ -1619,7 +1626,7 @@ async function cargar() {
     if (perm.ok) window._verOtrosOk = true;
     else { localSel = session.local_id; document.getElementById('sel-local').value = localSel; }
   }
-  if (!veTodo() && localesVisibles().length > 1 && localSel !== session.local_id) {
+  if (!veTodo() && localesVisibles().length > 1 && localSel !== session.local_id && MIS_LOCALES.includes(localSel)) {
     session.local_id = localSel; try { localStorage.setItem('ventas_local_trabajo', localSel); } catch (e) {}
   }
   asegurarEstiloLocal([localSel]);
@@ -3912,7 +3919,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=42"></script>
+<script src="manual.js?v=43"></script>
 <script src="reporte.js?v=22"></script>
 </body>
 </html>
