@@ -39,7 +39,7 @@ let _repCache = {};
 // Admin y quien tenga el permiso en hub_permisos (Marisa y Analía con sus personales) ven TODO
 // (ventas_reporte_todo(): policy vr_permiso_read); la encargada, solo su local. Las cuentas genéricas no
 // leen ventas_reportes directo. Más adelante esto pasa a la ventana común /hub/autorizar.js.
-let _repEnc = null;   // { local, email, nombre, todo }  (todo = ve todos los locales)
+let _repEnc = null;   // { local, locales, email, nombre, todo }  (todo = ve todos los locales; locales = los que ve si no)
 let _repCli = null;   // cliente supabase del usuario personal que abrió el reporte
 const _repDb = () => _repCli || sb;
 let _repIdle = null;
@@ -195,16 +195,20 @@ async function abrirReporteVentas() {
     ['click', 'scroll', 'keydown'].forEach(ev => ov.addEventListener(ev, _repTocar, true));
     _repTocar();
   } else if (_repEnc) {
-    // La encargada ve SOLO su local y sin el interanual (que es consolidado).
-    const nom = { alcorta: 'Alcorta', unicenter: 'Unicenter' }[_repEnc.local] || _repEnc.local;
-    document.getElementById('r-local').innerHTML = `<option value="${_repEnc.local}">${nom}</option>`;
+    // La encargada ve SOLO sus locales y sin el interanual (que es consolidado). (13-nov) Sus locales = el suyo
+    // + los que JP le dé con hub_permisos 'ventas_ver_<local>' (ventas_reporte_locales; p.ej. Andrea: Alcorta y Unicenter).
+    const NOM = { alcorta: 'Alcorta', unicenter: 'Unicenter', oficina: 'Oficina', el_solar: 'El Solar' };
+    const locs = (_repEnc.locales && _repEnc.locales.length) ? _repEnc.locales : [_repEnc.local];
+    const nom = locs.map(l => NOM[l] || l).join(' y ');
+    document.getElementById('r-local').innerHTML = locs.map(l => `<option value="${_rEsc(l)}">${_rEsc(NOM[l] || l)}</option>`).join('');
     document.querySelector('#r-tipo option[value="interanual"]')?.remove();
     document.querySelector('#r-tipo option[value="evolucion"]')?.remove();   // (v12) usa vistas de admin
     _repSel.local = _repEnc.local;
+    document.getElementById('r-local').value = _repSel.local;
     if (_repSel.tipo === 'interanual') _repSel.tipo = 'semanal';
     document.getElementById('r-tipo').value = _repSel.tipo;
     const t = ov.querySelector('.r-head > div');
-    if (t) t.innerHTML = `Reporte de ventas · ${nom}<div style="font-size:11px;font-weight:400;opacity:.85">${_repEnc.email}</div>`;
+    if (t) t.innerHTML = `Reporte de ventas · ${_rEsc(nom)}<div style="font-size:11px;font-weight:400;opacity:.85">${_rEsc(_repEnc.email)}</div>`;
     ['click', 'scroll', 'keydown'].forEach(ev => ov.addEventListener(ev, _repTocar, true));
     _repTocar();
   }
@@ -330,12 +334,14 @@ async function entrarRepSuperior() {
     const { data: pv, error: e1 } = await cli.rpc('hub_puede_ver', { p_que: 'reporte_ventas' });
     if (e1) throw e1;
     if (!pv || !pv.ok) { await salir(); throw new Error((pv && pv.motivo) || 'Ese usuario no tiene permiso para ver el reporte.'); }
-    // qué ve: todo (admin o con permiso) o solo su local (encargada)
-    const [rTodo, rLocal] = await Promise.all([cli.rpc('ventas_reporte_todo'), cli.rpc('ventas_reporte_local_encargada')]);
+    // qué ve: todo (admin o con permiso) o sus locales (encargada: el suyo primero + los de ventas_ver_<local>)
+    const [rTodo, rLocs] = await Promise.all([cli.rpc('ventas_reporte_todo'), cli.rpc('ventas_reporte_locales')]);
     if (rTodo.error) throw rTodo.error;
-    const todo = !!rTodo.data, local = rLocal.data || null;
-    if (!todo && !local) { await salir(); throw new Error('Ese usuario no tiene un local asignado para el reporte.'); }
-    _repCli = cli; _repEnc = { local: todo ? null : local, email: pv.email || email, nombre: pv.nombre || email, todo };
+    if (rLocs.error) throw rLocs.error;
+    const todo = !!rTodo.data, locales = Array.isArray(rLocs.data) ? rLocs.data : [];
+    if (!todo && !locales.length) { await salir(); throw new Error('Ese usuario no tiene un local asignado para el reporte.'); }
+    _repCli = cli; _repEnc = { local: todo ? null : locales[0], locales: todo ? null : locales,
+                               email: pv.email || email, nombre: pv.nombre || email, todo };
     _repResetCaches(); _repIaCache = null;
     cerrarRepLogin();
     if (typeof toast === 'function') toast(`Reporte abierto por ${_repNombre(_repEnc.nombre)}`);

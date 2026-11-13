@@ -1,5 +1,5 @@
 // Service Worker — Ventas Adorno
-const CACHE_VERSION = 'ventas-adorno-v154-avisos-admin';
+const CACHE_VERSION = 'ventas-adorno-v155-andrea-unicenter-sin-caras';
 const CACHE_ASSETS = ['./', './index.html',
   './manual.js', './reporte.js', './manifest.webmanifest',
   './manifest-alcorta.webmanifest', './manifest-unicenter.webmanifest', './manifest-oficina.webmanifest',

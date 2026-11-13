@@ -3001,8 +3001,8 @@ function quienCierra(fecha, localId, avisoHtml) {
         <div class="cc-head"><h3>Cerrar el día ${fecha.slice(8, 10)}/${fecha.slice(5, 7)} · ${escHtml(NOMBRE_LOCAL[localId] || localId)}</h3>
           <button class="cc-x" title="Cerrar" aria-label="Cerrar">✕</button></div>
         <div class="cc-aviso">${avisoHtml}</div>
-        <div class="cc-cam"><video playsinline muted></video><div class="cc-marco"></div></div>
-        <div class="cc-estado">Preparando la cámara…</div>
+        <div class="cc-cam" style="display:none;"><video playsinline muted></video><div class="cc-marco"></div></div>
+        <div class="cc-estado">Un momento…</div>
         <div class="cc-acciones"></div>
       </div>`;
     document.body.appendChild(wrap);
@@ -3011,6 +3011,7 @@ function quienCierra(fecha, localId, avisoHtml) {
     const estado = (html) => { $('.cc-estado').innerHTML = html; };
     const dormir = (ms) => new Promise(r => setTimeout(r, ms));
     let fin = false, tMano = null, hayMano = false;
+    let carasApagadas = false;   // (13-nov) el Hub apagó el reconocimiento por cara (hub_caras_activas() = false)
     const terminar = (res) => {
       if (fin) return; fin = true; caraApagar(); clearTimeout(tMano);
       document.removeEventListener('keydown', esc); wrap.remove(); resolve(res);
@@ -3028,7 +3029,9 @@ function quienCierra(fecha, localId, avisoHtml) {
       estado(`${p.modo === 'cara' ? 'Te reconocí' : 'Cierra'}: <b>${escHtml(nombrePersona(p.nombre))}</b>${nota ? `<div style="font-size:12px;color:#92400e;margin-top:4px;">${nota}</div>` : ''}`);
       acc.innerHTML = ''; hayMano = false;
       boton('Cerrar el día', 'principal', () => terminar(p));
-      boton(p.modo === 'cara' ? 'No soy yo' : 'Volver a la cámara', '', () => { acc.innerHTML = ''; hayMano = false; arrancar(); });
+      if (p.modo === 'cara') boton('No soy yo', '', () => { acc.innerHTML = ''; hayMano = false; arrancar(); });
+      else if (carasApagadas) boton('Elegir a otra persona', '', () => elegirAMano());
+      else boton('Volver a la cámara', '', () => { acc.innerHTML = ''; hayMano = false; arrancar(); });
     };
 
     async function elegirAMano() {
@@ -3038,7 +3041,8 @@ function quienCierra(fecha, localId, avisoHtml) {
       if (fin) return;
       if (error) { estado('No pude traer la lista: ' + escHtml(error.message)); return; }
       if (!data || !data.length) { estado('No hay personas activas cargadas en este local.'); return; }
-      estado('¿Quién cierra el día?');
+      estado('¿Quién cierra el día?' + (carasApagadas
+        ? '<div style="font-size:12px;color:var(--muted);margin-top:4px;">El reconocimiento por cara está apagado por ahora: elegí a mano.</div>' : ''));
       const eq = document.createElement('div'); eq.className = 'cc-equipo';
       data.forEach(pp => {
         const b = document.createElement('button'); b.className = 'cc-btn'; b.textContent = nombrePersona(pp.nombre);
@@ -3052,7 +3056,7 @@ function quienCierra(fecha, localId, avisoHtml) {
         eq.appendChild(b);
       });
       acc.appendChild(eq);
-      boton('Volver a la cámara', 'link', () => { acc.innerHTML = ''; hayMano = false; arrancar(); });
+      if (!carasApagadas) boton('Volver a la cámara', 'link', () => { acc.innerHTML = ''; hayMano = false; arrancar(); });
     }
 
     async function arrancar() {
@@ -3089,7 +3093,12 @@ function quienCierra(fecha, localId, avisoHtml) {
         await dormir(150);
       }
     }
-    arrancar();
+    // (13-nov) Si el Hub apagó el reconocimiento por cara, no se abre la cámara: directo a elegir a mano.
+    (async () => {
+      try { const { data } = await sb.rpc('hub_caras_activas'); carasApagadas = data === false; } catch (_) {}
+      if (fin) return;
+      if (carasApagadas) elegirAMano(); else arrancar();
+    })();
   });
 }
 
@@ -3712,7 +3721,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=39"></script>
-<script src="reporte.js?v=20"></script>
+<script src="manual.js?v=40"></script>
+<script src="reporte.js?v=21"></script>
 </body>
 </html>
