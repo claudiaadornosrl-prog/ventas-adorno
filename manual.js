@@ -51,8 +51,9 @@ function _manualSecciones() {
         'Cada cuenta ve y carga lo suyo: la cuenta de Alcorta solo Alcorta y la de Unicenter solo Unicenter. Las dos cuentas de Oficina (claudiaadorno@ y administracion@, desde el 12-nov) ven y cargan los 3 locales: arriba eligen el local con las tarjetas o miran el consolidado. Lo de administración (cerrar o reabrir el mes, aprobar pedidos, reabrir días y corregir números directo) sigue siendo solo de admin. Lo controla la base, no solo la pantalla.',
         'Si el mes elegido no tiene días cargados, arriba de la grilla aparece un aviso con el motivo: mes futuro, mes en curso sin ventas todavía, mes viejo del que solo se conoce el total mensual, o mes en que el local no operaba.',
         'Los números los carga solo el sistema desde Dragonfish — no hace falta tipear nada. Si un día quedó incompleto, tocá "Resincronizar mes" en el menú ⋮ (solo actualiza días NO cerrados).',
+        'Nadie de los locales ni de Oficina cambia un importe directo (13-nov): ni desde la pantalla ni por otro lado, porque la base no las deja escribir la planilla. Los números los graba el sistema: el sync de Dragonfish, el cierre del turno y el cierre del día. Si un número está mal, tocás la celda y pedís la corrección; la aprueba el admin.',
         'La columna Online en los locales es el efectivo de la segunda base — si hay que corregir a mano, SIEMPRE se corrige en esa columna.',
-        'FC Oficina son facturas emitidas en Oficina pero que corresponden a una venta del local — las carga el sistema solo.',
+        'FC Oficina son facturas emitidas en Oficina pero que corresponden a una venta del local — las carga el sistema solo. Si está mal, se pide la corrección como cualquier otra celda (desde el 13-nov ya no se edita directo).',
       ],
     },
     {
@@ -93,7 +94,7 @@ function _manualSecciones() {
       icon: 'inbox', titulo: 'Solicitudes y reaperturas',
       desc: 'Para corregir un dato de un día ya cerrado, no se toca directo: se pide.',
       pasos: [
-        'Si un importe está mal en un día cerrado, tocá la celda y "Enviar pedido" — le llega la solicitud de corrección al admin.',
+        'Si un importe está mal, tocá la celda (cualquiera, también Fc Oficina) y "Enviar pedido" — le llega la solicitud de corrección al admin.',
         'Si necesitás reabrir un día entero, usá "Reaperturas" del menú ⋮.',
         'Apenas lo pedís, a JP y a Clau les llega un aviso al celular con el local, el día, el importe y quién lo pidió (12-nov; antes ese aviso no salía). Lo mismo cuando se completa el sync de fin de mes de un mes que todavía no se cerró.',
         'El admin aprueba o rechaza. Cómo quedó lo ves en la planilla: la celda corregida queda amarilla (pasando el mouse se ve el antes y el después) y en ⋮ → Reaperturas ves el estado de tus pedidos.',

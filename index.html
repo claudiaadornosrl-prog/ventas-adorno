@@ -2075,11 +2075,9 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
       if (session.isAdmin) {
         // Admin: click en cualquier celda abre el editar completo
         onclick = `event.stopPropagation(); abrirEditar('${fecha}','${localId}',${JSON.stringify(v||null).replace(/"/g,'&quot;')})`;
-      } else if (campo === 'fc_oficina') {
-        // Vendedora: fc_oficina sigue editable (mini modal con SOLO ese campo)
-        onclick = `event.stopPropagation(); abrirEditarFcOficina('${fecha}','${localId}',${JSON.stringify(v||null).replace(/"/g,'&quot;')})`;
       } else {
-        // Vendedora + otra celda: pedir corrección
+        // Local y Oficina: pedir corrección en CUALQUIER celda (13-nov, JP: Fc Oficina tampoco se edita directo;
+        // la base ya no les deja escribir ventas_diarias, solo por las funciones de cierre)
         const valActual = v ? (v[campo] || 0) : 0;
         onclick = `event.stopPropagation(); abrirSolicitudCorreccion('${fecha}','${localId}','${campo}',${valActual})`;
       }
@@ -2385,46 +2383,8 @@ function abrirEditar(fecha, localId, v) {
 
 function cerrarModal() { document.getElementById('modal')?.remove(); }
 
-// ─── Modal específico: editar solo Fc Oficina (para vendedoras) ──────
-function abrirEditarFcOficina(fecha, localId, v) {
-  if (typeof v === 'string') { try { v = JSON.parse(v); } catch { v = null; } }
-  const actual = v?.fc_oficina ?? 0;
-  const html = `
-    <div id="modal" style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;">
-      <div style="background:white;border-radius:12px;padding:22px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
-        <h3 style="margin:0 0 4px;color:var(--primary);">Fc Oficina</h3>
-        <p style="margin:0 0 16px;font-size:12px;color:var(--muted);">${LOCALES[localId]?.nombre} · ${fmtFecha(fecha)}</p>
-        <label style="font-size:12px;color:var(--muted);font-weight:600;">Monto Fc Oficina</label>
-        <input id="f-fc-of" type="text" inputmode="decimal" value="${nmShow(actual)}" onfocus="wireImporte(this)" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;font-size:14px;margin-top:6px;">
-        <div id="form-error" style="color:var(--primary);font-size:12px;margin-top:10px;display:none;"></div>
-        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;">
-          <button onclick="cerrarModal()" style="padding:9px 16px;border:1px solid var(--border);background:white;border-radius:6px;cursor:pointer;font-size:13px;">Cancelar</button>
-          <button id="btn-guardar-fcof" onclick="guardarFcOficina('${fecha}','${localId}',${v ? v.id : 'null'})" class="btn-primary" style="padding:9px 18px;width:auto;">Guardar</button>
-        </div>
-      </div>
-    </div>`;
-  document.body.insertAdjacentHTML('beforeend', html);
-  setTimeout(() => document.getElementById('f-fc-of')?.focus(), 50);
-}
-
-async function guardarFcOficina(fecha, localId, vId) {
-  const btn = document.getElementById('btn-guardar-fcof');
-  const errEl = document.getElementById('form-error');
-  const valor = nmParse(document.getElementById('f-fc-of').value);
-  if (errEl) { errEl.style.display='none'; errEl.textContent=''; }
-  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
-  try {
-    const data = { local: localId, fecha, fc_oficina: valor, cargado_por: session.email };
-    const res = vId
-      ? await sb.from('ventas_diarias').update({ fc_oficina: valor }).eq('id', vId)
-      : await sb.from('ventas_diarias').upsert(data, { onConflict: 'local,fecha' });
-    if (res.error) throw res.error;
-    cerrarModal(); toast('✓ Fc Oficina guardado'); cargar();
-  } catch (e) {
-    if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
-    if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
-  }
-}
+// (13-nov-2026, JP) Se fue el mini modal "Fc Oficina" de las vendedoras (escribía ventas_diarias directo):
+// ahora Fc Oficina se pide como cualquier corrección.
 
 // ─── Modal "Solicitar corrección" (para vendedoras) ──────────────────
 // 🚨 Tiene que tener TODAS las columnas que la grilla deja corregir, y las
@@ -3721,7 +3681,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=40"></script>
+<script src="manual.js?v=41"></script>
 <script src="reporte.js?v=21"></script>
 </body>
 </html>
