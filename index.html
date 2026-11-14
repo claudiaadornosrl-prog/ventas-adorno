@@ -505,6 +505,7 @@ window.ADORNO_SSO = (function () {
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.min.js" integrity="sha384-UagCvVPT5XXA0Hx+nJYUAGBFseHT9zBgpJMSebsAxl9lciTwbT+39j5VfRjdP5Tp" crossorigin="anonymous"></script>
 <script src="/hub/seguridad.js?v=1"></script>
+<script src="/hub/caras.js?v=4" defer></script>  <!-- (14-nov) «📷 Registra quién» del Hub: ADORNO_CARAS.registrar -->
 <style>
 /* Tipografia institucional: URW Gothic (clon libre de Avant Garde),
    servida desde fonts/ del propio repo. */
@@ -1077,6 +1078,34 @@ async function conPermiso(funcion, local, que, opc = {}) {
 }
 const conAut = (params, perm) => (perm && perm.aut) ? { ...params, p_autorizacion: perm.aut } : params;
 
+/** (14-nov-2026, JP desde Infra) «📷 Registra quién» del Hub. Llamarlo justo antes de grabar (y después de la autorización).
+ *  Si la función no está marcada, sigue sin mostrar nada. Si está marcada, anota en hub_registros quién la hace:
+ *  con usuario personal, esa persona; con la cuenta del local o de la oficina, por la cara o tocando su nombre en la lista
+ *  (ADORNO_CARAS.registrar, /hub/caras.js v4). Siempre con la sesión de quien usa Ventas (sb), nunca con la de quien autorizó.
+ *  persona = { empleado_id } si Ventas ya sabe quién es («¿Quién cierra?»): se anota sin volver a preguntar.
+ *  Devuelve true para seguir; false si cancelaron o no se pudo anotar (y entonces la operación NO se hace). */
+async function registrarQuien(funcion, local, detalle, persona) {
+  const loc = (local && local !== 'todos') ? local : null;
+  try {
+    if (persona?.empleado_id || !window.ADORNO_CARAS?.registrar) {
+      const c = await sb.rpc('hub_registra_quien', { p_funcion: funcion });
+      if (c.error) throw c.error;
+      if (!c.data?.registra) return true;
+      if (!persona?.empleado_id) throw new Error('no cargó /hub/caras.js. Recargá la página');
+      const r = await sb.rpc('hub_registrar', { p_funcion: funcion, p_local: loc, p_empleado_id: persona.empleado_id, p_detalle: detalle || null });
+      if (r.error) throw r.error;
+      return true;
+    }
+    const r = await ADORNO_CARAS.registrar({ cli: sb, funcion, local: loc, detalle: detalle || null });
+    if (r.ok) return true;
+    if (r.motivo === 'error') toast('No se pudo anotar quién lo hace: ' + (r.error || 'error'), true);
+    return false;
+  } catch (e) {
+    toast('No se pudo anotar quién lo hace: ' + (e?.message || e), true);
+    return false;
+  }
+}
+
 // (11-nov-2026, JP) Las notificaciones se activan desde el Hub (campanita, interruptor Ventas):
 // Ventas ya no tiene botón ni suscripción propia. El service worker sigue mostrando los push.
 
@@ -1521,6 +1550,7 @@ async function hacerSyncFinDeMes() {
   const ultDia = new Date(año, mes, 0).getDate();
   const hasta = `${año}-${String(mes).padStart(2,'0')}-${String(ultDia).padStart(2,'0')}`;
   if (!(await conPermiso('ventas.resincronizar', localId, 'hacer el sync de fin de mes')).ok) return;
+  if (!(await registrarQuien('ventas.resincronizar', localId, { desde, hasta, modo: 'fin_de_mes' }))) return;
   try {
     toast(`🐉 Pidiendo sync de fin de mes (${label})…`);
     const { data: job, error } = await sb.from('dragonfish_jobs').insert({
@@ -2139,6 +2169,7 @@ window.salvarDifMp = async function salvarDifMp(fecha, localId, estado) {
   try { localStorage.setItem('ventas_revisor_nombre', nombre); } catch (_) {}
   const perm = await conPermiso('ventas.dif_mp', localId, 'justificar la diferencia con Mercado Pago');
   if (!perm.ok) return;
+  if (!(await registrarQuien('ventas.dif_mp', localId, { fecha, estado, motivo: motivo || null, nombre }))) return;
   try {
     const { error } = await sb.rpc('ventas_salvar_dif_mp', conAut({
       p_local: localId, p_fecha: fecha, p_estado: estado, p_motivo: motivo, p_quien: nombre }, perm));
@@ -2580,7 +2611,7 @@ function abrirFcOficina(fecha, localId, actual) {
     </div>`;
   document.body.appendChild(w);
   const cerrar = () => { document.removeEventListener('keydown', esc); w.remove(); };
-  const esc = (e) => { if (e.key === 'Escape' && !document.getElementById('sup-wrap')) cerrar(); };
+  const esc = (e) => { if (e.key === 'Escape' && !document.getElementById('sup-wrap') && !document.querySelector('.acr-fondo')) cerrar(); };
   document.addEventListener('keydown', esc);
   w.querySelector('.cc-x').onclick = cerrar;
   w.querySelector('#fcof-ok').onclick = async () => {
@@ -2589,6 +2620,7 @@ function abrirFcOficina(fecha, localId, actual) {
     err.textContent = '';
     const perm = await conPermiso('ventas.fc_oficina', localId, 'cargar la Factura Oficina');
     if (!perm.ok) return;
+    if (!(await registrarQuien('ventas.fc_oficina', localId, { fecha, valor }))) return;
     btn.disabled = true; btn.textContent = 'Guardando…';
     const { error } = await sb.rpc('ventas_cargar_fc_oficina', conAut({ p_local: localId, p_fecha: fecha, p_valor: valor }, perm));
     if (error) { err.textContent = error.message; btn.disabled = false; btn.textContent = 'Guardar'; return; }
@@ -2645,6 +2677,7 @@ async function enviarSolicitudCorreccion(fecha, localId, campo, valorActual) {
   if (!motivo || motivo.length < 5) { errEl.textContent='Escribí un motivo (mínimo 5 caracteres)'; errEl.style.display='block'; return; }
   const perm = await conPermiso('ventas.pedir_correccion', localId, 'pedir una corrección');
   if (!perm.ok) return;
+  if (!(await registrarQuien('ventas.pedir_correccion', localId, { fecha, campo, valor_anterior: valorActual, valor_propuesto: propuesto }))) return;
   if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
   try {
     // (13-nov) por la función de la base: chequea el permiso del Hub (y la autorización si «pide permiso»)
@@ -2728,6 +2761,7 @@ async function resolverSolicitud(id, estado) {
   }
   const perm = await conPermiso('ventas.aprobar_correccion', null, 'aprobar correcciones', { cliente: true });
   if (!perm.ok) return;
+  if (!(await registrarQuien('ventas.aprobar_correccion', null, { solicitud: id, estado }))) { soltarSuperior(perm.sup); return; }
   try {
     const { error } = await perm.db.from('ventas_correcciones').update({
       estado,
@@ -2771,6 +2805,10 @@ async function guardarVenta(fecha, localId, vId) {
   if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
   const perm = await conPermiso('ventas.editar_importes', localId, 'cambiar importes a mano', { cliente: true });
   if (!perm.ok) return;
+  if (!(await registrarQuien('ventas.editar_importes', localId, { fecha, efectivo: data.efectivo, tarjeta: data.tarjeta, qr: data.qr,
+      vales: data.vales, online: data.online, fc_oficina: data.fc_oficina, tickets: data.cant_transacciones, controlado: data.controlado }))) {
+    soltarSuperior(perm.sup); return;
+  }
   if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
   try {
     let res;
@@ -2835,6 +2873,7 @@ async function abrirCargaDragonfish(modo) {
     return;
   }
 
+  if (!(await registrarQuien('ventas.resincronizar', localId, { desde, hasta, modo }))) return;
   toast(`🐉 Pidiendo al servicio local (${label})…`);
   try {
     const { data: job, error } = await sb.from('dragonfish_jobs').insert({
@@ -2930,6 +2969,7 @@ async function cerrarMesActual() {
 
   const perm = await conPermiso('ventas.reabrir_cerrar_mes', null, 'cerrar el mes', { cliente: true });
   if (!perm.ok) return;
+  if (!(await registrarQuien('ventas.reabrir_cerrar_mes', localId, { accion: 'cerrar_mes', año, mes }))) { soltarSuperior(perm.sup); return; }
   try {
     const { error } = await perm.db.rpc('ventas_cerrar_mes', { p_local: localId, p_año: año, p_mes: mes });
     soltarSuperior(perm.sup);
@@ -2961,6 +3001,7 @@ async function reabrirMesActual() {
   if (!confirm(`¿Reabrir ${meses[mes-1]} ${año} de ${LOCALES[localId].nombre}?`)) return;
   const perm = await conPermiso('ventas.reabrir_cerrar_mes', null, 'reabrir el mes', { cliente: true });
   if (!perm.ok) return;
+  if (!(await registrarQuien('ventas.reabrir_cerrar_mes', localId, { accion: 'reabrir_mes', año, mes }))) { soltarSuperior(perm.sup); return; }
   try {
     const { error } = await perm.db.rpc('ventas_reabrir_mes', { p_local: localId, p_año: año, p_mes: mes });
     soltarSuperior(perm.sup);
@@ -3069,6 +3110,8 @@ async function cerrarTurnoAhora(fecha, localId) {
   // (jul 2026) El cruce MP se sacó del cierre de turno por el lag de
   // indexación de MP. El arqueo real es contra el DÍA ANTERIOR: se hace al
   // cerrar el día y en el cron de las 10:00.
+  // (14-nov) «📷 Registra quién»: si está marcada, se anota quién cierra el turno (si cancela, no se cierra)
+  if (!(await registrarQuien('ventas.cerrar_turno', localId, { fecha, turno: numero }))) return;
   try {
     const { data, error } = await sb.rpc('cerrar_turno', conAut({
       p_local: localId,
@@ -3339,6 +3382,8 @@ async function cerrarDiaAhora(fecha, localId) {
     if (!(await _confirmarCierreSinSync(e, localId))) return;
   }
 
+  // (14-nov) «📷 Registra quién»: queda anotada la persona elegida en «¿Quién cierra?» (no se pregunta dos veces)
+  if (!(await registrarQuien('ventas.cerrar_dia', localId, { fecha, identificado: ident?.modo || null }, ident))) return;
   try {
     const { data, error } = await sb.rpc('cerrar_dia', conAut({
       p_local: localId,
@@ -3412,6 +3457,7 @@ async function solicitarReaperturaAhora(fecha, localId) {
   }
   const perm = await conPermiso('ventas.pedir_reapertura', localId, 'pedir que reabran el día');
   if (!perm.ok) return;
+  if (!(await registrarQuien('ventas.pedir_reapertura', localId, { fecha, motivo: motivo.trim() }))) return;
   try {
     const { data, error } = await sb.rpc('solicitar_reapertura', conAut({
       p_local: localId,
@@ -3474,7 +3520,7 @@ async function abrirControlCerrados() {
       <div id="control-cerrados-body"><div style="text-align:center;color:#64748b;padding:30px;">Cargando…</div></div>
     </div>`;
   document.body.appendChild(wrap);
-  const esc = (e) => { if (e.key === 'Escape') cerrarControlCerrados(); };
+  const esc = (e) => { if (e.key === 'Escape' && !document.querySelector('.acr-fondo')) cerrarControlCerrados(); };
   document.addEventListener('keydown', esc);
   window.cerrarControlCerrados = () => { wrap.remove(); document.removeEventListener('keydown', esc); soltarSuperior(_ctrlPerm?.sup); _ctrlPerm = null; };
 
@@ -3531,6 +3577,7 @@ async function abrirControlCerrados() {
 }
 
 async function marcarVistoControl(id) {
+  if (!(await registrarQuien('ventas.control_cerrados', null, { accion: 'marcar_visto', registro: id }))) return;
   const { error } = await (_ctrlPerm?.db || sb).from('ventas_control_cerrados_log')
     .update({ revisado_at: new Date().toISOString(), revisado_por: _ctrlPerm?.quien?.email || session?.email || 'admin' })
     .eq('id', id);
@@ -3621,6 +3668,9 @@ async function resolverReaperturaAhora(id, aprobar) {
   if (!confirm(`¿Confirmás ${accion} la solicitud?${aprobar ? '\n\nEl día se va a reabrir y la próxima sincronización va a actualizar los valores.' : ''}`)) return;
   const perm = await conPermiso('ventas.reabrir_cerrar_mes', null, 'resolver la reapertura', { cliente: true });
   if (!perm.ok) return;
+  if (!(await registrarQuien('ventas.reabrir_cerrar_mes', null, { accion: aprobar ? 'aprobar_reapertura' : 'rechazar_reapertura', solicitud: id }))) {
+    soltarSuperior(perm.sup); return;
+  }
   try {
     const { data, error } = await perm.db.rpc('resolver_reapertura', {
       p_id: id,
@@ -3660,6 +3710,7 @@ async function reabrirDiaAhora(fecha, localId) {
   if (!confirm(`¿Reabrir el día ${fmtFecha(fecha)} en ${localId.toUpperCase()}?\n\nVa a permitir cerrar nuevos turnos en ese día.`)) return;
   const perm = await conPermiso('ventas.reabrir_cerrar_mes', null, 'reabrir el día', { cliente: true });
   if (!perm.ok) return;
+  if (!(await registrarQuien('ventas.reabrir_cerrar_mes', localId, { accion: 'reabrir_dia', fecha }))) { soltarSuperior(perm.sup); return; }
   try {
     const { error } = await perm.db.rpc('reabrir_dia', {
       p_local: localId,
@@ -3919,7 +3970,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=43"></script>
+<script src="manual.js?v=44"></script>
 <script src="reporte.js?v=22"></script>
 </body>
 </html>
