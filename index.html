@@ -1083,6 +1083,8 @@ const conAut = (params, perm) => (perm && perm.aut) ? { ...params, p_autorizacio
  *  con usuario personal, esa persona; con la cuenta del local o de la oficina, por la cara o tocando su nombre en la lista
  *  (ADORNO_CARAS.registrar, /hub/caras.js v4). Siempre con la sesión de quien usa Ventas (sb), nunca con la de quien autorizó.
  *  persona = { empleado_id } si Ventas ya sabe quién es («¿Quién cierra?»): se anota sin volver a preguntar.
+ *  Si la reconoció la cámara, persona trae { modo:'cara', descriptor }: la base lo verifica (pos_cara_match) y lo anota
+ *  como 'cara'; elegida a mano no se manda y queda 'lista'.
  *  Devuelve true para seguir; false si cancelaron o no se pudo anotar (y entonces la operación NO se hace). */
 async function registrarQuien(funcion, local, detalle, persona) {
   const loc = (local && local !== 'todos') ? local : null;
@@ -1092,7 +1094,8 @@ async function registrarQuien(funcion, local, detalle, persona) {
       if (c.error) throw c.error;
       if (!c.data?.registra) return true;
       if (!persona?.empleado_id) throw new Error('no cargó /hub/caras.js. Recargá la página');
-      const r = await sb.rpc('hub_registrar', { p_funcion: funcion, p_local: loc, p_empleado_id: persona.empleado_id, p_detalle: detalle || null });
+      const r = await sb.rpc('hub_registrar', { p_funcion: funcion, p_local: loc, p_empleado_id: persona.empleado_id, p_detalle: detalle || null,
+        ...(persona.modo === 'cara' && Array.isArray(persona.descriptor) ? { p_descriptor: persona.descriptor } : {}) });
       if (r.error) throw r.error;
       return true;
     }
@@ -3314,7 +3317,7 @@ function quienCierra(fecha, localId, avisoHtml) {
         if (!CARA.corriendo || fin) break;
         if (error) { estado('Error al reconocer: ' + escHtml(error.message)); mostrarMano(); caraApagar(); break; }
         if (!data) { previa = null; estado('No te reconozco. ¿Tenés la cara registrada en el POS?'); await dormir(400); continue; }
-        if (previa && previa.empleado_id === data.empleado_id) { confirmarPase({ ...data, modo: 'cara' }); break; }
+        if (previa && previa.empleado_id === data.empleado_id) { confirmarPase({ ...data, modo: 'cara', descriptor: d }); break; }   // (14-nov) d → hub_registrar lo verifica
         previa = data; estado(`¿${escHtml(nombrePersona(data.nombre))}? Quedate quieta un segundo…`);
         await dormir(150);
       }
@@ -3970,7 +3973,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=44"></script>
+<script src="manual.js?v=45"></script>
 <script src="reporte.js?v=22"></script>
 </body>
 </html>
