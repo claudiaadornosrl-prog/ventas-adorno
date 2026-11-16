@@ -506,6 +506,7 @@ window.ADORNO_SSO = (function () {
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.min.js" integrity="sha384-UagCvVPT5XXA0Hx+nJYUAGBFseHT9zBgpJMSebsAxl9lciTwbT+39j5VfRjdP5Tp" crossorigin="anonymous"></script>
 <script src="/hub/seguridad.js?v=1"></script>
 <script src="/hub/caras.js?v=4" defer></script>  <!-- (14-nov) «📷 Registra quién» del Hub: ADORNO_CARAS.registrar -->
+<script src="/hub/autorizar.js?v=2" defer></script>  <!-- (15-nov) «Pide permiso» común del Hub: cara → celu → clave (ADORNO_AUTORIZAR.pedir) -->
 <style>
 /* Tipografia institucional: URW Gothic (clon libre de Avant Garde),
    servida desde fonts/ del propio repo. */
@@ -1063,13 +1064,36 @@ function pedirSuperior({ funcion, local, que }) {
   });
 }
 function soltarSuperior(sup) { try { sup?.cli?.auth.signOut({ scope: 'local' }); } catch (_) {} }
-/** Antes de una operación. 'h' → sigue · 'o' → avisa y no · 'a' → pide usuario superior.
+/** (15-nov-2026, JP vía Infra) «Pide permiso» con la VENTANA COMÚN del Hub (/hub/autorizar.js):
+ *  primero la cara de quien autoriza, si no un aviso a su celu, si no su usuario y clave.
+ *  La autorización del Hub se gasta enseguida con ventas_autorizacion_hub, que la cambia por una de Ventas
+ *  (un uso, 10 min, para esta cuenta). Así la operación sigue igual que siempre: conAut → p_autorizacion → ventas_exigir.
+ *  Devuelve { id, nombre, modo } · null si se canceló · false si la ventana del Hub no anduvo (sigue la vieja). */
+async function autorizarConHub(funcion, local, que, resumen) {
+  let a;
+  try {
+    a = await window.ADORNO_AUTORIZAR.pedir({ funcion, local, que, modulo: 'ventas',
+      resumen: resumen || `${que.charAt(0).toUpperCase()}${que.slice(1)} · ${NOMBRE_LOCAL[local] || local}` });
+  } catch (e) { console.warn('ventana común del Hub:', e); return false; }
+  if (!a) return null;
+  const { data, error } = await sb.rpc('ventas_autorizacion_hub', { p_hub_id: a.id, p_funcion: funcion, p_local: local });
+  if (error || !data?.id) { alert('No se pudo usar la autorización: ' + (error?.message || 'probá de nuevo')); return null; }
+  return { id: data.id, nombre: data.nombre || a.nombre, modo: data.modo || a.modo, email: null };
+}
+/** Antes de una operación. 'h' → sigue · 'o' → avisa y no · 'a' → pide permiso.
  *  Devuelve { ok, aut, db, sup }: aut = autorización de un solo uso para la función de la base;
- *  con { cliente: true } la operación se hace con la sesión de quien autorizó (db) y hay que soltarla después. */
+ *  con { cliente: true } la operación se hace con la sesión de quien autorizó (db) y hay que soltarla después:
+ *  eso necesita usuario y clave, así que sigue con la ventana vieja (pedirSuperior). opc.resumen: lo que muestra la ventana. */
 async function conPermiso(funcion, local, que, opc = {}) {
   const p = puedoEn(funcion, local);
   if (p === 'h') return { ok: true, aut: null, db: sb, sup: null };
   if (p === 'o') { toast('Tu usuario no tiene permiso para ' + que, true); return { ok: false }; }
+  // La ventana común pide que el local sea de esta cuenta (la base lo controla); si no, o sin el Hub, la de siempre.
+  if (!opc.cliente && window.ADORNO_AUTORIZAR && local && local !== 'todos' && MIS_LOCALES.includes(local)) {
+    const a = await autorizarConHub(funcion, local, que, opc.resumen);
+    if (a === null) return { ok: false };
+    if (a) return { ok: true, aut: a.id, db: sb, sup: null, quien: a };
+  }
   const sup = await pedirSuperior({ funcion, local, que });
   if (!sup) return { ok: false };
   toast(`Autorizó ${nombrePersona(sup.nombre)}`);
@@ -3080,7 +3104,8 @@ async function cerrarTurnoAhora(fecha, localId) {
             + `Esto guarda un snapshot con los valores actuales del día menos los turnos previos.`;
   if (!confirm(msg)) return;
   // (13-nov) «Cerrar un turno» del Hub: si pide permiso, autoriza alguien con su usuario
-  const perm = await conPermiso('ventas.cerrar_turno', localId, 'cerrar el turno');
+  const perm = await conPermiso('ventas.cerrar_turno', localId, 'cerrar el turno',
+    { resumen: `Cerrar el turno ${numero} del ${fecha.slice(8, 10)}/${fecha.slice(5, 7)} · ${NOMBRE_LOCAL[localId] || localId}` });
   if (!perm.ok) return;
 
   const cerradoPor = session?.isAdmin
@@ -3351,7 +3376,8 @@ async function cerrarDiaAhora(fecha, localId) {
     if (!confirm(msg)) return;
   }
   // (13-nov) «Cerrar el día» del Hub: si pide permiso, autoriza alguien con su usuario (10 minutos para cerrar)
-  const perm = await conPermiso('ventas.cerrar_dia', localId, 'cerrar el día');
+  const perm = await conPermiso('ventas.cerrar_dia', localId, 'cerrar el día',
+    { resumen: `Cerrar el día ${fecha.slice(8, 10)}/${fecha.slice(5, 7)} · ${NOMBRE_LOCAL[localId] || localId}` });
   if (!perm.ok) return;
   if (!session?.isAdmin) {
     const aviso = (yaCerrados > 0 ? `Hay ${yaCerrados} turno${yaCerrados>1?'s':''} ya cerrado${yaCerrados>1?'s':''}. ` : '')
@@ -3973,7 +3999,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=46"></script>
+<script src="manual.js?v=47"></script>
 <script src="reporte.js?v=22"></script>
 </body>
 </html>
