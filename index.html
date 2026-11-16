@@ -505,8 +505,8 @@ window.ADORNO_SSO = (function () {
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.min.js" integrity="sha384-UagCvVPT5XXA0Hx+nJYUAGBFseHT9zBgpJMSebsAxl9lciTwbT+39j5VfRjdP5Tp" crossorigin="anonymous"></script>
 <script src="/hub/seguridad.js?v=1"></script>
-<script src="/hub/caras.js?v=7" defer></script>  <!-- (14-nov) «📷 Registra quién» del Hub: ADORNO_CARAS.registrar · v7 (15-nov): la cámara lee sin mostrarse -->
-<script src="/hub/autorizar.js?v=3" defer></script>  <!-- (15-nov) «Pide permiso» común del Hub: cara → celu → clave (ADORNO_AUTORIZAR.pedir) -->
+<script src="/hub/caras.js?v=8" defer></script>  <!-- (14-nov) «📷 Registra quién» del Hub: ADORNO_CARAS.registrar · v7 (15-nov): la cámara lee sin mostrarse -->
+<script src="/hub/autorizar.js?v=5" defer></script>  <!-- (15-nov) «Pide permiso» común del Hub: cara → celu → clave (ADORNO_AUTORIZAR.pedir) -->
 <style>
 /* Tipografia institucional: URW Gothic (clon libre de Avant Garde),
    servida desde fonts/ del propio repo. */
@@ -1072,7 +1072,11 @@ function soltarSuperior(sup) { try { sup?.cli?.auth.signOut({ scope: 'local' });
 async function autorizarConHub(funcion, local, que, resumen) {
   let a;
   try {
-    a = await window.ADORNO_AUTORIZAR.pedir({ funcion, local, que, modulo: 'ventas',
+    // (15-nov, autorizar.js v5) la ventana pide y la base gasta con la sesión DE VENTAS (sb), no con otra que haya quedado
+    // abierta en la compu: si no, ventas_autorizacion_hub → hub_autorizacion_usar falla con «la pidió otra cuenta».
+    const s = (await sb.auth.getSession())?.data?.session;
+    const sesion = s?.access_token ? { email: String(s.user?.email || '').toLowerCase(), token: s.access_token } : undefined;
+    a = await window.ADORNO_AUTORIZAR.pedir({ funcion, local, que, modulo: 'ventas', sesion,
       resumen: resumen || `${que.charAt(0).toUpperCase()}${que.slice(1)} · ${NOMBRE_LOCAL[local] || local}` });
   } catch (e) { console.warn('ventana común del Hub:', e); return false; }
   if (!a) return null;
@@ -4001,7 +4005,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=47"></script>
+<script src="manual.js?v=48"></script>
 <script src="reporte.js?v=22"></script>
 </body>
 </html>
