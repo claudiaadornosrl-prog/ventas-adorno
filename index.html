@@ -543,7 +543,7 @@ window.ADORNO_SSO = (function () {
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.min.js" integrity="sha384-UagCvVPT5XXA0Hx+nJYUAGBFseHT9zBgpJMSebsAxl9lciTwbT+39j5VfRjdP5Tp" crossorigin="anonymous"></script>
 <script src="/hub/seguridad.js?v=1"></script>
-<script src="/hub/caras.js?v=8" defer></script>  <!-- (14-nov) «📷 Registra quién» del Hub: ADORNO_CARAS.registrar · v7 (15-nov): la cámara lee sin mostrarse -->
+<script src="/hub/caras.js?v=10" defer></script>  <!-- (14-nov) «📷 Registra quién» del Hub: ADORNO_CARAS.registrar · v7 (15-nov): la cámara lee sin mostrarse · v10 (16-nov): el tiempo para reconocer corre recién con la cámara abierta -->
 <script src="/hub/autorizar.js?v=6" defer></script>  <!-- (15-nov) «Pide permiso» común del Hub: cara → celu → clave (ADORNO_AUTORIZAR.pedir) -->
 <style>
 /* Tipografia institucional: URW Gothic (clon libre de Avant Garde),
@@ -878,7 +878,7 @@ th.th-der + th.th-der { border-left: none; }
       <button class="hbtn ab-fijo" onclick="logout()" title="Salir" aria-label="Salir"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span class="lb">Salir</span></button>
     </div>
   </div>
-  <script src="/hub/banner.js?v=8"></script>  <!-- (16-nov) v7: «Ver como» del Hub (solo lectura, ADORNO_VERCOMO) · v8: carteles de error fijos con ✕ y en castellano (ADORNO_AVISO) -->
+  <script src="/hub/banner.js?v=10"></script>  <!-- (16-nov) v7: «Ver como» del Hub (solo lectura, ADORNO_VERCOMO) · v8: carteles de error fijos con ✕ y en castellano (ADORNO_AVISO) · v10: si el fichador tiene la cámara, se le pide que la suelte y después que siga (envuelve getUserMedia) -->
 
   <div id="alerta-sync-finmes" style="display:none;background:linear-gradient(90deg,#fed7aa,#fdba74);border-bottom:1px solid #ea580c;padding:10px 16px;align-items:center;gap:10px;flex-wrap:wrap;">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="width:20px;height:20px;fill:none;stroke:#7c2d12;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -3255,7 +3255,7 @@ function notificarDiferenciaArqueo(dataTurno, fecha, localId, etiqueta) {
 // ── (11-nov-2026, JP) Cerrar el día con la cara ────────────────────────────────────────────────────────────────
 // Mismas caras que registra el POS (Ajustes › «Quién emite»). La cámara arma una lectura de 128 números con face-api
 // (la foto nunca se guarda ni se manda) y la BASE dice quién es (ventas_cierre_identificar, umbral 0.48 como el POS).
-// Dos lecturas seguidas de la misma persona = reconocida. Sin cámara, o si no reconoce en 10 s, se puede elegir a
+// Dos lecturas seguidas de la misma persona = reconocida. Sin cámara, o si no reconoce en 7 s (contados con la cámara ya abierta), se puede elegir a
 // mano (queda marcado «elegida a mano»). La base solo cierra con ese pase (cerrar_dia p_identificacion), de un uso
 // y 30 min; el admin cierra sin cámara.
 const CARA = { lib: null, stream: null, corriendo: false };
@@ -3280,9 +3280,16 @@ function caraLib() {
   });
   return CARA.lib;
 }
-async function caraCam(video) {
-  CARA.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
-  video.srcObject = CARA.stream; await video.play();
+/** (16-nov-2026, JP vía Infra: «fijate que no choque con el fichador») la cámara se pide EN EL MOMENTO con
+ *  navigator.mediaDevices.getUserMedia: /hub/banner.js v10 lo envuelve y, si el fichador la tiene tomada, le pide que la
+ *  suelte (puede tardar unos segundos) y le avisa que siga cuando se paran las pistas. Por eso, si mientras tanto ya se
+ *  pasó a la lista o se cerró la ventana (vigente() = false), la cámara se suelta enseguida: si no, quedaba prendida
+ *  de fondo y el fichador en pausa. Devuelve el stream, o null si ya no hacía falta. */
+async function caraCam(video, vigente) {
+  const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+  if (vigente && !vigente()) { try { s.getTracks().forEach(t => t.stop()); } catch (_) {} return null; }
+  CARA.stream = s; video.srcObject = s; await video.play();
+  return s;
 }
 function caraApagar() { CARA.corriendo = false; try { CARA.stream?.getTracks().forEach(t => t.stop()); } catch (_) {} CARA.stream = null; }
 async function caraLeer(video) {
@@ -3332,6 +3339,7 @@ function quienCierra(fecha, localId, avisoHtml) {
     const estado = (html) => { $('.cc-estado').innerHTML = html; };
     const dormir = (ms) => new Promise(r => setTimeout(r, ms));
     let fin = false, tMano = null;
+    let intento = 0;             // (16-nov) cada vez que se arranca la cámara o se pasa a la lista sube: un intento viejo no sigue
     let carasApagadas = false;   // (13-nov) el Hub apagó el reconocimiento por cara (hub_caras_activas() = false)
     const terminar = (res) => {
       if (fin) return; fin = true; caraApagar(); clearTimeout(tMano);
@@ -3352,7 +3360,7 @@ function quienCierra(fecha, localId, avisoHtml) {
     };
 
     async function elegirAMano(aviso) {
-      caraApagar(); clearTimeout(tMano); acc.innerHTML = '';
+      intento++; caraApagar(); clearTimeout(tMano); acc.innerHTML = '';
       estado('Cargando la gente del local…');
       const { data, error } = await sb.rpc('ventas_equipo_cierre', { p_local: localId });
       if (fin) return;
@@ -3380,32 +3388,41 @@ function quienCierra(fecha, localId, avisoHtml) {
 
     async function arrancar() {
       if (fin) return;
+      const mio = ++intento;
+      const vigente = () => !fin && mio === intento;   // (16-nov) si ya se pasó a la lista o se cerró, este intento no sigue
       estado('Un momento…');
-      // tope para bajar el reconocimiento y prender la cámara; después, unos segundos para reconocer
-      const aLaLista = (aviso) => { if (!fin) elegirAMano(aviso); };
+      // tope para bajar el reconocimiento y prender la cámara (15 s, con la pausa del fichador adentro);
+      // después, recién con la cámara abierta, unos segundos para reconocer
+      const aLaLista = (aviso) => { if (vigente()) elegirAMano(aviso); };
       clearTimeout(tMano); tMano = setTimeout(() => aLaLista('No pude usar la cámara a tiempo: elegí quién cierra.'), 15000);
+      let st = null;
       try {
         await caraLib();
-        if (fin) return;
-        await caraCam(video);
+        if (!vigente()) return;
+        st = await caraCam(video, vigente);
       } catch (e) {
-        if (fin) return;
+        if (!vigente()) return;
         const motivo = e?.name === 'NotAllowedError' ? 'no se dio permiso para usar la cámara'
                      : e?.name === 'NotFoundError' ? 'esta computadora no tiene cámara'
-                     : errTxt(e);
+                     : errTxt(e);   // (16-nov) «Device in use» → «La cámara está ocupada por otro programa (por ejemplo el fichador)…»
         aLaLista('No se pudo usar la cámara (' + motivo + '): elegí quién cierra.'); return;
       }
-      if (fin) { caraApagar(); return; }
+      if (!st) return;
+      if (!vigente()) {   // se pasó a la lista o se cerró mientras arrancaba el video: se suelta solo esta cámara
+        try { st.getTracks().forEach(t => t.stop()); } catch (_) {}
+        if (CARA.stream === st) CARA.stream = null;
+        return;
+      }
       clearTimeout(tMano); tMano = setTimeout(() => aLaLista('No te reconocí: elegí quién cierra.'), 7000);
       CARA.corriendo = true;
       let previa = null;
-      while (CARA.corriendo && !fin) {
+      while (CARA.corriendo && vigente()) {
         let d = null;
         try { d = await caraLeer(video); } catch (_) { d = null; }
-        if (!CARA.corriendo || fin) break;
+        if (!CARA.corriendo || !vigente()) break;
         if (!d) { previa = null; await dormir(250); continue; }
         const { data, error } = await sb.rpc('ventas_cierre_identificar', { p_local: localId, p_fecha: fecha, p_descriptor: d });
-        if (!CARA.corriendo || fin) break;
+        if (!CARA.corriendo || !vigente()) break;
         if (error) { aLaLista('No pude reconocer la cara (' + errTxt(error) + '): elegí quién cierra.'); break; }
         if (!data) { previa = null; await dormir(400); continue; }
         if (previa && previa.empleado_id === data.empleado_id) { confirmarPase({ ...data, modo: 'cara', descriptor: d }); break; }   // (14-nov) d → hub_registrar lo verifica
@@ -4067,7 +4084,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=52"></script>
+<script src="manual.js?v=53"></script>
 <script src="reporte.js?v=24"></script>
 </body>
 </html>
