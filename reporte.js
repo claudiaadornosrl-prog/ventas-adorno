@@ -667,7 +667,9 @@ async function _repRenderEvolucion(body) {
   try {
     await renderAnalisis(d.getFullYear(), d.getMonth() + 1, loc, body);
   } catch (e) {
-    body.innerHTML = `<div class="r-loading">No se pudo armar la evolución: ${_rEsc(e.message || String(e))}</div>`;
+    // (16-nov) el error en castellano simple (errTxt de index.html → ADORNO_AVISO.traducir del Hub)
+    const m = 'No se pudo armar la evolución: ' + (e?.message || String(e));
+    body.innerHTML = `<div class="r-loading">${_rEsc(typeof errTxt === 'function' ? errTxt(m) : m)}</div>`;
   }
 }
 
@@ -677,7 +679,7 @@ async function _repRenderInteranual() {
   await _repCargarIpc();
   if (!_repIaCache) {
     const { data, error } = await _repDb().rpc('ventas_reporte_interanual', { p_hasta: null, p_anios: 5 });
-    if (error) { body.innerHTML = `<div class="r-loading">No se pudo cargar: ${_rEsc(error.message)}</div>`; return; }
+    if (error) { const m = 'No se pudo cargar el interanual: ' + error.message; body.innerHTML = `<div class="r-loading">${_rEsc(typeof errTxt === 'function' ? errTxt(m) : m)}</div>`; return; }
     _repIaCache = data;
   }
   const d = _repIaCache;

@@ -878,7 +878,7 @@ th.th-der + th.th-der { border-left: none; }
       <button class="hbtn ab-fijo" onclick="logout()" title="Salir" aria-label="Salir"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span class="lb">Salir</span></button>
     </div>
   </div>
-  <script src="/hub/banner.js?v=7"></script>  <!-- (16-nov) v7: «Ver como» del Hub (solo lectura, ADORNO_VERCOMO) -->
+  <script src="/hub/banner.js?v=8"></script>  <!-- (16-nov) v7: «Ver como» del Hub (solo lectura, ADORNO_VERCOMO) · v8: carteles de error fijos con ✕ y en castellano (ADORNO_AVISO) -->
 
   <div id="alerta-sync-finmes" style="display:none;background:linear-gradient(90deg,#fed7aa,#fdba74);border-bottom:1px solid #ea580c;padding:10px 16px;align-items:center;gap:10px;flex-wrap:wrap;">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="width:20px;height:20px;fill:none;stroke:#7c2d12;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -1092,7 +1092,7 @@ function pedirSuperior({ funcion, local, que }) {
         cerrar({ id: j.id, cli, email: j.email, nombre: j.nombre });
       } catch (e) {
         if (fin) return;
-        err.textContent = e.message || 'No se pudo verificar.';
+        err.textContent = e?.message ? errTxt(e) : 'No se pudo verificar.';
         w.querySelector('#sup-pass').value = '';
         btn.disabled = false; btn.textContent = 'Autorizar';
       }
@@ -1276,6 +1276,14 @@ const fmtFecha = d => {
 const hoyISO = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
 const escHtml = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+/** (16-nov-2026, JP vía Infra) Un error en castellano simple, para los que se muestran adentro de una ventana o de la
+ *  pantalla (los toast de error y los alert ya los traduce /hub/banner.js v8). Si el texto empieza con lo que se estaba
+ *  haciendo («No se pudo entrar: …»), eso se conserva. Sin el Hub, el mensaje como venía. */
+function errTxt(e) {
+  const crudo = (e && e.message) || String(e ?? '');
+  try { return window.ADORNO_AVISO ? (ADORNO_AVISO.traducir(e).texto || crudo) : crudo; } catch (_) { return crudo; }
+}
+// toast(msg, true) = error: desde banner.js v8 sale como cartel rojo fijo con ✕ (no se va solo)
 function toast(msg, err) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.className = 'show' + (err ? ' err' : '');
@@ -1364,7 +1372,7 @@ async function doLogin() {
     if (oficina) { try { localStorage.setItem('ventas_cuenta_oficina', email); } catch (e) {} }
     enterApp();
   } catch (e) {
-    errEl.textContent = e.message || 'No se pudo entrar';
+    errEl.textContent = errTxt('No se pudo entrar: ' + (e?.message || 'probá de nuevo'));
     document.getElementById('login-btn').disabled = false;
   }
 }
@@ -1398,7 +1406,7 @@ async function loginAdminEnviar() {
     document.getElementById('admin-pass').value = '';
     enterApp();
   } catch (e) {
-    errEl.textContent = 'No se pudo entrar: ' + (e.message || 'error');
+    errEl.textContent = errTxt('No se pudo entrar: ' + (e?.message || 'probá de nuevo'));
   }
 }
 
@@ -1783,7 +1791,7 @@ async function cargar() {
     refrescarBadgeControlCerrados();
     refrescarBadgeReaperturas();
   } catch (e) {
-    document.getElementById('contenido').innerHTML = `<div class="empty"><div class="icon">⚠️</div>Error: ${escHtml(e.message)}</div>`;
+    document.getElementById('contenido').innerHTML = `<div class="empty"><div class="icon">⚠️</div>${escHtml(errTxt('No se pudo cargar la planilla: ' + (e?.message || e)))}</div>`;
   } finally {
     if (_sy) _sy.style.display = 'none';
   }
@@ -2212,7 +2220,7 @@ window.abrirDetalleMp = async function abrirDetalleMp(fecha, localId) {
     _mpModal(`Cruce MP · ${fFmt}`, html);
     cargar(); // refrescar el tilde con el cruce nuevo
   } catch (e) {
-    _mpModal('Cruce MP', `<div style="color:#dc2626;">Error: ${esc(e.message || String(e))}</div>`);
+    _mpModal('Cruce MP', `<div style="color:#dc2626;">${esc(errTxt('No se pudo abrir el cruce: ' + (e?.message || e)))}</div>`);
   }
 };
 
@@ -2700,7 +2708,7 @@ function abrirFcOficina(fecha, localId, actual) {
     if (!(await registrarQuien('ventas.fc_oficina', localId, { fecha, valor }))) return;
     btn.disabled = true; btn.textContent = 'Guardando…';
     const { error } = await sb.rpc('ventas_cargar_fc_oficina', conAut({ p_local: localId, p_fecha: fecha, p_valor: valor }, perm));
-    if (error) { err.textContent = error.message; btn.disabled = false; btn.textContent = 'Guardar'; return; }
+    if (error) { err.textContent = errTxt('No se pudo guardar: ' + error.message); btn.disabled = false; btn.textContent = 'Guardar'; return; }
     cerrar(); toast('✓ Factura Oficina guardada'); cargar();
   };
   setTimeout(() => w.querySelector('#fcof-valor')?.focus(), 50);
@@ -2767,7 +2775,7 @@ async function enviarSolicitudCorreccion(fecha, localId, campo, valorActual) {
     toast('✓ Solicitud enviada. JP la va a revisar.');
     cargar();
   } catch (e) {
-    if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+    if (errEl) { errEl.textContent = errTxt('No se pudo pedir la corrección: ' + (e?.message || e)); errEl.style.display = 'block'; }
     if (btn) { btn.disabled = false; btn.textContent = 'Enviar pedido →'; }
   }
 }
@@ -2901,7 +2909,7 @@ async function guardarVenta(fecha, localId, vId) {
     toast('✓ Guardado');
     cargar();
   } catch (e) {
-    if (errEl) { errEl.textContent = e.message || 'Error al guardar'; errEl.style.display = 'block'; }
+    if (errEl) { errEl.textContent = errTxt('No se pudo guardar: ' + (e?.message || 'probá de nuevo')); errEl.style.display = 'block'; }
     if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
   }
 }
@@ -3125,7 +3133,8 @@ async function reabrirMesActual() {
 // del día (pasó el 3-ago en Unicenter y el 5-ago en Alcorta). Solo el
 // admin puede forzar el cierre, con confirmación explícita.
 async function _confirmarCierreSinSync(err, localId) {
-  const detalle = (err && err.message) ? `\n\nDetalle técnico: ${err.message}` : '';
+  // (16-nov) el motivo en castellano simple (antes iba el mensaje técnico, a veces en inglés)
+  const detalle = (err && err.message) ? `\n\nMotivo: ${errTxt(err)}` : '';
   if (session?.isAdmin) {
     return confirm('⚠ NO se pudo sincronizar con Dragonfish.\n\n'
       + 'Los números de la planilla pueden estar INCOMPLETOS (si el sistema '
@@ -3345,7 +3354,7 @@ function quienCierra(fecha, localId, avisoHtml) {
       estado('Cargando la gente del local…');
       const { data, error } = await sb.rpc('ventas_equipo_cierre', { p_local: localId });
       if (fin) return;
-      if (error) { estado('No pude traer la lista: ' + escHtml(error.message)); return; }
+      if (error) { estado(escHtml(errTxt('No pude traer la lista: ' + error.message))); return; }
       if (!data || !data.length) { estado('No hay personas activas cargadas en este local.'); return; }
       const nota = verComo() ? 'Ver como: la cámara no se usa y no se cierra nada (solo lectura).'
         : carasApagadas ? 'El reconocimiento por cara está apagado por ahora: elegí a mano.' : (aviso || '');
@@ -3358,7 +3367,7 @@ function quienCierra(fecha, localId, avisoHtml) {
           eq.querySelectorAll('button').forEach(x => { x.disabled = true; });
           const r = await sb.rpc('ventas_cierre_manual', { p_local: localId, p_fecha: fecha, p_empleado_id: pp.empleado_id });
           if (fin) return;
-          if (r.error) { estado('No se pudo: ' + escHtml(r.error.message)); eq.querySelectorAll('button').forEach(x => { x.disabled = false; }); return; }
+          if (r.error) { estado(escHtml(errTxt('No se pudo elegir a esa persona: ' + r.error.message))); eq.querySelectorAll('button').forEach(x => { x.disabled = false; }); return; }
           confirmarPase({ ...r.data, modo: 'manual' }, 'Elegida a mano: en la planilla queda marcado que se cerró sin la cámara.');
         };
         eq.appendChild(b);
@@ -3381,7 +3390,7 @@ function quienCierra(fecha, localId, avisoHtml) {
         if (fin) return;
         const motivo = e?.name === 'NotAllowedError' ? 'no se dio permiso para usar la cámara'
                      : e?.name === 'NotFoundError' ? 'esta computadora no tiene cámara'
-                     : (e?.message || String(e));
+                     : errTxt(e);
         aLaLista('No se pudo usar la cámara (' + motivo + '): elegí quién cierra.'); return;
       }
       if (fin) { caraApagar(); return; }
@@ -3395,7 +3404,7 @@ function quienCierra(fecha, localId, avisoHtml) {
         if (!d) { previa = null; await dormir(250); continue; }
         const { data, error } = await sb.rpc('ventas_cierre_identificar', { p_local: localId, p_fecha: fecha, p_descriptor: d });
         if (!CARA.corriendo || fin) break;
-        if (error) { aLaLista('No pude reconocer (' + error.message + '): elegí quién cierra.'); break; }
+        if (error) { aLaLista('No pude reconocer la cara (' + errTxt(error) + '): elegí quién cierra.'); break; }
         if (!data) { previa = null; await dormir(400); continue; }
         if (previa && previa.empleado_id === data.empleado_id) { confirmarPase({ ...data, modo: 'cara', descriptor: d }); break; }   // (14-nov) d → hub_registrar lo verifica
         previa = data;   // dos lecturas seguidas de la misma persona = reconocida
@@ -3616,7 +3625,7 @@ async function abrirControlCerrados() {
     .order('corrida_at', { ascending: false }).limit(200);
   const body = document.getElementById('control-cerrados-body');
   if (!body) return;
-  if (error) { body.innerHTML = `<div style="color:#dc2626;">Error: ${escHtml(error.message)}</div>`; return; }
+  if (error) { body.innerHTML = `<div style="color:#dc2626;">${escHtml(errTxt('No se pudo cargar la lista: ' + error.message))}</div>`; return; }
   if (!data || !data.length) { body.innerHTML = `<div style="text-align:center;color:#64748b;padding:30px;">Ningún día cerrado cambió en los últimos 60 días.</div>`; return; }
 
   const renderItem = (r) => {
@@ -3702,7 +3711,7 @@ async function abrirBandejaReaperturas() {
     .order('solicitado_at', { ascending: false })
     .limit(50);
   if (error) {
-    document.getElementById('reaperturas-body').innerHTML = `<div style="color:#dc2626;">Error: ${escHtml(error.message)}</div>`;
+    document.getElementById('reaperturas-body').innerHTML = `<div style="color:#dc2626;">${escHtml(errTxt('No se pudieron cargar las reaperturas: ' + error.message))}</div>`;
     return;
   }
   if (!data || !data.length) {
@@ -4056,7 +4065,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=50"></script>
-<script src="reporte.js?v=23"></script>
+<script src="manual.js?v=51"></script>
+<script src="reporte.js?v=24"></script>
 </body>
 </html>
