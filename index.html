@@ -505,8 +505,8 @@ window.ADORNO_SSO = (function () {
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.min.js" integrity="sha384-UagCvVPT5XXA0Hx+nJYUAGBFseHT9zBgpJMSebsAxl9lciTwbT+39j5VfRjdP5Tp" crossorigin="anonymous"></script>
 <script src="/hub/seguridad.js?v=1"></script>
-<script src="/hub/caras.js?v=4" defer></script>  <!-- (14-nov) «📷 Registra quién» del Hub: ADORNO_CARAS.registrar -->
-<script src="/hub/autorizar.js?v=2" defer></script>  <!-- (15-nov) «Pide permiso» común del Hub: cara → celu → clave (ADORNO_AUTORIZAR.pedir) -->
+<script src="/hub/caras.js?v=7" defer></script>  <!-- (14-nov) «📷 Registra quién» del Hub: ADORNO_CARAS.registrar · v7 (15-nov): la cámara lee sin mostrarse -->
+<script src="/hub/autorizar.js?v=3" defer></script>  <!-- (15-nov) «Pide permiso» común del Hub: cara → celu → clave (ADORNO_AUTORIZAR.pedir) -->
 <style>
 /* Tipografia institucional: URW Gothic (clon libre de Avant Garde),
    servida desde fonts/ del propio repo. */
@@ -1105,7 +1105,7 @@ const conAut = (params, perm) => (perm && perm.aut) ? { ...params, p_autorizacio
 /** (14-nov-2026, JP desde Infra) «📷 Registra quién» del Hub. Llamarlo justo antes de grabar (y después de la autorización).
  *  Si la función no está marcada, sigue sin mostrar nada. Si está marcada, anota en hub_registros quién la hace:
  *  con usuario personal, esa persona; con la cuenta del local o de la oficina, por la cara o tocando su nombre en la lista
- *  (ADORNO_CARAS.registrar, /hub/caras.js v4). Siempre con la sesión de quien usa Ventas (sb), nunca con la de quien autorizó.
+ *  (ADORNO_CARAS.registrar, /hub/caras.js v7: desde el 15-nov la cámara lee sin mostrarse y avisa «Anotado: …»). Siempre con la sesión de quien usa Ventas (sb), nunca con la de quien autorizó.
  *  persona = { empleado_id } si Ventas ya sabe quién es («¿Quién cierra?»): se anota sin volver a preguntar.
  *  Si la reconoció la cámara, persona trae { modo:'cara', descriptor }: la base lo verifica (pos_cara_match) y lo anota
  *  como 'cara'; elegida a mano no se manda y queda 'lista'.
@@ -3201,15 +3201,18 @@ const CARA_CDN = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13';
 const CARA_SRI = 'sha384-5SEinnOIOK1Nl6bzEIWwfXWMg4EaJhN2bXKgrjYC0Bq+fYNZHwhD3ntM92lTHnfL';
 function caraLib() {
   if (!CARA.lib) CARA.lib = new Promise((ok, mal) => {
-    const sc = document.createElement('script');
-    sc.src = CARA_CDN + '/dist/face-api.js'; sc.integrity = CARA_SRI; sc.crossOrigin = 'anonymous';
-    sc.onload = async () => {
+    // (15-nov) si la ventana de autorización del Hub ya bajó face-api, se reusa (y los modelos que ya estén cargados)
+    const modelos = async () => {
       try {
-        const m = CARA_CDN + '/model';
-        await Promise.all([faceapi.nets.tinyFaceDetector.loadFromUri(m), faceapi.nets.faceLandmark68TinyNet.loadFromUri(m), faceapi.nets.faceRecognitionNet.loadFromUri(m)]);
+        const m = CARA_CDN + '/model', n = faceapi.nets;
+        await Promise.all([n.tinyFaceDetector, n.faceLandmark68TinyNet, n.faceRecognitionNet].map(x => x.isLoaded ? null : x.loadFromUri(m)));
         ok(true);
       } catch (e) { CARA.lib = null; mal(e); }
     };
+    if (window.faceapi) { modelos(); return; }
+    const sc = document.createElement('script');
+    sc.src = CARA_CDN + '/dist/face-api.js'; sc.integrity = CARA_SRI; sc.crossOrigin = 'anonymous';
+    sc.onload = modelos;
     sc.onerror = () => { CARA.lib = null; mal(new Error('no se pudo bajar el reconocimiento de caras (¿sin internet?)')); };
     document.head.appendChild(sc);
   });
@@ -3255,16 +3258,18 @@ function quienCierra(fecha, localId, avisoHtml) {
         <div class="cc-head"><h3>Cerrar el día ${fecha.slice(8, 10)}/${fecha.slice(5, 7)} · ${escHtml(NOMBRE_LOCAL[localId] || localId)}</h3>
           <button class="cc-x" title="Cerrar" aria-label="Cerrar">✕</button></div>
         <div class="cc-aviso">${avisoHtml}</div>
-        <div class="cc-cam" style="display:none;"><video playsinline muted></video><div class="cc-marco"></div></div>
+        <div aria-hidden="true" style="position:fixed;left:-9999px;top:0;width:320px;height:240px;opacity:0;pointer-events:none;"><video playsinline muted width="320" height="240"></video></div>
         <div class="cc-estado">Un momento…</div>
         <div class="cc-acciones"></div>
       </div>`;
     document.body.appendChild(wrap);
     const $ = (q) => wrap.querySelector(q);
-    const video = $('video'), cam = $('.cc-cam'), acc = $('.cc-acciones');
+    // (15-nov-2026, JP vía Infra: «que no muestre la camarita ni el círculo») la cámara lee en segundo plano: el video
+    // está fuera de la pantalla y solo aparece «Cierra: Soledad». Si no reconoce enseguida (o no hay cámara), la lista.
+    const video = $('video'), acc = $('.cc-acciones');
     const estado = (html) => { $('.cc-estado').innerHTML = html; };
     const dormir = (ms) => new Promise(r => setTimeout(r, ms));
-    let fin = false, tMano = null, hayMano = false;
+    let fin = false, tMano = null;
     let carasApagadas = false;   // (13-nov) el Hub apagó el reconocimiento por cara (hub_caras_activas() = false)
     const terminar = (res) => {
       if (fin) return; fin = true; caraApagar(); clearTimeout(tMano);
@@ -3275,28 +3280,24 @@ function quienCierra(fecha, localId, avisoHtml) {
     $('.cc-x').onclick = () => terminar(null);
 
     const boton = (txt, clase, fn) => { const b = document.createElement('button'); b.className = 'cc-btn ' + clase; b.textContent = txt; b.onclick = fn; acc.appendChild(b); return b; };
-    const mostrarMano = () => { if (hayMano || fin) return; hayMano = true; boton('Elegir a mano quién cierra', 'link', elegirAMano); };
 
     const confirmarPase = (p, nota) => {
       caraApagar(); clearTimeout(tMano);
-      cam.classList.toggle('ok', p.modo === 'cara'); cam.style.display = p.modo === 'cara' ? '' : 'none';
-      estado(`${p.modo === 'cara' ? 'Te reconocí' : 'Cierra'}: <b>${escHtml(nombrePersona(p.nombre))}</b>${nota ? `<div style="font-size:12px;color:#92400e;margin-top:4px;">${nota}</div>` : ''}`);
-      acc.innerHTML = ''; hayMano = false;
+      estado(`${p.modo === 'cara' ? '✓ ' : ''}Cierra: <b>${escHtml(nombrePersona(p.nombre))}</b>${nota ? `<div style="font-size:12px;color:#92400e;margin-top:4px;">${nota}</div>` : ''}`);
+      acc.innerHTML = '';
       boton('Cerrar el día', 'principal', () => terminar(p));
-      if (p.modo === 'cara') boton('No soy yo', '', () => { acc.innerHTML = ''; hayMano = false; arrancar(); });
-      else if (carasApagadas) boton('Elegir a otra persona', '', () => elegirAMano());
-      else boton('Volver a la cámara', '', () => { acc.innerHTML = ''; hayMano = false; arrancar(); });
+      boton(p.modo === 'cara' ? 'No soy yo' : 'Elegir a otra persona', '', () => elegirAMano());
     };
 
-    async function elegirAMano() {
-      caraApagar(); clearTimeout(tMano); cam.style.display = 'none'; acc.innerHTML = ''; hayMano = true;
+    async function elegirAMano(aviso) {
+      caraApagar(); clearTimeout(tMano); acc.innerHTML = '';
       estado('Cargando la gente del local…');
       const { data, error } = await sb.rpc('ventas_equipo_cierre', { p_local: localId });
       if (fin) return;
       if (error) { estado('No pude traer la lista: ' + escHtml(error.message)); return; }
       if (!data || !data.length) { estado('No hay personas activas cargadas en este local.'); return; }
-      estado('¿Quién cierra el día?' + (carasApagadas
-        ? '<div style="font-size:12px;color:var(--muted);margin-top:4px;">El reconocimiento por cara está apagado por ahora: elegí a mano.</div>' : ''));
+      const nota = carasApagadas ? 'El reconocimiento por cara está apagado por ahora: elegí a mano.' : (aviso || '');
+      estado('¿Quién cierra el día?' + (nota ? `<div style="font-size:12px;color:var(--muted);margin-top:4px;">${escHtml(nota)}</div>` : ''));
       const eq = document.createElement('div'); eq.className = 'cc-equipo';
       data.forEach(pp => {
         const b = document.createElement('button'); b.className = 'cc-btn'; b.textContent = nombrePersona(pp.nombre);
@@ -3310,13 +3311,15 @@ function quienCierra(fecha, localId, avisoHtml) {
         eq.appendChild(b);
       });
       acc.appendChild(eq);
-      if (!carasApagadas) boton('Volver a la cámara', 'link', () => { acc.innerHTML = ''; hayMano = false; arrancar(); });
+      if (!carasApagadas) boton('Probar de nuevo con la cara', 'link', () => { acc.innerHTML = ''; arrancar(); });
     }
 
     async function arrancar() {
       if (fin) return;
-      cam.style.display = ''; cam.classList.remove('ok'); estado('Preparando la cámara…');
-      clearTimeout(tMano); tMano = setTimeout(mostrarMano, 10000);
+      estado('Un momento…');
+      // tope para bajar el reconocimiento y prender la cámara; después, unos segundos para reconocer
+      const aLaLista = (aviso) => { if (!fin) elegirAMano(aviso); };
+      clearTimeout(tMano); tMano = setTimeout(() => aLaLista('No pude usar la cámara a tiempo: elegí quién cierra.'), 15000);
       try {
         await caraLib();
         if (fin) return;
@@ -3326,24 +3329,23 @@ function quienCierra(fecha, localId, avisoHtml) {
         const motivo = e?.name === 'NotAllowedError' ? 'no se dio permiso para usar la cámara'
                      : e?.name === 'NotFoundError' ? 'esta computadora no tiene cámara'
                      : (e?.message || String(e));
-        estado('No se pudo usar la cámara: ' + escHtml(motivo) + '.');
-        mostrarMano(); return;
+        aLaLista('No se pudo usar la cámara (' + motivo + '): elegí quién cierra.'); return;
       }
       if (fin) { caraApagar(); return; }
-      estado('Mirá a la cámara…');
+      clearTimeout(tMano); tMano = setTimeout(() => aLaLista('No te reconocí: elegí quién cierra.'), 7000);
       CARA.corriendo = true;
       let previa = null;
       while (CARA.corriendo && !fin) {
         let d = null;
         try { d = await caraLeer(video); } catch (_) { d = null; }
         if (!CARA.corriendo || fin) break;
-        if (!d) { previa = null; estado('Mirá a la cámara…'); await dormir(250); continue; }
+        if (!d) { previa = null; await dormir(250); continue; }
         const { data, error } = await sb.rpc('ventas_cierre_identificar', { p_local: localId, p_fecha: fecha, p_descriptor: d });
         if (!CARA.corriendo || fin) break;
-        if (error) { estado('Error al reconocer: ' + escHtml(error.message)); mostrarMano(); caraApagar(); break; }
-        if (!data) { previa = null; estado('No te reconozco. ¿Tenés la cara registrada en el POS?'); await dormir(400); continue; }
+        if (error) { aLaLista('No pude reconocer (' + error.message + '): elegí quién cierra.'); break; }
+        if (!data) { previa = null; await dormir(400); continue; }
         if (previa && previa.empleado_id === data.empleado_id) { confirmarPase({ ...data, modo: 'cara', descriptor: d }); break; }   // (14-nov) d → hub_registrar lo verifica
-        previa = data; estado(`¿${escHtml(nombrePersona(data.nombre))}? Quedate quieta un segundo…`);
+        previa = data;   // dos lecturas seguidas de la misma persona = reconocida
         await dormir(150);
       }
     }
