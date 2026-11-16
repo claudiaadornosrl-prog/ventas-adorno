@@ -48,6 +48,7 @@ function _manualSecciones() {
       desc: 'Lo que cada usuario ve y puede hacer en Ventas lo maneja JP en el Hub → ícono de persona → Permisos, función por función (13-nov).',
       pasos: [
         'Cada función puede estar Habilitada (se usa normal), Pide permiso (aparece, pero al usarla tiene que autorizar alguien con permiso) u Oculta (no aparece).',
+        'Apartados (15-nov): en Hub → Permisos → Perfiles, cada apartado de Ventas ("Planilla del día", "Correcciones y cierres", "Reporte" y "Otros locales") tiene su interruptor, igual que el del módulo. Si está apagado para un perfil, todas las funciones de ese apartado quedan ocultas para ese perfil, aunque sea admin (es para Clau: puede hacer y autorizar todo, pero ve solo lo que JP le deja prendido). JP ve todo. Al volver a prenderlo, cada función queda como estaba.',
         'Las funciones de Ventas: ver la planilla, cerrar un turno, cerrar el día, cargar la Factura Oficina, justificar una diferencia con Mercado Pago, resincronizar desde el Dragonfish, cambiar a mano cualquier importe, pedir una corrección, pedir una reapertura, aprobar correcciones, reabrir días y cerrar o reabrir el mes, ver los días cerrados que cambiaron, ver el Reporte, ver el interanual y los últimos 5 años, ver los otros locales y operar en otros locales.',
         '"Pide permiso" (desde el 15-nov, la ventana común del Hub, igual en todos los módulos): autoriza alguien que tenga esa función Habilitada y ese local entre los suyos, o un dueño. Primero la CARA: la cámara lee en segundo plano (no se muestra el video) y, si quien está frente a la compu puede autorizarlo, aparece "Autorizado por …" y queda registrado con su nombre (no se guarda ninguna foto). Si no anda la cámara o esa persona no está, aparece la lista de quién puede autorizar (los que están en el local según el reloj o el turno, y los que no) y con "Pedir a…" le llega un aviso al celu para Aceptar o Rechazar; se espera hasta 3 minutos. Si no tiene el celu a mano, escribe ahí SU mail y SU clave personal (los de Colaboradores; si tiene el código del celular, también el código). La autorización sirve para esa sola operación y por 10 minutos, y queda anotado quién autorizó y cómo (cara, celu o clave). Se pide siempre con la cuenta que está usando Ventas en esa compu, aunque en el Hub haya otra cuenta abierta. Las cuentas de los locales y de la oficina nunca autorizan, y nadie se autoriza a sí mismo.',
         'Lo que se hace con la sesión de quien autoriza (abrir el Reporte, aprobar correcciones, cambiar importes a mano, cerrar o reabrir el mes o un día, ver los días cerrados que cambiaron) sigue con la ventana de mail y clave. Si el Hub no carga, también.',
@@ -142,7 +143,8 @@ function _manualSecciones() {
     });
   }
 
-  if (esAdmin) {
+  // (15-nov) si a esta cuenta de admin le ocultaron el Reporte en el Hub (Clau), no se le explica
+  if (esAdmin && !(typeof puedo === 'function' && puedo('ventas.reporte') === 'o')) {
     base.push({
       icon: 'chart', titulo: 'Análisis y consolidado (admin)',
       desc: 'Vista comparativa de los 3 locales, solo para administración.',

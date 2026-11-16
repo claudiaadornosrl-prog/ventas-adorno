@@ -213,7 +213,10 @@ async function abrirReporteVentas() {
   }
 
   // (13-nov) «Ver el interanual y los últimos 5 años» del Hub: 'o' → sin esas pestañas; 'a' → al elegirlas pide permiso
-  const _hist = !_repEnc ? 'h' : (_repEnc.todo ? 'h' : (_repEnc.hist || 'o'));
+  // (15-nov, Hub v118) el admin (_repEnc vacío) también respeta el apartado: si JP le ocultó «Reporte» a Clau desde
+  // Hub → Perfiles, hub_puedo('ventas.reporte_historico') da 'o' y no ve esas pestañas. JP sigue viendo todo.
+  const _histAdmin = (typeof puedo === 'function' && puedo('ventas.reporte_historico') === 'o') ? 'o' : 'h';
+  const _hist = !_repEnc ? _histAdmin : (_repEnc.todo ? 'h' : (_repEnc.hist || 'o'));
   if (_hist === 'o' || (_repEnc && !_repEnc.todo && _hist !== 'h' && _hist !== 'a')) {
     document.querySelector('#r-tipo option[value="interanual"]')?.remove();
     document.querySelector('#r-tipo option[value="evolucion"]')?.remove();
