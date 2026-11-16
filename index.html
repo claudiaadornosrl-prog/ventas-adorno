@@ -1004,7 +1004,8 @@ function _permRespaldo() {
     ['ventas.planilla', 'ventas.cerrar_turno', 'ventas.cerrar_dia', 'ventas.fc_oficina', 'ventas.dif_mp', 'ventas.resincronizar',
      'ventas.pedir_correccion', 'ventas.pedir_reapertura'].forEach(f => { p[f] = 'h'; });
     p['ventas.reporte'] = 'a';
-    if (session.oficina) { p['ventas.ver_otros_locales'] = 'h'; p['ventas.operar_otros_locales'] = 'h'; p['ventas.reporte_historico'] = 'a'; }
+    // (16-nov) Oficina mira los otros locales pero no opera en ellos (Hub: operar_otros_locales = 'o' para su perfil)
+    if (session.oficina) { p['ventas.ver_otros_locales'] = 'h'; p['ventas.operar_otros_locales'] = 'o'; p['ventas.reporte_historico'] = 'a'; }
   }
   return p;
 }
@@ -1601,7 +1602,8 @@ async function chequearSyncFinDeMes() {
     const ultDia = new Date(añoAnt, mesAnt, 0).getDate();
     const fechaUlt = `${añoAnt}-${String(mesAnt).padStart(2,'0')}-${String(ultDia).padStart(2,'0')}`;
 
-    const localesACheckear = localesVisibles();
+    // (16-nov) solo los locales donde puede resincronizar: Oficina mira Alcorta/Unicenter pero no hace su sync de fin de mes
+    const localesACheckear = localesVisibles().filter(l => puedoEn('ventas.resincronizar', l) !== 'o');
 
     for (const localId of localesACheckear) {
       // ¿Cerrado?
@@ -4065,7 +4067,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=51"></script>
+<script src="manual.js?v=52"></script>
 <script src="reporte.js?v=24"></script>
 </body>
 </html>
