@@ -156,11 +156,19 @@ window.ADORNO_MILES = (function () {
    window.ADORNO_ACCIONES = [{nombre, descripcion, parametros (JSON schema), disponible(), preparar(p), confirmar(p)}], Clodi puede
    PREPARAR una de esas acciones (completa el formulario del módulo) y la persona la manda con el botón Enviar, que corre la
    función del propio módulo con su sesión. Nada se envía sin ese clic. Voz: elige la más parecida a Claudia (mujer, es-AR) o la
-   que la persona elija en el panel; opción de leer siempre las respuestas. */
+   que la persona elija en el panel; opción de leer siempre las respuestas.
+   (18-nov-2026, POS) Una acción que solo CONSULTA (por ejemplo buscar comprobantes) devuelve desde preparar() { ok: true, listo: true, resumen }:
+   Clodi muestra lo que encontró como respuesta, sin tarjeta ni botón Enviar (no hay nada que mandar). */
 window.ADORNO_ASISTENTE = (function () {
   const URL = 'https://jfwtiagteuwmyvblgwms.supabase.co';
   const KEY = 'sb_publishable_udSPma98Sw9eskeeLCgdCw_S2vIX0Fk';
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  // (hub v159, 18-nov-2026, JP: «en el iPhone el micrófono sigue sin funcionar, y cada vez que cierro el Hub me vuelve a pedir
+  //   permiso») lo anotado de 6 intentos en la app del Hub (iOS 18.7): el iPhone arranca a escuchar y graba el audio, pero
+  //   nunca devuelve las palabras (ni una, ni al soltar), y el permiso del micrófono de una app web de la pantalla de inicio
+  //   no queda guardado: lo vuelve a pedir en cada apertura. Ninguna de las dos cosas se arregla desde la página. En iPhone y
+  //   iPad el micrófono de Clodi abre el teclado para dictar con su 🎤 (el dictado de Apple, que anda bien y no pide permiso).
+  const DICTA_TECLADO = /iPhone|iPad|iPod/.test(navigator.userAgent || '') || (/Macintosh/.test(navigator.userAgent || '') && 'ontouchend' in document);
   let panel = null, hist = [], ocupado = false, rec = null, grabando = false;
   const LS = { get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (_) {} } };
   const siempreVoz = () => true;   // (28-oct, JP) Clodi siempre responde en voz alta; la voz no se elige (no hay selector)
@@ -283,50 +291,96 @@ window.ADORNO_ASISTENTE = (function () {
 
   function armar() {
     if (panel) return;
-    const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
+    const st = document.createElement('style'); st.textContent = CSS + `
+      .asist-tip { margin: 0 12px 8px; padding: 9px 12px; border-radius: 16px; font-size: 12.5px; line-height: 1.4; background: color-mix(in srgb, #A8863F 16%, #fff); color: #4a3a22; }
+      .asist-tip small { display: block; margin-top: 3px; font-size: 11px; opacity: .8; }`;
+    document.head.appendChild(st);
     const fab = document.createElement('button'); fab.className = 'asist-fab'; fab.title = 'Clodi: preguntale cómo hacer algo (escribiendo o por voz)'; fab.setAttribute('aria-label', 'Abrir Clodi'); fab.innerHTML = CLODI('busto') + CLODI('cara'); fab.onclick = () => abrir();
     panel = document.createElement('div'); panel.className = 'asist-panel'; panel.hidden = true; panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'Clodi');
     panel.innerHTML = `
       <div class="asist-head"><span class="asist-av">${CLODI('cara')}</span><span class="asist-tit"><b>Clodi</b><span class="asist-sub">${esc(modulo())} · preguntame cómo hacer algo</span></span>
         <button class="asist-ib" title="Cerrar (Esc)" data-a="cerrar">${ICO.cerrar}</button></div>
-      <div class="asist-log"><div class="asist-vacio">¡Hola! Soy <b>Clodi</b>. Escribime tu pregunta, o mantené apretado el micrófono mientras hablás y soltalo para mandarla, por ejemplo: <b>"¿cómo cargo un pedido?"</b> o <b>"¿dónde veo mis vacaciones?"</b>.<br>Te explico los pasos con el manual de este módulo${SR ? '' : '<br><br>(este navegador no tiene dictado por voz: escribí la pregunta)'}.</div></div>
+      <div class="asist-log"><div class="asist-vacio">¡Hola! Soy <b>Clodi</b>. Escribime tu pregunta, o ${DICTA_TECLADO ? 'tocá el micrófono y dictámela con el 🎤 del teclado' : 'mantené apretado el micrófono mientras hablás y soltalo para mandarla'}, por ejemplo: <b>"¿cómo cargo un pedido?"</b> o <b>"¿dónde veo mis vacaciones?"</b>.<br>Te explico los pasos con el manual de este módulo${SR || DICTA_TECLADO ? '' : '<br><br>(este navegador no tiene dictado por voz: escribí la pregunta)'}.</div></div>
       <div class="asist-in">
         <textarea rows="1" placeholder="Preguntale a Clodi…" aria-label="Pregunta para Clodi"></textarea>
-        ${SR ? `<button class="asist-ib asist-mic" title="Mantené apretado para hablar; al soltar, se manda" aria-label="Mantené apretado para hablar" style="touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none">${ICO.mic}</button>` : ''}
+        ${SR || DICTA_TECLADO ? `<button class="asist-ib asist-mic" title="${DICTA_TECLADO ? 'Dictar con el micrófono del teclado' : 'Mantené apretado para hablar; al soltar, se manda'}" aria-label="${DICTA_TECLADO ? 'Dictar con el micrófono del teclado' : 'Mantené apretado para hablar'}" style="touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none">${ICO.mic}</button>` : ''}
         <button class="asist-ib asist-env" title="Enviar (Enter)" data-a="enviar">${ICO.enviar}</button>
       </div>`;
     document.body.appendChild(fab); document.body.appendChild(panel); vivir();
     const ta = panel.querySelector('textarea');
     panel.addEventListener('click', (e) => { const b = e.target.closest('[data-a]'); if (!b) return; const a = b.dataset.a;
-      if (a === 'cerrar') cerrar(); else if (a === 'enviar') enviar(false); else if (a === 'leer') leer(b.dataset.t);
+      if (a === 'cerrar') cerrar(); else if (a === 'enviar') enviar(dictando); else if (a === 'leer') leer(b.dataset.t);
       });
-    panel.addEventListener('pointerdown', despertarVoz);
+    // (hub v158, 18-nov-2026, JP: «en el iPhone le permití el micrófono, le hablo y no escribe nada») el toque que despierta la
+    //   voz de Clodi no va en el micrófono (en el iPhone, la voz y el dictado se pisan el audio)
+    panel.addEventListener('pointerdown', (e) => { if (!e.target.closest('.asist-mic')) despertarVoz(); });
     const mic = panel.querySelector('.asist-mic');
-    if (mic) { mic.addEventListener('pointerdown', micDown); mic.addEventListener('pointerup', micUp); mic.addEventListener('pointercancel', micUp); mic.addEventListener('lostpointercapture', micUp);
+    // (hub v158) con el dedo, eventos táctiles con preventDefault: el cuadro de texto no pierde el foco, el teclado no se
+    //   cierra, la pantalla no salta y el iPhone no cancela el toque a mitad de camino (antes el dictado se cortaba solo
+    //   apenas se apoyaba el dedo). El mouse sigue con pointer events.
+    if (mic && DICTA_TECLADO) {
+      // el toque no le saca el foco al cuadro de texto (si el teclado ya estaba abierto, no se cierra y se vuelve a abrir)
+      mic.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+      mic.addEventListener('touchend', (e) => { e.preventDefault(); dictarTeclado(); }, { passive: false });
+      mic.addEventListener('click', dictarTeclado);
+    } else if (mic) { mic.addEventListener('touchstart', (e) => { e.preventDefault(); micDown(e, 'dedo'); }, { passive: false });
+      mic.addEventListener('touchend', (e) => { e.preventDefault(); micUp('soltó'); }, { passive: false });
+      mic.addEventListener('touchcancel', () => micUp('cancelado'));
+      mic.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'touch') micDown(e, 'mouse'); });
+      mic.addEventListener('pointerup', (e) => { if (e.pointerType !== 'touch') micUp('soltó'); });
+      mic.addEventListener('pointercancel', (e) => { if (e.pointerType !== 'touch') micUp('cancelado'); });
+      mic.addEventListener('lostpointercapture', (e) => { if (e.pointerType !== 'touch') micUp('perdió'); });
       mic.addEventListener('contextmenu', (e) => e.preventDefault());
-      mic.addEventListener('keydown', (e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) micDown(e); }); mic.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') micUp(e); }); }
-    ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(false); } });
+      mic.addEventListener('keydown', (e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) micDown(e, 'tecla'); }); mic.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') micUp('tecla'); }); }
+    ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(dictando); } });
     ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = Math.min(110, ta.scrollHeight) + 'px'; });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && panel && !panel.hidden) cerrar(); });
   }
-  function abrir() { armar(); panel.hidden = false; panel.querySelector('.asist-head .asist-sub').textContent = modulo() + ' · preguntame cómo hacer algo'; setTimeout(() => panel.querySelector('textarea').focus(), 50); }
+  function abrir() { armar(); panel.hidden = false; panel.querySelector('.asist-head .asist-sub').textContent = modulo() + ' · preguntame cómo hacer algo'; if (!matchMedia('(pointer: coarse)').matches) setTimeout(() => panel.querySelector('textarea').focus(), 50); }
   function cerrar() { if (!panel) return; panel.hidden = true; micHeld = false; if (grabando && rec) { try { rec.stop(); } catch (_) {} } try { speechSynthesis.cancel(); } catch (_) {} hablar(false); }
 
   // (15-nov-2026, JP: "tocás el botón, le hablás y se corta en cualquier momento… que tengas que dejar el dedo apoyado y
   // cuando levantes el dedo se corte el mensaje y le llegue al asistente") MANTENER APRETADO PARA HABLAR: mientras el
   // micrófono está apretado (dedo, mouse o barra espaciadora) escucha sin cortarse en las pausas; al soltar, se manda.
-  let micHeld = false, micTxt = '', micT0 = 0, micCorto = false;
-  function micDown(e) {
+  let micHeld = false, micTxt = '', micT0 = 0, micCorto = false, micTraza = [], micOyo = false, micErr = '', dictando = false;
+  // (hub v159) iPhone / iPad: abre el teclado y explica cómo dictar con su 🎤; con «retorno» (o el botón de enviar) se manda
+  function dictarTeclado() {
+    const ta = panel.querySelector('textarea'); if (!ta) return;
+    dictando = true;
+    try { speechSynthesis.cancel(); } catch (_) {} hablar(false);
+    ta.focus();
+    try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (_) {}
+    ta.placeholder = 'Tocá el 🎤 del teclado y hablá…';
+    let tip = panel.querySelector('.asist-tip');
+    if (!tip) { tip = document.createElement('div'); tip.className = 'asist-tip'; panel.querySelector('.asist-in').before(tip); }
+    tip.innerHTML = '🎤 Tocá el <b>micrófono del teclado</b> (abajo, al lado de la barra espaciadora), hablá y después tocá <b>retorno</b> o la flecha para mandar.<small>Si no ves ese micrófono: Ajustes › General › Teclado › Activar Dictado.</small>';
+  }
+  // (hub v158) qué pasó en cada intento (bajó el dedo, arrancó, oyó audio, oyó voz, error, terminó, soltó…): si no escuchó nada
+  //   queda anotado en el registro de carteles (hub_error_visto) para ver por qué, y a la persona se le dice qué hacer
+  const traza = (t) => { micTraza.push(t + '@' + (Date.now() - micT0)); if (micTraza.length > 40) micTraza.shift(); };
+  const DICTADO_TECLADO = plataforma() === 'ios' ? ' En el iPhone también podés tocar el cuadro de texto y usar el 🎤 del teclado.' : '';
+  // (en los módulos no siempre hay `sb`: se manda con fetch y el token de la sesión, como las preguntas a Clodi)
+  async function micReportar(texto) {
+    try {
+      if (window.ADORNO_VERCOMO) return;
+      const tk = await token(); if (!tk) return;
+      const info = plataforma() + (navigator.standalone || matchMedia('(display-mode: standalone)').matches ? ' app' : ' navegador') + ' · ' + (navigator.userAgent.match(/OS [\d_]+|Chrome\/\d+|Version\/[\d.]+/g) || []).join(' ');
+      fetch(URL + '/rest/v1/rpc/hub_error_visto', { method: 'POST', keepalive: true, headers: { apikey: KEY, Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_modulo: location.pathname.split('/').filter(Boolean)[0] || 'inicio', p_texto: texto, p_original: (info + ' · ' + micTraza.join(' ')).slice(0, 1000), p_ruta: location.pathname, p_como: 'voz' }) }).catch(() => {});
+    } catch (_) {}
+  }
+  function micDown(e, via) {
     if (!SR || micHeld) return;
     e.preventDefault();
     try { if (e.pointerId != null) e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
-    micHeld = true; micTxt = ''; micT0 = Date.now(); micCorto = false;
+    micHeld = true; micTxt = ''; micT0 = Date.now(); micCorto = false; micTraza = []; micOyo = false; micErr = ''; traza('apretó:' + (via || '?'));
     try { speechSynthesis.cancel(); } catch (_) {} hablar(false);
     const ta = panel.querySelector('textarea'); ta.value = '';
     escuchar();
   }
-  function micUp() {
+  function micUp(via) {
     if (!micHeld) return;
+    traza('soltó:' + (via || '?'));
     micHeld = false; micCorto = Date.now() - micT0 < 350;
     if (grabando && rec) { try { micCorto ? rec.abort() : rec.stop(); } catch (_) {} } else finDictado();
     setTimeout(() => { if (!micHeld && grabando) finDictado(); }, 1500);   // por si el navegador no avisa que terminó
@@ -334,29 +388,50 @@ window.ADORNO_ASISTENTE = (function () {
   function finDictado() {
     const btn = panel.querySelector('.asist-mic'), ta = panel.querySelector('textarea');
     grabando = false; if (btn) btn.classList.remove('on');
-    if (micCorto) { ta.value = ''; ta.placeholder = 'Mantené apretado el micrófono mientras hablás'; setTimeout(() => { if (!grabando) ta.placeholder = 'Preguntale a Clodi…'; }, 3000); return; }
+    if (micCorto) { ta.value = ''; ta.placeholder = 'Mantené apretado el micrófono mientras hablás'; setTimeout(() => { if (!grabando) ta.placeholder = 'Preguntale a Clodi…'; }, 3000);
+      log('err', 'Para hablarle, mantené apretado el micrófono mientras hablás y soltalo al terminar.' + DICTADO_TECLADO); return; }
     ta.placeholder = 'Preguntale a Clodi…';
-    if (ta.value.trim()) enviar(true);
+    if (ta.value.trim()) { enviar(true); return; }
+    if (micErr) return;   // ya se avisó el error
+    // no escuchó nada: se avisa qué hacer y queda anotado para ver por qué
+    log('err', (micOyo ? 'Te escuché pero no entendí las palabras. Probá de nuevo hablando un poco más cerca.' : 'No te escuché. Mantené apretado el micrófono mientras hablás y soltalo al terminar.') + DICTADO_TECLADO);
+    micReportar(micOyo ? 'Clodi oyó audio pero no reconoció palabras' : 'Clodi no escuchó la voz');
   }
   function escuchar() {
     const btn = panel.querySelector('.asist-mic'), ta = panel.querySelector('textarea');
-    rec = new SR(); rec.lang = 'es-AR'; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
-    const mio = rec; let final = '';
-    rec.onstart = () => { grabando = true; btn.classList.add('on'); ta.placeholder = 'Escuchando… soltá para mandar'; };
-    rec.onresult = (ev) => { let interim = ''; for (let i = ev.resultIndex; i < ev.results.length; i++) { const r = ev.results[i]; if (r.isFinal) final += r[0].transcript; else interim += r[0].transcript; } ta.value = (micTxt + ' ' + final + interim).trim(); };
+    // (hub v158) en el iPhone escucha de corrido (continuous): allá volver a arrancar el dictado sin un toque puede fallar
+    rec = new SR(); rec.lang = 'es-AR'; rec.interimResults = true; rec.continuous = plataforma() === 'ios'; rec.maxAlternatives = 1;
+    const mio = rec; let final = '', primero = true; traza('arranca');
+    rec.onstart = () => { traza('escucha'); grabando = true; btn.classList.add('on'); ta.placeholder = 'Escuchando… soltá para mandar'; };
+    rec.onaudiostart = () => traza('audio');
+    rec.onspeechstart = () => { traza('voz'); micOyo = true; };
+    rec.onresult = (ev) => { if (primero) { traza('palabras'); primero = false; } micOyo = true; let interim = ''; for (let i = ev.resultIndex; i < ev.results.length; i++) { const r = ev.results[i]; if (r.isFinal) final += r[0].transcript; else interim += r[0].transcript; } ta.value = (micTxt + ' ' + final + interim).trim(); };
     rec.onerror = (ev) => {
+      traza('error:' + ev.error);
       if (ev.error === 'aborted' || ev.error === 'no-speech') return;   // sigue: onend decide
-      micHeld = false; micCorto = false; ta.value = (micTxt + ' ' + final).trim();
-      log('err', ev.error === 'not-allowed' ? 'El navegador no dio permiso para usar el micrófono.' : 'No pude escuchar (' + ev.error + '). Escribí la pregunta.');
+      micHeld = false; micCorto = false; ta.value = (micTxt + ' ' + final).trim(); micErr = ev.error;
+      const M = {
+        'not-allowed': 'El navegador no dio permiso para usar el micrófono.' + (plataforma() === 'ios' ? ' En el iPhone: Ajustes › Apps › Safari › Micrófono (y Reconocimiento de voz), en «Permitir».' : ' Revisá el candado al lado de la dirección.'),
+        'service-not-allowed': 'Este equipo no deja usar el dictado acá.' + (plataforma() === 'ios' ? ' Revisá que esté activado Ajustes › General › Teclado › Dictado, o tocá el cuadro de texto y usá el 🎤 del teclado.' : ' Escribí la pregunta.'),
+        'audio-capture': 'No encontré el micrófono (¿lo está usando otra app o una llamada?).' + DICTADO_TECLADO,
+        'network': 'El dictado necesita internet y no hay conexión. Escribí la pregunta.',
+        'language-not-supported': 'El dictado de este equipo no entiende castellano.' + DICTADO_TECLADO,
+      };
+      log('err', M[ev.error] || ('No pude escuchar (' + ev.error + ').' + (DICTADO_TECLADO || ' Escribí la pregunta.')));
+      micReportar('Clodi: error del dictado (' + ev.error + ')');
     };
     // el navegador corta solo en cada pausa: si el botón sigue apretado, vuelve a escuchar y junta lo dicho
     rec.onend = () => {
+      traza('terminó');
       if (rec !== mio) return;
       micTxt = (micTxt + ' ' + final).trim();
-      if (micHeld) { try { escuchar(); return; } catch (_) { micHeld = false; } }
+      if (micHeld) { try { escuchar(); return; } catch (e) { traza('no-rearranca:' + ((e && e.name) || '')); micHeld = false; } }
       finDictado();
     };
-    try { rec.start(); } catch (_) { grabando = false; micHeld = false; }
+    try { rec.start(); } catch (e) {
+      traza('no-arranca:' + ((e && (e.name || e.message)) || ''));
+      if (!grabando) { micHeld = false; micErr = 'start'; log('err', 'No pude arrancar el dictado.' + (DICTADO_TECLADO || ' Escribí la pregunta.')); micReportar('Clodi: no pudo arrancar el dictado'); }
+    }
   }
   // (28-oct, JP: "una voz que sea la más parecida a la de Claudia") mujer, argentina primero. Cada equipo tiene voces distintas:
   // se usa la primera de esta lista que exista; la persona puede elegir otra en el panel (queda guardada en ese equipo).
@@ -429,6 +504,7 @@ window.ADORNO_ASISTENTE = (function () {
     if (!def) { log('err', 'Eso no lo puedo preparar en esta pantalla.'); return; }
     let r; try { r = await def.preparar(acc.parametros || {}); } catch (e) { r = { ok: false, error: e.message || String(e) }; }
     if (!r || !r.ok) { log('err', 'No pude prepararlo: ' + ((r && r.error) || 'error desconocido')); return; }
+    if (r.listo) { log('a', { respuesta: r.resumen || 'Listo.' }); if (porVoz || siempreVoz()) leer(r.resumen || ''); return; }   // solo consulta: no hay nada que enviar
     const l = panel.querySelector('.asist-log'), card = document.createElement('div');
     card.className = 'asist-card';
     card.innerHTML = `<div>Te lo dejé preparado: <b>${esc(r.resumen || '')}</b>.<br>Revisalo y, si está bien, tocá <b>Enviar</b>.</div><div class="asist-bts"><button class="asist-bt si">Enviar</button><button class="asist-bt no">Cancelar</button></div>`;
@@ -446,7 +522,7 @@ window.ADORNO_ASISTENTE = (function () {
     if (ocupado) return;
     const ta = panel.querySelector('textarea'); const q = (porVoz ? corregirNombre(ta.value) : ta.value).trim(); if (!q) return;
     despertarVoz();
-    ta.value = ''; ta.style.height = 'auto'; log('q', q); const w = log('wait'); ocupado = true;
+    ta.value = ''; ta.style.height = 'auto'; dictando = false; const tip = panel.querySelector('.asist-tip'); if (tip) tip.remove(); ta.placeholder = 'Preguntale a Clodi…'; log('q', q); const w = log('wait'); ocupado = true;
     try {
       const tk = await token();
       if (!tk) throw new Error('Tenés que iniciar sesión para hablar con Clodi.');
@@ -4084,7 +4160,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=53"></script>
+<script src="manual.js?v=54"></script>
 <script src="reporte.js?v=24"></script>
 </body>
 </html>
