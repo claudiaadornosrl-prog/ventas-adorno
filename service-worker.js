@@ -1,7 +1,7 @@
 // Service Worker — Ventas Adorno
-const CACHE_VERSION = 'ventas-adorno-v169-camara-permiso';
+const CACHE_VERSION = 'ventas-adorno-v170-tablas-excel';
 const CACHE_ASSETS = ['./', './index.html',
-  './manual.js', './reporte.js', './manifest.webmanifest',
+  './manual.js', './reporte.js', './adorno-tablas.js', './manifest.webmanifest',
   './manifest-alcorta.webmanifest', './manifest-unicenter.webmanifest', './manifest-oficina.webmanifest',
   './favicon.svg'];
 

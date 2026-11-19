@@ -74,6 +74,20 @@ function _manualSecciones() {
       ],
     },
     {
+      icon: 'planilla', titulo: 'Tablas tipo Excel',
+      desc: 'Desde el 19-nov todas las tablas de Ventas funcionan igual que en Excel, como en el resto de los módulos: la planilla del mes de cada local y las tablas del Reporte.',
+      pasos: [
+        'Títulos fijos: al bajar por una tabla larga, la fila de títulos queda siempre arriba, así se sabe qué es cada columna.',
+        'Renglones alternados: las filas se pintan una sí y una no para leerlas más fácil (en la planilla, encima del color del local). La fila que está bajo el mouse se resalta.',
+        'Ordenar: tocar el título de una columna ordena de menor a mayor; tocarlo de nuevo, de mayor a menor; una tercera vez, vuelve al orden original (en la planilla, por fecha). Las fechas se ordenan como fechas y los importes como números. La fila TOTAL de abajo no se mueve.',
+        'Filtrar: el embudito al lado de cada título abre un menú para buscar dentro de esa columna, elegir qué valores mostrar (como los filtros de Excel) o poner un «desde/hasta» en fechas e importes. Arriba de la tabla aparece «Mostrando X de Y» con el botón «Quitar filtros». Ojo: el TOTAL de la planilla sigue siendo el del mes completo, no se recalcula con el filtro.',
+        'Ocultar columnas: en el mismo menú, «Ocultar columna». Para volver a verlas: «Mostrar» en la barrita de arriba de la tabla, o «Columnas» en el menú de cualquier título. Las columnas ocultas se recuerdan en esa computadora.',
+        'Agrandar o achicar columnas: arrastrar el borde derecho del título. Doble clic en ese borde (o «Anchos automáticos» en el menú) vuelve al ancho normal. Los anchos también se recuerdan en esa computadora.',
+        'Los filtros y el orden duran mientras la página esté abierta; al recargarla, la tabla vuelve a mostrarse completa.',
+        'El consolidado de los 3 locales (dos filas de títulos) tiene solo los títulos fijos y los renglones alternados; las comparaciones chicas del control de días cerrados quedan como estaban.',
+      ],
+    },
+    {
       icon: 'clock', titulo: 'Turnos',
       desc: 'Cada turno de caja se cierra por separado, contra las transacciones reales del día.',
       pasos: [

@@ -799,10 +799,8 @@ th { background: #f9fafb; padding: 10px 8px; text-align: right; font-size: 11px;
 th:first-child { text-align: left; }
 td { padding: 8px; border-bottom: 1px solid #f3f4f6; text-align: right; font-variant-numeric: tabular-nums; }
 td:first-child { text-align: left; font-weight: 600; }
-/* Zebra striping — filas alternadas como Excel */
-tbody tr:nth-child(even) { background: #eef1f5; }
-tbody tr:nth-child(odd)  { background: #ffffff; }
-tbody tr:hover { background: #fef3c7; }
+/* (19-nov-2026, JP vía Infra) los renglones alternados y el resalte bajo el mouse los pone la pieza común
+   adorno-tablas.js (tablas tipo Excel): la cebra propia con nth-child se sacó porque al ordenar o filtrar quedaba despareja. */
 td.editable { cursor: pointer; }
 td.editable:hover { background: #fef3c7; }
 td input { width: 100%; padding: 4px; border: 1px solid var(--primary); border-radius: 4px; text-align: right; font: inherit; font-variant-numeric: tabular-nums; }
@@ -821,9 +819,6 @@ td input { width: 100%; padding: 4px; border: 1px solid var(--primary); border-r
 th.col-alcorta { background: #dcfce7; color: #166534; } td.col-alcorta { background: #f0fdf4; } td.cell-derived.col-alcorta { background: #dcfce7; border-left-color: #86efac; }
 th.col-unicenter { background: #dbeafe; color: #1e40af; } td.col-unicenter { background: #eff6ff; } td.cell-derived.col-unicenter { background: #dbeafe; border-left-color: #93c5fd; }
 th.col-oficina { background: #e5e7eb; color: #374151; } td.col-oficina { background: #f3f4f6; } td.cell-derived.col-oficina { background: #e5e7eb; border-left-color: #d1d5db; }
-tbody tr:nth-child(even) td.col-alcorta { background: #e6f9ec; } tbody tr:nth-child(even) td.cell-derived.col-alcorta { background: #d1f5dc; }
-tbody tr:nth-child(even) td.col-unicenter { background: #e4effd; } tbody tr:nth-child(even) td.cell-derived.col-unicenter { background: #cfe1fb; }
-tbody tr:nth-child(even) td.col-oficina { background: #eceef1; } tbody tr:nth-child(even) td.cell-derived.col-oficina { background: #dcdfe4; }
 .row-total td.col-alcorta { background: #bbf7d0; } .row-total td.col-unicenter { background: #bfdbfe; } .row-total td.col-oficina { background: #d1d5db; }
 .kpi-alcorta { border-top: 4px solid #16a34a; } .kpi-unicenter { border-top: 4px solid #2563eb; } .kpi-oficina { border-top: 4px solid #6b7280; }
 .kpi-activa { box-shadow: 0 0 0 2px #0f172a inset, var(--shadow); } .kpi-activa .kpi-label::after { content: ' · viendo'; font-weight: 400; opacity: .7; text-transform: none; }
@@ -837,14 +832,14 @@ body[data-local="oficina"] .table-wrap th { background: #e5e7eb; color: #374151;
 body[data-local="alcorta"] .row-total { background: #bbf7d0; } body[data-local="unicenter"] .row-total { background: #bfdbfe; } body[data-local="oficina"] .row-total { background: #d1d5db; }
 /* (21-oct) cada tarjeta conserva SU color aunque esté adentro de otro local; Total general lleva borde oscuro */
 .kpi-row .kpi:not(.kpi-alcorta):not(.kpi-unicenter):not(.kpi-oficina) { border-top: 4px solid #334155; }
-/* (21-oct, JP) "la tabla completa de su color": fondo de toda la planilla, filas pares más marcadas, bordes del tono */
-body[data-local="alcorta"] .table-wrap { background: #f0fdf4; } body[data-local="alcorta"] .table-wrap td { border-bottom-color: #dcfce7; } body[data-local="alcorta"] tbody tr:nth-child(even) { background: #dcfce7; }
-body[data-local="unicenter"] .table-wrap { background: #eff6ff; } body[data-local="unicenter"] .table-wrap td { border-bottom-color: #dbeafe; } body[data-local="unicenter"] tbody tr:nth-child(even) { background: #dbeafe; }
-body[data-local="oficina"] .table-wrap { background: #f3f4f6; } body[data-local="oficina"] .table-wrap td { border-bottom-color: #e5e7eb; } body[data-local="oficina"] tbody tr:nth-child(even) { background: #e5e7eb; }
-body[data-local="alcorta"] .table-wrap .cell-derived { background: #d9f5e3; } body[data-local="alcorta"] tbody tr:nth-child(even) .cell-derived { background: #c6efd4; }
-body[data-local="unicenter"] .table-wrap .cell-derived { background: #d6e7fc; } body[data-local="unicenter"] tbody tr:nth-child(even) .cell-derived { background: #c3dafa; }
-body[data-local="oficina"] .table-wrap .cell-derived { background: #e2e5ea; } body[data-local="oficina"] tbody tr:nth-child(even) .cell-derived { background: #d6dae0; }
-tbody tr:nth-child(even) .cell-derived { background: #dfe3ea; }
+/* (21-oct, JP) "la tabla completa de su color": fondo de toda la planilla y bordes del tono.
+   (19-nov) las filas pares más marcadas (nth-child) se sacaron: la cebra la pone adorno-tablas.js encima del color del local. */
+body[data-local="alcorta"] .table-wrap { background: #f0fdf4; } body[data-local="alcorta"] .table-wrap td { border-bottom-color: #dcfce7; }
+body[data-local="unicenter"] .table-wrap { background: #eff6ff; } body[data-local="unicenter"] .table-wrap td { border-bottom-color: #dbeafe; }
+body[data-local="oficina"] .table-wrap { background: #f3f4f6; } body[data-local="oficina"] .table-wrap td { border-bottom-color: #e5e7eb; }
+body[data-local="alcorta"] .table-wrap .cell-derived { background: #d9f5e3; }
+body[data-local="unicenter"] .table-wrap .cell-derived { background: #d6e7fc; }
+body[data-local="oficina"] .table-wrap .cell-derived { background: #e2e5ea; }
 .cell-derived.big { background: #e9ecf1; color: #111827; font-weight: 700; font-size: 14px; }
 tbody tr:nth-child(even) .cell-derived.big { background: #dfe3ea; }
 th.th-der { background: #eceff3; border-left: 2px solid #cfd5dd; }
@@ -3754,7 +3749,7 @@ async function abrirControlCerrados() {
             ${acciones}
           </div>
         </div>
-        <table style="width:100%;min-width:0;border-collapse:collapse;font-size:12px;margin-top:8px;">
+        <table data-tt="no" style="width:100%;min-width:0;border-collapse:collapse;font-size:12px;margin-top:8px;">  <!-- (19-nov) comparación chica de cada tarjeta: sin filtros tipo Excel (adorno-tablas.js) -->
           <thead><tr style="color:#64748b;"><th style="position:static;text-transform:none;letter-spacing:0;box-shadow:none;text-align:left;padding:3px 8px;font-weight:600;">Columna</th><th style="position:static;text-transform:none;letter-spacing:0;box-shadow:none;text-align:right;padding:3px 8px;font-weight:600;">Planilla (cerrada)</th><th style="position:static;text-transform:none;letter-spacing:0;box-shadow:none;text-align:right;padding:3px 8px;font-weight:600;">Dragonfish hoy</th><th style="position:static;text-transform:none;letter-spacing:0;box-shadow:none;text-align:right;padding:3px 8px;font-weight:600;">Diferencia</th></tr></thead>
           <tbody>${filas}</tbody>
         </table>
@@ -4160,7 +4155,8 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=55"></script>
+<script src="manual.js?v=56"></script>
 <script src="reporte.js?v=24"></script>
+<script src="adorno-tablas.js?v=6761f5ad"></script>
 </body>
 </html>
