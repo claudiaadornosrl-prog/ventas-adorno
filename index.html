@@ -840,8 +840,7 @@ body[data-local="oficina"] .table-wrap { background: #f3f4f6; } body[data-local=
 body[data-local="alcorta"] .table-wrap .cell-derived { background: #d9f5e3; }
 body[data-local="unicenter"] .table-wrap .cell-derived { background: #d6e7fc; }
 body[data-local="oficina"] .table-wrap .cell-derived { background: #e2e5ea; }
-.cell-derived.big { background: #e9ecf1; color: #111827; font-weight: 700; font-size: 14px; }
-tbody tr:nth-child(even) .cell-derived.big { background: #dfe3ea; }
+.cell-derived.big { background: #e9ecf1; color: #111827; font-weight: 700; font-size: 14px; }   /* (19-nov) sin variante de filas pares: cebra de adorno-tablas.js */
 th.th-der { background: #eceff3; border-left: 2px solid #cfd5dd; }
 th.th-der + th.th-der { border-left: none; }
 
@@ -2616,14 +2615,13 @@ function asegurarEstiloLocal(locales) {
     const L = CSS.escape(loc);
     st.textContent += `
 th.col-${L} { background: ${mix(16)}; color: ${mix(75, 'black')}; } td.col-${L} { background: ${mix(7)}; } td.cell-derived.col-${L} { background: ${mix(16)}; border-left-color: ${mix(40)}; }
-tbody tr:nth-child(even) td.col-${L} { background: ${mix(11)}; } tbody tr:nth-child(even) td.cell-derived.col-${L} { background: ${mix(22)}; }
 .row-total td.col-${L} { background: ${mix(30)}; } .kpi-row .kpi.kpi-${L} { border-top: 4px solid ${F} !important; }   /* gana a la regla :not() del Total general */
 body[data-local="${L}"] .header { background: linear-gradient(90deg, ${F}, ${mix(85, 'black')}); }
 body[data-local="${L}"] .table-wrap th { background: ${mix(16)}; color: ${mix(75, 'black')}; border-bottom-color: ${mix(40)}; }
 body[data-local="${L}"] .row-total { background: ${mix(30)}; }
-body[data-local="${L}"] .table-wrap { background: ${mix(7)}; } body[data-local="${L}"] .table-wrap td { border-bottom-color: ${mix(16)}; } body[data-local="${L}"] tbody tr:nth-child(even) { background: ${mix(16)}; }
-body[data-local="${L}"] .table-wrap .cell-derived { background: ${mix(14)}; } body[data-local="${L}"] tbody tr:nth-child(even) .cell-derived { background: ${mix(20)}; }
-`;
+body[data-local="${L}"] .table-wrap { background: ${mix(7)}; } body[data-local="${L}"] .table-wrap td { border-bottom-color: ${mix(16)}; }
+body[data-local="${L}"] .table-wrap .cell-derived { background: ${mix(14)}; }
+`;   // (19-nov) sin filas pares propias (nth-child): la cebra la pone adorno-tablas.js
   });
 }
 
@@ -4157,6 +4155,6 @@ if ('serviceWorker' in navigator) {
 </script>
 <script src="manual.js?v=56"></script>
 <script src="reporte.js?v=24"></script>
-<script src="adorno-tablas.js?v=6761f5ad"></script>
+<script src="adorno-tablas.js?v=878e3ad2"></script>
 </body>
 </html>

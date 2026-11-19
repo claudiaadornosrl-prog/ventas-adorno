@@ -10,6 +10,10 @@
 //  Y que cuando creemos una tabla nueva ya tome esa base.» → nació en Compras (tablas.js v1, mismo
 //  día) y se pasó acá, más los renglones alternados (cebra) y el renglón resaltado bajo el mouse.
 //
+//  (19-nov, aviso de Clientes) Fondo de los títulos fijos: respeta el fondo propio del <th>, toma el de
+//  su <tr> cuando el módulo pinta la fila del título (fondo de color con letra blanca) y deja ver los
+//  tintes semitransparentes. Antes los títulos podían quedar blanco sobre blanco.
+//
 //  Variables de color que usa (con valores por defecto si el módulo no las define):
 //   --primary, --primary-dark, --bd, --tx, --mut, y propias: --tt-cebra (fondo de los renglones
 //   alternados), --tt-hover (renglón bajo el mouse).
@@ -71,7 +75,8 @@ const svg = (k, cls) => `<svg class="tt-ico${cls ? ' ' + cls : ''}" viewBox="0 0
 
 const CSS = `
 table.tt>thead>tr>th.tt-th{position:sticky!important;z-index:1}
-:where(table.tt)>thead>tr>th.tt-th{background:var(--tt-fondo,#fff);border-bottom-color:transparent;box-shadow:inset 0 -2px 0 var(--bd,#e2e8f0)}
+:where(table.tt)>thead>tr>th.tt-th{border-bottom-color:transparent;box-shadow:inset 0 -2px 0 var(--bd,#e2e8f0)}
+:where(table.tt)>thead>tr>th.tt-th:not(.tt-th-propio){background:linear-gradient(var(--tt-tinte,transparent),var(--tt-tinte,transparent)),var(--tt-fondo,#fff)}
 [id$="-overlay"] .c-head{z-index:4!important}
 :where(table.tt:not([data-tt-cebra="no"])>tbody>tr.tt-cebra)>td{box-shadow:inset 0 0 0 9999px var(--tt-cebra,rgba(120,86,60,.07))}
 @media (hover:hover){:where(table.tt:not([data-tt-cebra="no"])>tbody>tr:hover)>td{box-shadow:inset 0 0 0 9999px var(--tt-hover,rgba(176,122,85,.12))}}
@@ -582,13 +587,17 @@ function altoCaja(el){
   const alto = Math.max(260, Math.round(visible - topePegado(el, sc) - (sc ? 70 : 24)));
   const v = alto + 'px'; if (el.style.maxHeight !== v) el.style.maxHeight = v;
 }
+// opacidad de un color calculado («rgb(…)» = 1, «rgba(…, a)» = a, «transparent» = 0)
+function alfa(b){
+  const m = b && b.match(/rgba?\(([^)]+)\)/);
+  if (!m) return 0;
+  const p = m[1].match(/[\d.]+%?/g) || [];
+  return p.length >= 4 ? (p[3].includes('%') ? parseFloat(p[3]) / 100 : parseFloat(p[3])) : 1;
+}
 function fondoDe(el){
   for (let n = el; n && n.nodeType === 1; n = n.parentElement){
     const b = getComputedStyle(n).backgroundColor;
-    const m = b && b.match(/rgba?\(([^)]+)\)/);
-    if (!m) continue;
-    const p = m[1].split(',');
-    if (p.length === 4 && parseFloat(p[3]) < 1) continue;
+    if (alfa(b) < 1) continue;
     return b;
   }
   return '#fff';
@@ -622,9 +631,26 @@ function prepararFijo(T){
     T.sc = sc;
     const tope = Math.round(topePegado(t, sc));
     const filas = t.tHead.rows, y0 = filas.length ? filas[0].offsetTop : 0;
+    // Fondo de los títulos fijos (tienen que ser opacos para tapar lo que pasa por abajo):
+    //  · si el título ya tiene un fondo opaco propio del módulo → se respeta (tt-th-propio);
+    //  · si tiene un tinte semitransparente → se pinta el tinte arriba del fondo de abajo (--tt-tinte);
+    //  · si es transparente → el fondo de su FILA o lo que haya debajo (thead, tabla, tarjeta…). Así
+    //    sirve también para los módulos que pintan el <tr> del título (fondo de color con letra blanca).
+    // Se mira el fondo propio una sola vez, antes de que la pieza lo pinte.
     for (const r of filas){
       const v = (tope + r.offsetTop - y0) + 'px';
-      for (const th of r.cells){ if (!th.classList.contains('tt-th')) th.classList.add('tt-th'); if (th.style.top !== v) th.style.top = v; }
+      let fr = null;
+      for (const th of r.cells){
+        if (th._ttPropio == null){
+          const a = alfa(getComputedStyle(th).backgroundColor);
+          th._ttPropio = a >= 1;
+          if (a > 0 && a < 1) th.style.setProperty('--tt-tinte', getComputedStyle(th).backgroundColor);
+          if (th._ttPropio) th.classList.add('tt-th-propio');
+        }
+        if (!th.classList.contains('tt-th')) th.classList.add('tt-th');
+        if (!th._ttPropio){ if (fr == null) fr = fondoDe(r); if (th.style.getPropertyValue('--tt-fondo') !== fr) th.style.setProperty('--tt-fondo', fr); }
+        if (th.style.top !== v) th.style.top = v;
+      }
     }
     const f = fondoDe(t);
     if (t.style.getPropertyValue('--tt-fondo') !== f) t.style.setProperty('--tt-fondo', f);
