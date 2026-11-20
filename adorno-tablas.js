@@ -18,6 +18,8 @@
 //  (19-nov, aviso del POS) Para filtrar y ordenar, el valor de una celda deja afuera el renglón chico de
 //  abajo (.mini, .tt-aparte, [data-tt-aparte]) y los botones, si la celda tiene otro texto. Una celda
 //  puede decir su valor con data-valor="…".
+//  (19-nov, JP) El embudito y la flechita de orden van SIEMPRE al costado del título (a la derecha, en un
+//  lugar reservado del margen), nunca abajo, aunque la columna sea angosta y el título baje de renglón.
 //
 //  Variables de color que usa (con valores por defecto si el módulo no las define):
 //   --primary, --primary-dark, --bd, --tx, --mut, y propias: --tt-cebra (fondo de los renglones
@@ -100,6 +102,9 @@ th .tt-menu.on svg{fill:currentColor}
 th .tt-menu svg,.tt-ico{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;flex:none}
 th .tt-flecha{color:var(--primary,#B07A55);font-size:9px;margin-left:3px;vertical-align:1px}
 th .tt-flecha:empty{display:none}
+th.tt-col{position:relative}
+th.tt-col>.tt-menu{position:absolute;top:50%;right:var(--tt-pr0,6px);transform:translateY(-50%);margin:0}
+th.tt-col>.tt-flecha{position:absolute;top:50%;right:calc(var(--tt-pr0,6px) + 19px);transform:translateY(-50%);margin:0;line-height:1}
 @media (hover:none){th .tt-menu{opacity:.6}}
 .tt-oc{display:none!important}
 tr.tt-fuera{display:none!important}
@@ -464,6 +469,10 @@ function armarTitulos(T){
       th.appendChild(h);
     }
     if (!col.util) continue;
+    // (19-nov, JP: «que el ícono del filtro nunca quede por debajo del título, siempre al costado») el embudito y
+    // la flechita van fijos a la derecha del título, en un lugar reservado del margen derecho: aunque la columna
+    // sea angosta y el título baje de renglón, el ícono queda al costado. Se guarda el margen propio una sola vez.
+    if (th._ttPr0 == null){ th._ttPr0 = parseFloat(getComputedStyle(th).paddingRight) || 0; th.style.setProperty('--tt-pr0', th._ttPr0 + 'px'); }
     th.classList.add('tt-col');
     if (!T.ordenApp) th.classList.add('tt-ordenable');
     if (th.querySelector(':scope > .tt-menu')) continue;
@@ -520,6 +529,10 @@ function pintarTitulos(T){
     const fl = col.th.querySelector(':scope > .tt-flecha'), b = col.th.querySelector(':scope > .tt-menu');
     const f = !T.ordenApp && o && o.id === col.id ? (o.dir > 0 ? '▲' : '▼') : '';
     if (fl && fl.textContent !== f) fl.textContent = f;
+    if (b && col.th._ttPr0 != null){   // lugar para el embudito (20 px) y, si está ordenada, la flechita (11 px más)
+      const pr = (col.th._ttPr0 + 20 + (f ? 11 : 0)) + 'px';
+      if (col.th.style.paddingRight !== pr) col.th.style.paddingRight = pr;
+    }
     if (b){ const on = activo(T.st.filtros[col.id]); if (b.classList.contains('on') !== on) b.classList.toggle('on', on); }
   }
 }

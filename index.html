@@ -223,7 +223,7 @@ window.ADORNO_ASISTENTE = (function () {
     return '';
   }
   function pestanas() {
-    const els = [...document.querySelectorAll('#tabs > button, nav.tabs > button, .tabs > button, .nav-item[data-tab], .tabs .tab[data-tab]')];
+    const els = [...document.querySelectorAll('#tabs > button, nav.tabs > button, .tabs > button, .nav-item[data-tab], .tabs .tab[data-tab], .ab-tabs > button:not(.ab-fijo):not(.ab-hamb):not(.kebab-tabs-btn):not(.ab-manual):not(.ab-espejo)')];
     const out = [];
     els.forEach((el) => { const lb = limpiar(el.getAttribute('title') || (el.querySelector('.lb') && el.querySelector('.lb').textContent) || el.textContent); if (lb && !out.some((o) => o.lb === lb)) out.push({ lb, el }); });
     return out;
@@ -234,17 +234,27 @@ window.ADORNO_ASISTENTE = (function () {
     if (location.pathname.replace(/index\.html$/, '') === m.ruta) return '';   // ya está en ese módulo
     return m.ruta + (m.pestana ? '#clodi-ir=' + encodeURIComponent(String(m.pestana).slice(0, 60)) : '');
   }
+  // (19-nov-2026, 2ª vuelta) el módulo puede avisar que tiene algo sin guardar: window.ADORNO_ASISTENTE_SIN_GUARDAR = () => 'hay un ticket armado'
+  function sinGuardar() { try { const f = window.ADORNO_ASISTENTE_SIN_GUARDAR; const r = typeof f === 'function' ? f() : ''; return r ? (typeof r === 'string' ? r : 'hay algo sin guardar') : ''; } catch (_) { return ''; } }
   function irModulo(m) {   // solo cuando pidió que la lleven: espera a que termine de hablar y va
-    const u = irUrl(m); if (!u) return; let n = 0;
+    const u = irUrl(m); if (!u || sinGuardar()) return; let n = 0;
     const t = setInterval(() => { n++; let habla = false; try { habla = 'speechSynthesis' in window && (speechSynthesis.speaking || speechSynthesis.pending); } catch (_) {} if ((n > 3 && !habla) || n > 60) { clearInterval(t); location.href = u; } }, 400);
   }
   function llegar() {   // al entrar desde el botón de Clodi: abre la pestaña que venía pedida (espera a que el módulo arme sus pestañas)
     const m = /[#&]clodi-ir=([^&]+)/.exec(location.hash || ''); if (!m) return;
     let q = ''; try { q = decodeURIComponent(m[1]).toLowerCase(); } catch (_) { return; }
     try { history.replaceState(null, '', location.pathname + location.search); } catch (_) {}
-    let n = 0; const t = setInterval(() => {
+    // (2ª vuelta) hay módulos que cargan permisos o datos después de dibujar las pestañas y el primer toque se pierde:
+    // se toca, se comprueba que quedó abierta y, si no, se vuelve a tocar (hasta 20 s)
+    const abierta = (el) => /(^|\s)(active|activa|on|act|sel|selected|current)(\s|$)/.test(el.className || '') || el.getAttribute('aria-selected') === 'true' || el.getAttribute('aria-current') === 'page';
+    let n = 0, toques = 0; const t = setInterval(() => {
+      if (++n > 40) { clearInterval(t); return; }
       const ps = pestanas(); const p = ps.find((x) => x.lb.toLowerCase() === q) || ps.find((x) => x.lb.toLowerCase().includes(q) || q.includes(x.lb.toLowerCase()));
-      if (p) { clearInterval(t); irA(p.lb); } else if (++n > 40) clearInterval(t);
+      if (!p) return;
+      if (abierta(p.el)) { clearInterval(t); return; }
+      const seVe = ps.some((x) => abierta(x.el));   // ¿este módulo marca la pestaña abierta de una forma que se puede leer?
+      if (seVe || toques === 0 || n === 6 || n === 14) { toques++; irA(p.lb); }
+      if (!seVe && toques >= 3) clearInterval(t);
     }, 500);
   }
   function irA(nombre) {
@@ -516,6 +526,7 @@ window.ADORNO_ASISTENTE = (function () {
     else if (tipo === 'err') { d.className = 'asist-err'; d.textContent = texto; }
     else if (tipo === 'wait') { d.className = 'asist-fila'; d.innerHTML = `<span class="asist-av">${CLODI('cara')}</span><div class="asist-a asist-wait"><i>Clodi está buscando en el manual…</i></div>`; d.querySelector('.clodi').classList.add('piensa'); }
     else { d.className = 'asist-fila'; d.innerHTML = `<span class="asist-av">${CLODI('cara')}</span><div class="asist-a"></div>`; d.lastChild.innerHTML = esc(texto.respuesta) + (texto.pestana ? `<br><i>→ pestaña <b>${esc(texto.pestana)}</b></i>` : '') + (irUrl(texto.ir_modulo) ? `<div class="asist-bts"><a class="asist-bt si asist-ir" href="${esc(irUrl(texto.ir_modulo))}">Ir a ${esc(texto.ir_modulo.nombre || 'ese módulo')} →</a></div>` : '') + ('speechSynthesis' in window ? ` <button class="asist-ib" title="Escuchar la respuesta" data-a="leer" data-t="${esc(texto.respuesta)}">${ICO.voz}</button>` : ''); }
+    { const ir = d.querySelector && d.querySelector('a.asist-ir'); if (ir) ir.addEventListener('click', (ev) => { const sg = sinGuardar(); if (sg && !window.confirm('Ojo: ' + sg + '. Si salís ahora, se pierde. ¿Salgo igual?')) ev.preventDefault(); }); }
     l.appendChild(d); l.scrollTop = l.scrollHeight; return d;
   }
   async function prepararAccion(acc, porVoz) {   // completa el formulario del módulo; se envía SOLO con el botón Enviar
@@ -553,6 +564,7 @@ window.ADORNO_ASISTENTE = (function () {
       const j = await r.json().catch(() => ({}));
       w.remove();
       if (!r.ok || !j.ok) throw new Error(j.error || ('Error ' + r.status));
+      if (j.ir_modulo && j.ir_modulo.llevar && !j.accion && irUrl(j.ir_modulo)) { const sg = sinGuardar(); if (sg) { j.ir_modulo.llevar = false; j.respuesta = 'No te llevo todavía porque ' + sg + '. Cuando termines, tocá el botón para ir a ' + (j.ir_modulo.nombre || 'ese módulo') + '.'; } }
       hist.push({ q, a: j.respuesta }); log('a', j);
       if (j.pestana && !j.accion) irA(j.pestana);
       if (j.ir_modulo && j.ir_modulo.llevar && !j.accion) irModulo(j.ir_modulo);
@@ -1200,6 +1212,16 @@ function soltarSuperior(sup) { try { sup?.cli?.auth.signOut({ scope: 'local' });
  *  usuario y clave, y no se graba nada: se corta justo antes de grabar, con este aviso. */
 const verComo = () => !!window.ADORNO_VERCOMO;
 const AVISO_VER_COMO = 'Estás en «Ver como»: es solo lectura, acá no se graba nada.';
+/** (19-nov-2026, charla de Clodi, 2.ª vuelta del «Ir a …») Si hay algo a medio hacer, Clodi no cambia de módulo sola y el
+ *  botón «Ir a …» pregunta antes: cerrando el día («¿Quién cierra?») o con algo escrito y sin guardar en la ventana de
+ *  carga/corrección (#modal), la Factura Oficina (#fcof-wrap) o la justificación de Mercado Pago (#mp-salvar-wrap). */
+window.ADORNO_ASISTENTE_SIN_GUARDAR = () => {
+  if (document.getElementById('modal-cierre-cara')) return 'estás cerrando el día';
+  const v = document.querySelector('#modal, #fcof-wrap, #mp-salvar-wrap');
+  const escrito = v && [...v.querySelectorAll('input, textarea, select')].some((i) =>
+    !['hidden', 'checkbox', 'radio', 'button', 'submit'].includes(i.type) && String(i.value ?? '').trim() !== String(i.defaultValue ?? '').trim());
+  return escrito ? 'tenés datos sin guardar en la ventana abierta' : '';
+};
 /** (15-nov-2026, JP vía Infra) «Pide permiso» con la VENTANA COMÚN del Hub (/hub/autorizar.js):
  *  primero la cara de quien autoriza, si no un aviso a su celu, si no su usuario y clave.
  *  La autorización del Hub se gasta enseguida con ventas_autorizacion_hub, que la cambia por una de Ventas
@@ -4176,8 +4198,8 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=58"></script>
+<script src="manual.js?v=59"></script>
 <script src="reporte.js?v=24"></script>
-<script src="adorno-tablas.js?v=e33931fe"></script>
+<script src="adorno-tablas.js?v=4229024c"></script>
 </body>
 </html>
