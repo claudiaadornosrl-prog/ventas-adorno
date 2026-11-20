@@ -228,8 +228,8 @@ function aFecha(t){
   m = String(t).trim().match(RX_ISO);
   return m ? (+m[1]) * 10000 + (+m[2]) * 100 + (+m[3]) : null;
 }
-// números a la argentina: 1.234.567,89 · $ -1.234,00 · 12 % · 3 u. · (1.234,00)
-const RX_NUM = /^([-−–+]?)\s*(?:US\$|U\$S|USD|ARS|\$)?\s*([-−–]?)\s*(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d+))?\s*(?:%|u\.?|unid\.?|uds?\.?|pk|kg)?$/i;
+// números a la argentina: 1.234.567,89 · $ -1.234,00 · 12 % · 3 u. · (1.234,00) · U$D 3.600,00 (Tesorería, 19-nov)
+const RX_NUM = /^([-−–+]?)\s*(?:US\$|U\$S|U\$D|USD|ARS|\$)?\s*([-−–]?)\s*(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d+))?\s*(?:%|u\.?|unid\.?|uds?\.?|pk|kg)?$/i;
 function aNumero(t){
   let s = String(t).trim(), neg = false;
   const p = s.match(/^\((.*)\)$/); if (p){ s = p[1]; neg = true; }
