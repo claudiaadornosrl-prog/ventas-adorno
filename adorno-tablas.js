@@ -105,6 +105,10 @@ th .tt-flecha:empty{display:none}
 th.tt-col{position:relative}
 th.tt-col>.tt-menu{position:absolute;top:50%;right:var(--tt-pr0,6px);transform:translateY(-50%);margin:0}
 th.tt-col>.tt-flecha{position:absolute;top:50%;right:calc(var(--tt-pr0,6px) + 19px);transform:translateY(-50%);margin:0;line-height:1}
+th.tt-col.tt-va-b>.tt-menu{top:auto;bottom:var(--tt-pb0,4px);transform:none}
+th.tt-col.tt-va-b>.tt-flecha{top:auto;bottom:calc(var(--tt-pb0,4px) + 4px);transform:none}
+th.tt-col.tt-va-t>.tt-menu{top:var(--tt-pt0,4px);transform:none}
+th.tt-col.tt-va-t>.tt-flecha{top:calc(var(--tt-pt0,4px) + 4px);transform:none}
 @media (hover:none){th .tt-menu{opacity:.6}}
 .tt-oc{display:none!important}
 tr.tt-fuera{display:none!important}
@@ -472,7 +476,16 @@ function armarTitulos(T){
     // (19-nov, JP: «que el ícono del filtro nunca quede por debajo del título, siempre al costado») el embudito y
     // la flechita van fijos a la derecha del título, en un lugar reservado del margen derecho: aunque la columna
     // sea angosta y el título baje de renglón, el ícono queda al costado. Se guarda el margen propio una sola vez.
-    if (th._ttPr0 == null){ th._ttPr0 = parseFloat(getComputedStyle(th).paddingRight) || 0; th.style.setProperty('--tt-pr0', th._ttPr0 + 'px'); }
+    // (aviso de Compras) Si el título está alineado arriba o abajo (vertical-align top/bottom), el ícono va arriba o
+    // abajo junto al texto, no al medio.
+    if (th._ttPr0 == null){
+      const cs = getComputedStyle(th);
+      th._ttPr0 = parseFloat(cs.paddingRight) || 0;
+      th.style.setProperty('--tt-pr0', th._ttPr0 + 'px');
+      const va = cs.verticalAlign;
+      if (va === 'bottom' || va === 'text-bottom'){ th.classList.add('tt-va-b'); th.style.setProperty('--tt-pb0', (parseFloat(cs.paddingBottom) || 0) + 'px'); }
+      else if (va === 'top' || va === 'text-top'){ th.classList.add('tt-va-t'); th.style.setProperty('--tt-pt0', (parseFloat(cs.paddingTop) || 0) + 'px'); }
+    }
     th.classList.add('tt-col');
     if (!T.ordenApp) th.classList.add('tt-ordenable');
     if (th.querySelector(':scope > .tt-menu')) continue;
@@ -530,8 +543,9 @@ function pintarTitulos(T){
     const f = !T.ordenApp && o && o.id === col.id ? (o.dir > 0 ? '▲' : '▼') : '';
     if (fl && fl.textContent !== f) fl.textContent = f;
     if (b && col.th._ttPr0 != null){   // lugar para el embudito (20 px) y, si está ordenada, la flechita (11 px más)
-      const pr = (col.th._ttPr0 + 20 + (f ? 11 : 0)) + 'px';
-      if (col.th.style.paddingRight !== pr) col.th.style.paddingRight = pr;
+      // con «important» en línea: le gana a un padding !important del módulo (aviso de Compras), que si no lo anulaba
+      const pr = (col.th._ttPr0 + 20 + (f ? 11 : 0)) + 'px', s = col.th.style;
+      if (s.getPropertyValue('padding-right') !== pr || s.getPropertyPriority('padding-right') !== 'important') s.setProperty('padding-right', pr, 'important');
     }
     if (b){ const on = activo(T.st.filtros[col.id]); if (b.classList.contains('on') !== on) b.classList.toggle('on', on); }
   }
@@ -631,6 +645,31 @@ function fondoDe(el){
   }
   return '#fff';
 }
+// Títulos con algo en bloque debajo del nombre (renglón chico, un select, una casilla): el embudito y la flechita
+// se alinean con el ÚLTIMO renglón del NOMBRE, no con el medio o el pie de la celda (aviso de Compras, 19-nov).
+// Se mide con el dibujo real; lo vuelve a llamar prepararFijo cuando la tabla cambia de tamaño.
+const BLOQUE = /^(block|flex|grid|table|list-item)$/;
+function alinearIconos(th){
+  const b = th.querySelector(':scope > .tt-menu'); if (!b || !th.offsetWidth) return;
+  const rs = [];
+  for (const n of th.childNodes){
+    if (n.nodeType === 1){
+      if (n.classList.contains('tt-ui')) continue;
+      if (BLOQUE.test(getComputedStyle(n).display)) break;
+      for (const x of n.getClientRects()) if (x.width && x.height) rs.push(x);
+    } else if (n.nodeType === 3 && n.nodeValue.trim()){
+      const rg = document.createRange(); rg.selectNodeContents(n);
+      for (const x of rg.getClientRects()) if (x.width && x.height) rs.push(x);
+    }
+  }
+  if (!rs.length) return;
+  const ult = rs.reduce((a, x) => x.bottom > a.bottom ? x : a);
+  const y = Math.round(ult.top + ult.height / 2 - th.getBoundingClientRect().top) + 'px';
+  for (const el of [b, th.querySelector(':scope > .tt-flecha')]){
+    if (!el || el.style.top === y) continue;
+    el.style.top = y; el.style.bottom = 'auto'; el.style.transform = 'translateY(-50%)';
+  }
+}
 function prepararFijo(T){
   const t = T.t;
   if (!t.isConnected || !t.offsetWidth || !t.tHead) return;   // escondida: la vuelve a llamar el ResizeObserver
@@ -681,6 +720,10 @@ function prepararFijo(T){
           if (th._ttPropio) th.classList.add('tt-th-propio');
         }
         if (!th.classList.contains('tt-th')) th.classList.add('tt-th');
+        if (th.classList.contains('tt-col')){
+          if (th._ttBloque == null) th._ttBloque = [...th.children].some(ch => !ch.classList.contains('tt-ui') && BLOQUE.test(getComputedStyle(ch).display));
+          if (th._ttBloque) alinearIconos(th);
+        }
         if (!th._ttPropio){ if (fr == null) fr = fondoDe(r); if (th.style.getPropertyValue('--tt-fondo') !== fr) th.style.setProperty('--tt-fondo', fr); }
         if (th.style.top !== v) th.style.top = v;
       }
