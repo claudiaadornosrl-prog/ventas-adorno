@@ -2505,7 +2505,8 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
       t.estado_discrepancia && t.estado_discrepancia !== 'ok'
     ).length;
 
-    let celdaTurno = '<td class="cell-derived">—</td>';
+    // (19-nov) data-valor: lo que ofrece el filtro tipo Excel de la columna Turnos (adorno-tablas.js), en vez del nombre de los botones
+    let celdaTurno = '<td class="cell-derived" data-valor="Sin ventas">—</td>';
     // Entramos al bloque si hay turnos previos, hay venta cargada, o ES HOY
     // (para HOY siempre queremos ofrecer el botón "🔒 Cerrar" — al apretar
     // se hace pre-sync de Dragonfish+MP que trae las ventas que aún no
@@ -2548,7 +2549,8 @@ function renderGrillaLocal(ventas, año, mes, localId, aplicadas, pendientes, tu
       const botonSolicitar = (diaCerrado && !linkReabrir && puedoEn('ventas.pedir_reapertura', localId) !== 'o')
         ? abtn(`solicitarReaperturaAhora('${fecha}','${localId}')`, 'Pedir reapertura — le llega la solicitud al admin', 'key', 'violeta')
         : '';
-      celdaTurno = `<td style="text-align:center;white-space:nowrap;">${badge}${verLink}${botonCerrar}${botonCerrarDia}${linkReabrir}${botonSolicitar}</td>`;
+      const valorTurno = diaCerrado ? (conDiscrep > 0 ? 'Cerrado con diferencia' : 'Cerrado') : (nTurnos > 0 ? 'Abierto con turnos' : 'Abierto');
+      celdaTurno = `<td data-valor="${valorTurno}" style="text-align:center;white-space:nowrap;">${badge}${verLink}${botonCerrar}${botonCerrarDia}${linkReabrir}${botonSolicitar}</td>`;
     }
 
     filas.push(`
@@ -4174,8 +4176,8 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=57"></script>
+<script src="manual.js?v=58"></script>
 <script src="reporte.js?v=24"></script>
-<script src="adorno-tablas.js?v=878e3ad2"></script>
+<script src="adorno-tablas.js?v=4b39a30e"></script>
 </body>
 </html>

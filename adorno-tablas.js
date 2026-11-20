@@ -13,6 +13,11 @@
 //  (19-nov, aviso de Clientes) Fondo de los títulos fijos: respeta el fondo propio del <th>, toma el de
 //  su <tr> cuando el módulo pinta la fila del título (fondo de color con letra blanca) y deja ver los
 //  tintes semitransparentes. Antes los títulos podían quedar blanco sobre blanco.
+//  (19-nov, avisos de Marketing y Documentos) Una tabla con overflow:hidden propio (molde de módulos) pasa
+//  a overflow:clip: si no, los títulos fijos se iban con la tabla.
+//  (19-nov, aviso del POS) Para filtrar y ordenar, el valor de una celda deja afuera el renglón chico de
+//  abajo (.mini, .tt-aparte, [data-tt-aparte]) y los botones, si la celda tiene otro texto. Una celda
+//  puede decir su valor con data-valor="…".
 //
 //  Variables de color que usa (con valores por defecto si el módulo no las define):
 //   --primary, --primary-dark, --bd, --tx, --mut, y propias: --tt-cebra (fondo de los renglones
@@ -82,6 +87,7 @@ table.tt>thead>tr>th.tt-th{position:sticky!important;z-index:1}
 @media (hover:hover){:where(table.tt:not([data-tt-cebra="no"])>tbody>tr:hover)>td{box-shadow:inset 0 0 0 9999px var(--tt-hover,rgba(176,122,85,.12))}}
 .tt-sinx{overflow:visible!important}
 .tt-clip{overflow:clip!important}
+table.tt-clip-t{overflow:visible!important;overflow:clip!important}
 .tt-caja{overflow:auto!important}
 th.tt-col.tt-ordenable{cursor:pointer;user-select:none;-webkit-user-select:none}
 th.tt-col:not(.tt-ordenable){cursor:default}
@@ -167,7 +173,10 @@ const VACIO = /^(|—|-|–|s\/d|sin dato|sin datos)$/i;
 // lo que está escondido adentro de una celda y no es su valor (globitos de ayuda, sugerencias, nuestra UI)
 const SALTA = /(^|\s)(tt-ui|op-tipbox|sku-sug)(\s|$)/;
 
-function texto(el, conControles){
+// lo que es «de más» en una celda: renglón chico de abajo (.mini, .tt-aparte, [data-tt-aparte]) y botones.
+// Se deja afuera del valor SOLO si la celda tiene otro texto (ver textoCelda).
+const APARTE = /(^|\s)(mini|tt-aparte)(\s|$)/;
+function texto(el, conControles, sinExtras){
   let s = '';
   for (let n = el.firstChild; n; n = n.nextSibling){
     if (n.nodeType === 3){ s += n.nodeValue; continue; }
@@ -177,6 +186,7 @@ function texto(el, conControles){
     if (n.hidden || (n.style && n.style.display === 'none')) continue;
     const cl = typeof n.className === 'string' ? n.className : '';
     if (cl && SALTA.test(cl)) continue;
+    if (sinExtras && (tg === 'BUTTON' || (cl && APARTE.test(cl)) || n.hasAttribute('data-tt-aparte'))) continue;
     if (tg === 'INPUT'){
       if (!conControles) continue;
       const ty = (n.type || '').toLowerCase();
@@ -187,15 +197,21 @@ function texto(el, conControles){
     if (tg === 'SELECT'){ if (conControles){ const o = n.options[n.selectedIndex]; s += ' ' + (o ? o.text : '') + ' '; } continue; }
     if (tg === 'TEXTAREA'){ if (conControles) s += ' ' + n.value + ' '; continue; }
     if (tg === 'BR'){ s += ' '; continue; }
-    const t = texto(n, conControles);
+    const t = texto(n, conControles, sinExtras);
     // entre dos pedazos pegados (<span>×3</span><span>Copa</span>) va un espacio, si no quedan como una sola palabra
     s += /^(DIV|P|LI|UL|OL|H\d|SECTION)$/.test(tg) || (s && t && !/\s$/.test(s) && !/^\s/.test(t) && n.previousSibling && n.previousSibling.nodeType === 1) ? ' ' + t + ' ' : t;
   }
   return s;
 }
+// Valor de una celda para filtrar y ordenar:
+//  · data-valor="…" en la celda manda (el módulo dice qué vale);
+//  · si no, el texto SIN el renglón chico de abajo ni los botones («Recibido» y no «Recibido Mariana · 19/11»);
+//  · si sin eso no queda nada, el texto entero; y si tampoco, el cartelito del ícono.
 function textoCelda(c){
   if (!c) return '';
-  let t = limpio(texto(c, true));
+  if (c.dataset && c.dataset.valor != null) return limpio(c.dataset.valor);
+  let t = limpio(texto(c, true, true));
+  if (!t) t = limpio(texto(c, true, false));
   if (!t){   // celdas que son solo un ícono: vale lo que dice su cartelito
     const q = c.querySelector('[aria-label],[title]');
     if (q) t = limpio(q.getAttribute('aria-label') || q.getAttribute('title') || '');
@@ -608,6 +624,10 @@ function prepararFijo(T){
   ocupado++;
   try {
     if (T.anchosPend && !T.w){ congelar(T, T.anchosPend); T.anchosPend = null; }   // anchos guardados de esta tabla
+    // (19-nov, avisos de Marketing y Documentos) la TABLA misma con overflow:hidden (para redondear las puntas,
+    // lo trae el molde de módulos) se vuelve caja de desplazamiento y los títulos se van con ella: pasa a «clip»,
+    // que recorta igual las puntas pero no arma caja.
+    if (!t.classList.contains('tt-clip-t')){ const ct = getComputedStyle(t); if (ct.overflowX === 'hidden' || ct.overflowY === 'hidden') t.classList.add('tt-clip-t'); }
     let sc = null;
     for (let el = t.parentElement; el && el !== document.body && el !== document.documentElement; el = el.parentElement){
       if (el.classList.contains('tt-clip')) continue;
