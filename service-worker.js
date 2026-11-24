@@ -1,5 +1,5 @@
 // Service Worker — Ventas Adorno
-const CACHE_VERSION = 'ventas-adorno-v175-embudo-al-costado';
+const CACHE_VERSION = 'ventas-adorno-v176-login-usuario-personal';
 const CACHE_ASSETS = ['./', './index.html',
   './manual.js', './reporte.js', './adorno-tablas.js', './manifest.webmanifest',
   './manifest-alcorta.webmanifest', './manifest-unicenter.webmanifest', './manifest-oficina.webmanifest',

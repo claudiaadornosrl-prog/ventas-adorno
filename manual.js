@@ -41,6 +41,10 @@ function _manualSecciones() {
         'Oficina tiene dos cuentas (12-nov): en la pantalla de entrada de Ventas, al tocar Oficina aparecen dos pastillas, Analía (claudiaadorno@) y Marisa (administracion@). Tocás la de tu compu y ponés su contraseña; la compu recuerda la última que entró.',
         'La sesión se cierra desde el Hub (👤 → Salir) y se cierra en todos los módulos. La computadora sigue marcada como de confianza hasta que lo apagues desde el Hub.',
         'También se puede entrar a Ventas con el usuario personal (13-nov): en la pantalla de entrada, "Entrar con tu usuario personal". Lo que ves y lo que podés hacer lo deciden tus permisos del Hub (si tu perfil no ve la planilla, ves solo el Reporte).',
+        'Usuario personal o cuenta del local (24-nov): si tenés usuario propio (encargadas, Oficina, admin), entrá con él y no con el botón del local. Con la cuenta del local (alcorta@, unicenter@) ves solo ese local y no aparece el selector de arriba para pasar a otro. Con tu usuario, si tenés más de un local o locales "solo para mirar", arriba aparece el selector (los que son solo para mirar dicen "· solo ver"). Si ya entraste con tu usuario en el Hub y Ventas te pide entrar, arriba te aparece "Ya entraste al sistema como …" con el botón "Seguir con mi usuario": ponés tu contraseña y listo.',
+        'Si entraste por error con la cuenta del local (por ejemplo en el celular): en Ventas no hay botón Salir; andá al Hub (la casita de arriba a la derecha), 👤 → Salir, entrá con tu usuario y volvé a Ventas. Si Ventas te pide entrar, usá "Seguir con mi usuario" o "Entrar con tu usuario personal", no el botón del local. Salir cierra la sesión en todos los módulos de ese celular o compu.',
+        'En el celular, si tenés varios locales, el selector de local va en una segunda fila debajo del banner, a lo ancho; arriba quedan el mes, el ⋮, el Reporte y la casita del Hub.',
+        'La app de un local instalada en la compu del local (Ventas Alcorta, Ventas UNI…) entra solo con la cuenta de ese local. Para entrar con tu usuario, abrí Ventas en el navegador o desde el Hub, no desde esa app.',
       ],
     },
     {
