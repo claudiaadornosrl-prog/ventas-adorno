@@ -310,6 +310,10 @@ window.ADORNO_ASISTENTE = (function () {
   .asist-bts{display:flex;gap:8px;margin-top:9px} .asist-bt{border:0;border-radius:999px;padding:7px 16px;font:inherit;font-weight:600;cursor:pointer}
   .asist-bt.si{background:var(--accent,#d97757);color:#fff} .asist-bt.no{background:transparent;color:var(--muted,#5f5e5a);border:0.5px solid var(--border,#d3d1c7)}
   .asist-bt:disabled{opacity:.6;cursor:default} a.asist-bt{text-decoration:none;display:inline-block} .asist-fin{margin-top:8px;font-size:13px} .asist-fin.ok{color:#166534} .asist-fin.mal{color:#991b1b}
+  .asist-lst{align-self:stretch;background:var(--bg,#fafaf9);border:0.5px solid var(--border,#d3d1c7);border-radius:12px;padding:9px 10px} .asist-lst b.t{display:block;font-size:13px;margin-bottom:6px}
+  .asist-lst .tw{overflow-x:auto;max-height:190px;overflow-y:auto;border-radius:8px} .asist-lst table{border-collapse:collapse;font-size:11.5px;width:100%} .asist-lst th{position:sticky;top:0;background:var(--surface,#fff);text-align:left;font-weight:600;padding:4px 6px;white-space:nowrap}
+  .asist-lst td{padding:3px 6px;white-space:nowrap;border-top:0.5px solid var(--border,#e7e5e0)} .asist-lst td.n,.asist-lst th.n{text-align:right} .asist-lst tr:nth-child(even) td{background:rgba(0,0,0,.025)}
+  .asist-lst .nt{font-size:11.5px;color:var(--muted,#5f5e5a);margin-top:6px} .asist-lst .asist-bts{flex-wrap:wrap} .asist-lst .asist-bt{padding:6px 13px;font-size:13px}
   .asist-resalta{outline:3px solid var(--accent,#d97757)!important;outline-offset:2px;border-radius:8px;transition:outline-color 1.2s}
   @media (max-width:600px){.asist-panel{right:calc(8px + env(safe-area-inset-right,0px));left:calc(8px + env(safe-area-inset-left,0px));width:auto;bottom:calc(92px + env(safe-area-inset-bottom,0px));max-height:66vh;max-height:66dvh}}
   /* (28-oct, JP) en celular y tablet: cara redonda flotante, despegada del borde (en iPhone la barra de Safari se achica abajo y tapaba el busto) */
@@ -529,6 +533,73 @@ window.ADORNO_ASISTENTE = (function () {
     { const ir = d.querySelector && d.querySelector('a.asist-ir'); if (ir) ir.addEventListener('click', (ev) => { const sg = sinGuardar(); if (sg && !window.confirm('Ojo: ' + sg + '. Si salís ahora, se pierde. ¿Salgo igual?')) ev.preventDefault(); }); }
     l.appendChild(d); l.scrollTop = l.scrollHeight; return d;
   }
+  // (24-nov-2026, charla de Clodi) listados a pedido: la Edge manda listado {titulo, columnas:[{clave,titulo,tipo}], filas, notas, formato}
+  function lstValor(c, v, crudo) {
+    if (v === null || v === undefined || v === '') return '';
+    if (c.tipo === 'plata') { const n = Number(v); return crudo ? n : '$ ' + Math.round(n).toLocaleString('es-AR'); }
+    if (c.tipo === 'numero') { const n = Number(v); return crudo ? n : n.toLocaleString('es-AR'); }
+    return String(v);
+  }
+  function lstTotales(L) {   // fila de totales para las columnas de plata y número (sin «Días con venta»)
+    const sum = L.columnas.some((c) => c.tipo === 'plata'); if (!sum || L.filas.length < 2) return null;
+    const t = {}; let primera = true;
+    for (const c of L.columnas) {
+      if ((c.tipo === 'plata' || c.tipo === 'numero') && c.clave !== 'dias' && c.clave !== 'ticket_promedio') t[c.clave] = L.filas.reduce((s, f) => s + (Number(f[c.clave]) || 0), 0);
+      else if (primera && c.tipo === 'texto') { t[c.clave] = L.recortado ? 'Total de los renglones' : 'Total'; primera = false; }
+    }
+    return t;
+  }
+  function lstTabla(L, hasta, conTotal) {
+    const n = (c) => (c.tipo === 'plata' || c.tipo === 'numero') ? ' class="n"' : '';
+    const filas = (hasta ? L.filas.slice(0, hasta) : L.filas).map((f) => '<tr>' + L.columnas.map((c) => `<td${n(c)}>${esc(lstValor(c, f[c.clave]))}</td>`).join('') + '</tr>').join('');
+    const t = conTotal ? lstTotales(L) : null;
+    const pie = t ? '<tr class="tot">' + L.columnas.map((c) => `<td${n(c)}><b>${esc(lstValor(c, t[c.clave]))}</b></td>`).join('') + '</tr>' : '';
+    return `<table><thead><tr>${L.columnas.map((c) => `<th${n(c)}>${esc(c.titulo)}</th>`).join('')}</tr></thead><tbody>${filas}${pie}</tbody></table>`;
+  }
+  function lstArchivo(L) { return (L.titulo || 'Listado').replace(/[\\/:*?"<>|·]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 90); }
+  function lstVentana(L, imprimir) {   // tabla completa en otra ventana; con imprimir abre el cuadro para «Guardar como PDF»
+    const w = window.open('', '_blank'); if (!w) { log('err', 'El navegador bloqueó la ventana: permití las ventanas emergentes para este sitio.'); return; }
+    const hoy = new Date().toLocaleDateString('es-AR');
+    w.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(lstArchivo(L))}</title><style>
+      body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#1a1a1a;margin:24px;background:#fff} h1{font-size:18px;margin:0 0 2px} .s{color:#5f5e5a;font-size:12px;margin-bottom:14px}
+      table{border-collapse:collapse;font-size:12px;width:100%} th{background:#f1efe8;text-align:left;padding:6px 8px;position:sticky;top:0} td{padding:5px 8px;border-top:1px solid #e7e5e0}
+      .n{text-align:right;white-space:nowrap} tr:nth-child(even) td{background:#fafaf9} tr.tot td{border-top:2px solid #1a1a1a;background:#fff} .nt{margin-top:12px;font-size:11.5px;color:#5f5e5a}
+      @media print{body{margin:10mm} th{position:static} .np{display:none}} .np{margin-bottom:14px} .np button{border:0;border-radius:999px;padding:7px 16px;background:#d97757;color:#fff;font:inherit;font-weight:600;cursor:pointer}
+      </style></head><body><div class="np"><button onclick="print()">Imprimir o guardar como PDF</button></div><h1>${esc(L.titulo || 'Listado')}</h1><div class="s">Claudia Adorno · armado por Clodi el ${hoy} · ${L.filas.length} renglones</div>
+      ${lstTabla(L, 0, true)}${(L.notas || []).length ? '<div class="nt">' + L.notas.map(esc).join('<br>') + '</div>' : ''}</body></html>`);
+    w.document.close(); if (imprimir) setTimeout(() => { try { w.focus(); w.print(); } catch (_) {} }, 400);
+  }
+  let _xlsx = null;
+  function lstSheetJS() {   // se carga solo la primera vez que alguien baja un Excel
+    if (window.XLSX) return Promise.resolve(window.XLSX);
+    if (!_xlsx) _xlsx = new Promise((ok, mal) => { const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; s.integrity = 'sha512-r22gChDnGvBylk90+2e/ycr3RVrDi8DIOkIGNhJlKfuyQM4tIRAI062MaV8sfjQKYVGjOBaZBOA87z+IhZE9DA=='; s.crossOrigin = 'anonymous'; s.onload = () => window.XLSX ? ok(window.XLSX) : mal(new Error('sin XLSX')); s.onerror = () => { _xlsx = null; mal(new Error('no cargó')); }; document.head.appendChild(s); });
+    return _xlsx;
+  }
+  function lstBajar(nombre, blob) { const a = document.createElement('a'); a.href = URL_.createObjectURL(blob); a.download = nombre; document.body.appendChild(a); a.click(); setTimeout(() => { URL_.revokeObjectURL(a.href); a.remove(); }, 1500); }
+  const URL_ = window.URL;
+  async function lstExcel(L) {
+    const t = lstTotales(L);
+    const aoa = [[L.titulo || 'Listado'], [], L.columnas.map((c) => c.titulo), ...L.filas.map((f) => L.columnas.map((c) => lstValor(c, f[c.clave], true))), ...(t ? [L.columnas.map((c) => lstValor(c, t[c.clave], true))] : [])];
+    try {
+      const X = await lstSheetJS(); const ws = X.utils.aoa_to_sheet(aoa);
+      ws['!cols'] = L.columnas.map((c, i) => ({ wch: Math.min(48, Math.max(c.titulo.length, ...L.filas.slice(0, 200).map((f) => String(lstValor(c, f[c.clave])).length)) + 2) }));
+      L.columnas.forEach((c, i) => { if (c.tipo !== 'plata') return; for (let r = 3; r < aoa.length; r++) { const k = X.utils.encode_cell({ r, c: i }); if (ws[k] && typeof ws[k].v === 'number') ws[k].z = '"$" #,##0'; } });
+      const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, 'Listado'); X.writeFile(wb, lstArchivo(L) + '.xlsx');
+    } catch (_) {   // sin internet para la librería: CSV que Excel abre igual (punto y coma, con BOM)
+      const csv = aoa.map((r) => r.map((v) => { let s = String(v ?? ''); if (typeof v === 'string' && /^[=+\-@]/.test(s)) s = "'" + s; return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }).join(';')).join('\r\n');
+      lstBajar(lstArchivo(L) + '.csv', new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }));
+    }
+  }
+  function mostrarListado(L) {
+    if (!L || !Array.isArray(L.columnas) || !Array.isArray(L.filas)) return;
+    const l = panel.querySelector('.asist-log'), d = document.createElement('div'); d.className = 'asist-lst';
+    const vacio = !L.filas.length;
+    d.innerHTML = `<b class="t">${esc(L.titulo || 'Listado')}</b>` + (vacio ? '<div class="nt">No hay renglones para mostrar.</div>' : `<div class="tw">${lstTabla(L, 8, false).replace('<table>', '<table data-tt="no">')}</div>`)
+      + `<div class="nt">${vacio ? '' : L.filas.length + ' renglones' + (L.filas.length > 8 ? ' (acá van los primeros 8)' : '') + '. '}${(L.notas || []).map(esc).join(' ')}</div>`
+      + (vacio ? '' : `<div class="asist-bts"><button class="asist-bt si" data-l="ver">Ver completo</button><button class="asist-bt si" data-l="xls">Excel</button><button class="asist-bt si" data-l="pdf">PDF</button></div>`);
+    d.addEventListener('click', (ev) => { const b = ev.target.closest('[data-l]'); if (!b) return; const a = b.dataset.l; if (a === 'ver') lstVentana(L, false); else if (a === 'pdf') lstVentana(L, true); else lstExcel(L); });
+    l.appendChild(d); l.scrollTop = l.scrollHeight;
+  }
   async function prepararAccion(acc, porVoz) {   // completa el formulario del módulo; se envía SOLO con el botón Enviar
     const def = acciones().find((x) => x.nombre === acc.nombre);
     if (!def) { log('err', 'Eso no lo puedo preparar en esta pantalla.'); return; }
@@ -566,6 +637,7 @@ window.ADORNO_ASISTENTE = (function () {
       if (!r.ok || !j.ok) throw new Error(j.error || ('Error ' + r.status));
       if (j.ir_modulo && j.ir_modulo.llevar && !j.accion && irUrl(j.ir_modulo)) { const sg = sinGuardar(); if (sg) { j.ir_modulo.llevar = false; j.respuesta = 'No te llevo todavía porque ' + sg + '. Cuando termines, tocá el botón para ir a ' + (j.ir_modulo.nombre || 'ese módulo') + '.'; } }
       hist.push({ q, a: j.respuesta }); log('a', j);
+      if (j.listado) mostrarListado(j.listado);
       if (j.pestana && !j.accion) irA(j.pestana);
       if (j.ir_modulo && j.ir_modulo.llevar && !j.accion) irModulo(j.ir_modulo);
       if (porVoz || siempreVoz()) leer(j.respuesta);
@@ -4236,7 +4308,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 </script>
-<script src="manual.js?v=60"></script>
+<script src="manual.js?v=61"></script>
 <script src="reporte.js?v=24"></script>
 <script src="adorno-tablas.js?v=abc48a63"></script>
 </body>
